@@ -1,13 +1,16 @@
-import { compile, roots, parameterNames, toMathML } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact } from './math.js';
 const parameters = Object.create(null);
 const $ = id => document.getElementById(id);
 const MAX = 8;
 const palette = ['#4f6bed', '#e5484d', '#12a594', '#f08c00', '#8e4ec6', '#0090c1', '#d6409f', '#5c7c2f'];
 const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-let functions = [], nextId = 1, activeId = null;
+let functions = [], nextId = 1, activeId = null, marks = [];
 let view = { min: -10, max: 10, cy: 0 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
 const canvas = $('plot'), ctx = canvas.getContext('2d');
-const format = n => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(5)).toLocaleString('pl-PL', { maximumFractionDigits: 5 });
+const format = (n, digits = 5) => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits });
+// Exact form when recognisable (√2, π/4, 1/3), otherwise 8 significant digits.
+const value = n => exact(n) ?? `≈ ${format(n, 8)}`;
+const list = (items, max = 6) => items.slice(0, max).join(';  ') + (items.length > max ? ';  …' : '');
 const scale = () => width / (view.max - view.min);
 const px = x => (x - view.min) * scale();
 const py = y => height / 2 - (y - view.cy) * scale();
@@ -124,11 +127,17 @@ function updateInsights() {
   const f = active(), fn = f?.fn;
   const target = $('analysis-target'); target.style.setProperty('--c', fn ? f.color : 'transparent');
   target.innerHTML = ''; const label = document.createElement('span'); if (fn) label.innerHTML = toMathML(f.expression); else label.textContent = 'brak funkcji'; target.append(label);
-  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).textContent = !fn ? '—' : Number.isFinite(fn(x)) ? format(fn(x)) : 'nie istnieje';
-  if (!fn) { $('roots').textContent = '—'; return; }
-  const allZero = Array.from({ length: 31 }, (_, i) => fn(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);
-  const values = allZero ? [] : roots(fn, view.min, view.max);
-  $('roots').textContent = allZero ? 'cały widoczny zakres' : values.length ? `x ≈ ${values.slice(0, 6).map(format).join(';  ')}${values.length > 6 ? ';  …' : ''}` : 'brak';
+  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).textContent = !fn ? '—' : Number.isFinite(fn(x)) ? value(fn(x)) : 'nie istnieje';
+  marks = [];
+  if (!fn) { $('roots').textContent = $('intersections').textContent = '—'; return draw(); }
+  const zeroOnView = h => Array.from({ length: 31 }, (_, i) => h(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);
+  const allZero = zeroOnView(fn), values = allZero ? [] : roots(fn, view.min, view.max);
+  $('roots').textContent = allZero ? 'cały widoczny zakres' : values.length ? `x = ${list(values.map(value))}` : 'brak';
+  const others = plotted().filter(g => g !== f && !zeroOnView(x => fn(x) - g.fn(x)));
+  const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max)).sort((a, b) => a.x - b.x);
+  $('intersections').textContent = !others.length ? '—' : crossings.length ? list(crossings.map(p => `(${value(p.x)}; ${value(p.y)})`), 4) : 'brak';
+  if (f.visible) marks = [...values.map(x => ({ x, y: 0 })), ...crossings];
+  draw();
 }
 function syncRange() { $('x-min').value = Number(view.min.toFixed(3)); $('x-max').value = Number(view.max.toFixed(3)); $('scale-label').textContent = `x ∈ [${format(view.min)}; ${format(view.max)}]`; }
 function refresh() { renderParameters(); draw(); updateInsights(); syncRange(); }
@@ -162,14 +171,13 @@ function draw() {
   const current = active();
   ctx.lineJoin = ctx.lineCap = 'round';
   for (const f of [...plotted().filter(f => f !== current), ...(current?.visible && current.fn ? [current] : [])]) {
-    ctx.beginPath(); ctx.lineWidth = f === current ? 2.75 : 2.25; ctx.strokeStyle = f.color; let previous = null;
-    for (let p = 0; p <= width; p += .7) {
-      const y = py(f.fn(fromX(p)));
-      if (!Number.isFinite(y) || Math.abs(y) > height * 20) { previous = null; continue; }
-      if (previous === null || Math.abs(y - previous) > height * .8) ctx.moveTo(p, y); else ctx.lineTo(p, y);
-      previous = y;
-    }
-    ctx.stroke();
+    ctx.beginPath(); ctx.lineWidth = f === current ? 2.75 : 2.25; ctx.strokeStyle = f.color;
+    plot(f.fn); ctx.stroke();
+  }
+  for (const m of marks) {
+    const x = px(m.x), y = py(m.y); if (x < -6 || x > width + 6 || y < -6 || y > height + 6) continue;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = theme['plot-bg']; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = current.color; ctx.stroke();
   }
   if (pointer && !drag && current?.visible && current.fn) {
     const y = py(current.fn(fromX(pointer.x)));
@@ -178,6 +186,33 @@ function draw() {
       ctx.lineWidth = 2.5; ctx.strokeStyle = theme['plot-bg']; ctx.stroke();
     }
   }
+}
+// Splits each pixel step until the curve is straight to ½ px, so corners, domain edges (√(1−x²) meets the axis)
+// and asymptotes (tan x, 1/x) are drawn exactly instead of being bridged or cut short.
+function plot(fn) {
+  const Y = p => py(fn(fromX(p))), ok = Number.isFinite, limit = height * 10;
+  let pen = false;
+  const point = (p, y) => {
+    if (!ok(y)) { pen = false; return; }
+    y = Math.max(-limit, Math.min(height + limit, y));
+    if (pen) ctx.lineTo(p, y); else ctx.moveTo(p, y);
+    pen = true;
+  };
+  const segment = (p0, y0, p1, y1, depth, parentDelta) => {
+    if (!ok(y0) && !ok(y1)) return point(p1, y1);
+    const both = ok(y0) && ok(y1), delta = Math.abs(y1 - y0);
+    const offscreen = both && ((y0 < 0 && y1 < 0) || (y0 > height && y1 > height));
+    if (depth && !offscreen) {
+      const pm = (p0 + p1) / 2, ym = Y(pm);
+      if (!both || delta > height || !ok(ym) || Math.abs(ym - (y0 + y1) / 2) > .5) { segment(p0, y0, pm, ym, depth - 1, delta); segment(pm, ym, p1, y1, depth - 1, delta); return; }
+    }
+    // After 8 halvings a continuous curve's step shrinks (by ~½ per halving, ~0.8 for ∛x); a jump (floor x, tan x) doesn't.
+    if (!depth && both && !offscreen && delta > 2 && (delta > height || delta > .95 * parentDelta)) pen = false;
+    point(p1, y1);
+  };
+  // ponytail: depth 8 (1/256 px) caps work on wild functions like sin(1/x); raise it if detail near such points matters.
+  let p0 = 0, y0 = Y(0); point(p0, y0);
+  for (let p = 1; p <= Math.ceil(width); p++) { const y = Y(p); segment(p0, y0, p, y, 8, Infinity); p0 = p; y0 = y; }
 }
 function resize() {
   const rect = $('canvas-wrap').getBoundingClientRect(); width = rect.width; height = rect.height;
@@ -226,9 +261,12 @@ canvas.onpointermove = e => {
     const dx = (e.clientX - drag.x) / scale();
     view = { min: drag.min - dx, max: drag.max - dx, cy: drag.cy + (e.clientY - drag.y) / scale() }; syncRange();
   } else {
-    const f = active(), x = fromX(pointer.x), y = f?.visible && f.fn ? f.fn(x) : NaN, tip = $('coordinates');
+    // Snap to a root or intersection under the cursor and show its exact coordinates.
+    const mark = marks.find(m => Math.hypot(px(m.x) - pointer.x, py(m.y) - pointer.y) < 10);
+    if (mark) pointer.x = px(mark.x);
+    const f = active(), x = mark ? mark.x : fromX(pointer.x), y = mark ? mark.y : f?.visible && f.fn ? f.fn(x) : NaN, tip = $('coordinates');
     tip.hidden = !Number.isFinite(y);
-    tip.textContent = `x ${format(x)}   y ${format(Number.isFinite(y) ? y : 0)}`;
+    tip.textContent = mark ? `x = ${value(x)}   y = ${value(y)}` : `x ${format(x)}   y ${format(Number.isFinite(y) ? y : 0)}`;
     tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, pointer.x + 14))}px`;
     tip.style.top = `${Math.max(8, pointer.y - 40)}px`;
   }

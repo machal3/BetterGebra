@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, roots, parameterNames, toMathML } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact } from './math.js';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
@@ -110,3 +110,26 @@ test('MathML formatting', () => {
   assert.match(m('x-(x+1)'), /<mo>−<\/mo><mrow><mo>\(<\/mo>/);
   assert.match(m('pi'), /π/);
   assert.match(m('exp(x)'), /<msup><mi>e<\/mi>/);});
+test('accurate roots: exact values, touching roots, poles', () => {
+  const r = expr => roots(compile(expr), -10, 10);
+  assert.deepEqual(r('x^2'), [0]);
+  assert.deepEqual(r('(x-1)^2'), [1]);
+  assert.deepEqual(r('x^2-4'), [-2, 2]);
+  assert.deepEqual(r('x^3-x'), [-1, 0, 1]);
+  assert.deepEqual(r('1/x'), []);
+  assert.deepEqual(r('tan(x)').length, 7);
+  assert.deepEqual(r('x^2+1'), []);
+  assert.deepEqual(r('sin(x)^2').map(exact), ['−3π', '−2π', '−π', '0', 'π', '2π', '3π']);
+  assert.equal(r('x^2-2')[1], Math.SQRT2);
+  assert.equal(r('cos x - x')[0].toFixed(12), '0.739085133215');
+  assert.deepEqual(r('|x|-3'), [-3, 3]);
+  assert.deepEqual(r('floor(x)'), [0]);
+});
+test('intersections and exact forms', () => {
+  const pts = intersections(compile('x^2'), compile('x+2'), -10, 10);
+  assert.deepEqual(pts, [{ x: -1, y: 1 }, { x: 2, y: 4 }]);
+  assert.deepEqual(intersections(compile('x^2'), compile('2x-1'), -10, 10), [{ x: 1, y: 1 }]);
+  assert.deepEqual(intersections(compile('sin x'), compile('cos x'), 0, 3).map(p => exact(p.x)), ['π/4']);
+  assert.deepEqual([0, 2, -3, .5, 1 / 3, Math.SQRT2, -Math.SQRT1_2, Math.PI / 2, 2 * Math.sqrt(3), 0.7390851332].map(exact),
+    ['0', '2', '−3', '1/2', '1/3', '√2', '−√2/2', 'π/2', '2√3', null]);
+});

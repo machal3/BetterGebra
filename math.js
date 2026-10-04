@@ -191,12 +191,53 @@ function render(n) {
 }
 export function toMathML(input) { return `<math>${mi('y')}${mo('=')}${render(parse(input))}</math>`; }
 
+// Replace e.g. 1.9999999999999998 with 2 when the rounder value is at least as good a root.
+function snap(fn, x, tol) {
+  const candidates = [0, ...[1, 2, 3, 4, 6, 8, 12].map(d => Math.round(x * d) / d), ...Array.from({ length: 12 }, (_, k) => Number(x.toFixed(k + 1)))];
+  return candidates.find(c => Math.abs(c - x) <= tol && Math.abs(fn(c)) <= Math.abs(fn(x))) ?? x;
+}
 export function roots(fn, min, max) {
-  const found = []; const add = x => { if (Number.isFinite(fn(x)) && Math.abs(fn(x)) < 1e-6 && !found.some(r => Math.abs(r - x) < 1e-4)) found.push(x); };
-  const step = (max - min) / 2000;
-  for (let i = 0; i <= 2000; i++) {
-    const x = min + i * step, y = fn(x); if (Math.abs(y) < 1e-8) add(x);
-    if (i && y * fn(x - step) < 0) { let a = x - step, b = x; for (let j = 0; j < 45; j++) { const m = (a + b) / 2; if (fn(a) * fn(m) <= 0) b = m; else a = m; } add((a + b) / 2); }
-    if (found.length >= 20) break;
-  } return found;
+  const N = 4000, step = (max - min) / N, found = [];
+  const add = x => { x = snap(fn, x, step * 1e-3); if (!found.some(r => Math.abs(r - x) < step / 2)) found.push(x); };
+  const ys = Array.from({ length: N + 1 }, (_, i) => fn(min + i * step)), abs = Math.abs;
+  for (let i = 0; i <= N && found.length < 50; i++) {
+    const x = min + i * step, y = ys[i], prev = ys[i - 1], next = ys[i + 1];
+    if (y === 0) { if (prev !== 0) add(x); continue; } // a run of zeros (floor x on [0; 1)) reports only its start
+    if (i && prev !== 0 && Number.isFinite(prev) && Number.isFinite(y) && Math.sign(prev) !== Math.sign(y)) {
+      let a = x - step, b = x, fa = prev;
+      for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) { const fm = fn(m); if (fm === 0) { a = b = m; break; } if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
+      // Poles (1/x, tan x) change sign too, but there |f| grows while bisecting instead of shrinking.
+      const r = abs(fn(a)) < abs(fn(b)) ? a : b;
+      if (abs(fn(r)) <= Math.min(abs(prev), abs(y))) add(r);
+    }
+    // Touching roots (x², sin²x) never change sign: look for a local minimum of |f| that reaches ~0.
+    if (i && i < N && abs(y) < abs(prev) && abs(y) <= abs(next) && Math.sign(prev) === Math.sign(y) && Math.sign(next) === Math.sign(y)) {
+      let a = x - step, b = x + step;
+      for (let k = 0; k < 200 && b - a > 1e-15 * Math.max(1, abs(x)); k++) {
+        const c = b - (b - a) * .618034, d = a + (b - a) * .618034;
+        if (abs(fn(c)) < abs(fn(d))) b = d; else a = c;
+      }
+      const m = (a + b) / 2;
+      // ponytail: fixed relative tolerance, so x²+1e-13 counts as touching the axis; fine at graphing precision.
+      if (abs(fn(m)) < 1e-12 * Math.max(1, abs(prev), abs(next))) add(m);
+    }
+  }
+  return found.sort((a, b) => a - b);
+}
+export function intersections(f, g, min, max) {
+  return roots(x => f(x) - g(x), min, max).map(x => ({ x, y: f(x) }));
+}
+// Recognise simple closed forms: p/d, pπ/d, p√k/d with d ≤ 12.
+export function exact(v) {
+  if (!Number.isFinite(v)) return null;
+  if (v === 0) return '0';
+  const units = [[1, ''], [Math.PI, 'π'], ...[2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19, 21, 22, 23].map(k => [Math.sqrt(k), `√${k}`])];
+  for (const [u, name] of units) for (let d = 1; d <= 12; d++) {
+    const p = Math.round(v / u * d);
+    if (p && Math.abs(p * u / d - v) < 1e-10 * Math.max(1, Math.abs(v)) && (name || Math.abs(p) < 1e6)) {
+      const n = Math.abs(p), num = name ? (n === 1 ? name : `${n}${name}`) : String(n);
+      return `${p < 0 ? '−' : ''}${num}${d > 1 ? `/${d}` : ''}`;
+    }
+  }
+  return null;
 }
