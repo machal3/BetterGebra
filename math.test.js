@@ -134,7 +134,7 @@ test('intersections and exact forms', () => {
     ['0', '2', '−3', '1/2', '1/3', '√2', '−√2/2', 'π/2', '2√3', null]);
 });
 test('endpoints: closed when the point belongs to the graph, open when only approached', () => {
-  const tol = .01, ends = (expr, a, b) => endpoint(compile(expr), a, b, tol).map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
+  const tol = .01, ends = (expr, a, b) => endpoint(compile(expr), a, b, tol).dots.map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
   assert.deepEqual(ends('sqrt(x)', -.013, .007), [[0, 0, true]]);
   assert.deepEqual(ends('acos(x)', .995, 1.004), [[1, 0, true]]);
   assert.deepEqual(ends('floor(x)', 2.99, 3.01), [[3, 3, true], [3, 2, false]]);
@@ -143,7 +143,7 @@ test('endpoints: closed when the point belongs to the graph, open when only appr
   assert.deepEqual(ends('sqrt(x)/sqrt(x)', -.01, .02), [[0, 1, false]]);
   assert.deepEqual(ends('ln(x)', -.01, .02), []);
   assert.deepEqual(ends('1/x', -.01, .02), []);
-  const [edge] = endpoint(compile('sqrt(2-x^2)'), 1.41, 1.42, tol);
+  const [edge] = endpoint(compile('sqrt(2-x^2)'), 1.41, 1.42, tol).dots;
   assert.ok(edge.closed && Math.abs(edge.x - Math.SQRT2) < 1e-12 && Math.abs(edge.y) < 1e-6);
 });
 test('holes: removable gaps are found as open dots', () => {
@@ -154,4 +154,20 @@ test('holes: removable gaps are found as open dots', () => {
   assert.deepEqual(h('1/x'), []);
   assert.deepEqual(h('ln(x)'), []);
   assert.deepEqual(h('x^2'), []);
+});
+test('endpoints: where each side of the graph is joined', () => {
+  const join = (expr, a, b, tol = .01) => { const e = endpoint(compile(expr), a, b, tol); return [e.x, e.left, e.right]; };
+  assert.deepEqual(join('sqrt(x)', -.013, .007), [0, NaN, 0]);
+  assert.deepEqual(join('sqrt(x)', -1e-6, 1e-6, 5e-8), [0, NaN, 0]);   // heavy zoom: still reaches exactly (0; 0)
+  assert.deepEqual(join('-sqrt(1-x)', .99, 1.01), [1, -0, NaN]);
+  assert.deepEqual(join('floor(x)', 2.99, 3.01), [3, 2, 3]);
+  assert.deepEqual(join('floor(1000x)/1000', .00099, .00101, 1e-6), [.001, 0, .001]);   // jump at a decimal, zoomed in
+  assert.deepEqual(endpoint(compile('floor(1000x)/1000'), .00099, .00101, 1e-6).dots.map(d => [d.y, d.closed]), [[.001, true], [0, false]]);
+  assert.deepEqual(join('ln(x)', -.01, .02), [0, NaN, -Infinity]);
+  assert.deepEqual(join('1/x', -.01, .02), [0, -Infinity, Infinity]);
+  assert.deepEqual(join('-1/x^2', -.01, .02), [0, -Infinity, -Infinity]);
+  const t = endpoint(compile('tan(x)'), 1.57, 1.58, .01);
+  assert.ok(Math.abs(t.x - Math.PI / 2) < 1e-15 && t.left === Infinity && t.right === -Infinity && t.dots.length === 0);
+  const steep = endpoint(compile('1000000x'), -1e-6, 1e-6, .01);
+  assert.ok(steep.left === steep.right && steep.dots.length === 0);  // continuous: joined, nothing to mark
 });

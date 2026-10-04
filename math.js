@@ -230,6 +230,8 @@ function nice(v) {
     const c = Math.round(v / u * d) * u / d;
     if (Math.abs(c - v) < 1e-9 * Math.max(1, Math.abs(v))) return c + 0; // + 0 turns -0 into 0
   }
+  // Short decimals (0.001, 2.75): a bisected jump of floor(1000x) lands an ulp below 0.001, where f still has the old value.
+  for (let k = 1; k <= 15; k++) { const c = Number(v.toPrecision(k)); if (Math.abs(c - v) <= 1e-12 * Math.abs(v)) return c; }
   return null;
 }
 // One-sided limit at c, or NaN when it doesn't exist or diverges (ln x, 1/x at 0). tol = what counts as "equal" in y.
@@ -240,15 +242,33 @@ function limit(fn, c, dir, tol) {
 // A piece of the graph ends somewhere in (a; b): a domain edge or a jump. Pin the point down and return its dots:
 // closed = the value f(c) itself, open = a one-sided limit the graph approaches but doesn't reach.
 export function endpoint(fn, a, b, tol) {
-  const gap = (u, v) => { const fu = fn(u), fv = fn(v); return finite(fu) !== finite(fv) ? Infinity : finite(fu) ? Math.abs(fu - fv) : 0; };
-  for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) if (gap(a, m) >= gap(m, b)) b = m; else a = m;
-  const c = nice(a) ?? nice(b) ?? (finite(fn(a)) ? a : b), fc = fn(c);
-  const dots = finite(fc) ? [{ x: c, y: fc, closed: true }] : [];
-  for (const dir of [-1, 1]) {
-    const y = limit(fn, c, dir, tol);
-    if (finite(y) && !(finite(fc) && Math.abs(y - fc) < tol)) dots.push({ x: c, y, closed: false });
-  }
-  return dots;
+  // Keep the half with more variation (3-point estimate): it stays ≈ the jump at a jump, blows up at a pole
+  // (even −1/x², whose endpoint values hide it), and shrinks to 0 where f is continuous.
+  const variation = (u, v) => {
+    const ys = [fn(u), fn((u + v) / 2), fn(v)], ok = ys.filter(finite).length;
+    return ok === 0 ? 0 : ok < 3 ? Infinity : Math.abs(ys[0] - ys[1]) + Math.abs(ys[1] - ys[2]);
+  };
+  for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) if (variation(a, m) >= variation(m, b)) b = m; else a = m;
+  const c = nice(a) ?? nice(b) ?? (finite(fn(a)) ? a : b), fc = fn(c), dots = [];
+  // Probe close enough that even √-type ends (|f(c±h) − f(c)| ~ √h) are within tol: h ≤ tol²/4.
+  const h = Math.max(Math.min(1e-9 * Math.max(1, Math.abs(c)), tol * tol / 4), 4e-16 * Math.abs(c), 1e-300);
+  // Where the piece on this side ends: f(c) if it reaches it, its limit if it only approaches, ±∞ if it diverges,
+  // NaN if the graph doesn't continue on that side.
+  const side = dir => {
+    const near = fn(c + dir * h), mid = fn(c + dir * h * 1e3), far = fn(c + dir * h * 1e6);
+    if (!finite(near)) return NaN;
+    if (finite(fc) && Math.abs(near - fc) < tol) return fc;
+    if (finite(mid) && Math.abs(near - mid) < tol) { dots.push({ x: c, y: near, closed: false }); return near; }
+    // ponytail: "|f| keeps growing over 3 scales" = divergence; a wild oscillation (sin(1/x)) could fool it.
+    if (finite(far) && Math.sign(near) === Math.sign(far) && Math.abs(near) > Math.abs(mid) && Math.abs(mid) > Math.abs(far) && Math.abs(near) > 2 * Math.abs(far)) return near > 0 ? Infinity : -Infinity;
+    return near;
+  };
+  const left = side(-1), right = side(1);
+  // No dot when both sides reach f(c) (continuous, just steep), nor when no side reaches it and one diverges:
+  // then f(c) is a float artefact like tan(π/2) = 1.6e16, not a point of the graph. sgn(0) = 0 stays (finite limits).
+  const reached = left === fc || right === fc, diverges = [left, right].some(v => Math.abs(v) === Infinity);
+  if (finite(fc) && !(left === fc && right === fc) && (reached || !diverges)) dots.unshift({ x: c, y: fc, closed: true });
+  return { x: c, left, right, dots };
 }
 // Removable gaps the sampler can't see, e.g. sin(x)/x or (x²−1)/(x−1): undefined at one point, same limit on both sides.
 // ponytail: only checks multiples of 1/4 and π/4 (skipped when > 1000 of them are in view); add candidates if other holes matter.

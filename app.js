@@ -169,7 +169,8 @@ function updateInsights() {
   const allZero = zeroOnView(fn), values = allZero ? [] : roots(fn, view.min, view.max);
   $('roots').textContent = allZero ? 'cały widoczny zakres' : values.length ? `x = ${list(values.map(value))}` : 'brak';
   const others = plotted().filter(g => g !== f && !zeroOnView(x => fn(x) - g.fn(x)));
-  const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max)).sort((a, b) => a.x - b.x);
+  const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max)).sort((a, b) => a.x - b.x)
+    .filter((p, i, all) => !i || p.x !== all[i - 1].x || p.y !== all[i - 1].y); // two graphs crossing at one point: list it once
   $('intersections').textContent = !others.length ? '—' : crossings.length ? list(crossings.map(p => `(${value(p.x)}; ${value(p.y)})`), 4) : 'brak';
   if (f.visible) marks = [...values.map(x => ({ x, y: 0 })), ...crossings];
   draw();
@@ -250,8 +251,16 @@ function plot(fn) {
     }
     // After 8 halvings a continuous curve's step shrinks (by ~½ per halving, ~0.8 for ∛x); a jump (floor x, tan x) doesn't.
     const jump = !depth && both && !offscreen && delta > 2 && (delta > height || delta > .95 * parentDelta);
-    if (jump) pen = false;
-    if (jump || (!depth && !both)) ends.push(...endpoint(fn, fromX(p0), fromX(p1), tol));
+    if (jump || (!depth && !both)) {
+      // A piece ends inside this 1/256 px step. Close the gap exactly: run the left piece into (c; its end),
+      // lift the pen, start the right piece from (c; its start). ±∞ becomes a point far off-screen.
+      const e = endpoint(fn, fromX(p0), fromX(p1), tol), pc = px(e.x);
+      const at = v => v === Infinity ? -limit : v === -Infinity ? height + limit : py(v);
+      ends.push(...e.dots);
+      if (ok(y0) && !Number.isNaN(e.left)) point(pc, at(e.left));
+      if (e.left !== e.right) pen = false; // equal sides = continuous, keep one stroke
+      if (ok(y1) && !Number.isNaN(e.right)) point(pc, at(e.right));
+    }
     point(p1, y1);
   };
   // ponytail: depth 8 (1/256 px) caps work on wild functions like sin(1/x); raise it if detail near such points matters.
