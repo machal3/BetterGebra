@@ -6,7 +6,7 @@ const palette = ['#4f6bed', '#e5484d', '#12a594', '#f08c00', '#8e4ec6', '#0090c1
 const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 let functions = [], nextId = 1, activeId = null, marks = [];
 let view = { min: -10, max: 10, cy: 0 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
-const canvas = $('plot'), ctx = canvas.getContext('2d');
+const canvas = $('plot'), ctx = canvas.getContext('2d'), hoverCtx = $('hover').getContext('2d');
 const format = (n, digits = 5) => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits });
 // Exact form when recognisable (√2, π/4, 1/3), otherwise 8 significant digits.
 const value = n => exact(n) ?? `≈ ${format(n, 8)}`;
@@ -49,7 +49,7 @@ function renderParameters() {
     slider.setAttribute('aria-label', `Suwak parametru ${name}`);
     const fitSlider = value => { slider.min = Math.min(-10, Math.floor(value)); slider.max = Math.max(10, Math.ceil(value)); slider.value = value; };
     fitSlider(parameters[name]);
-    const apply = value => { parameters[name] = value; $('coordinates').hidden = true; draw(); updateInsights(); };
+    const apply = value => { parameters[name] = value; updateInsights(); };
     input.oninput = () => {
       const value = input.valueAsNumber, valid = Number.isFinite(value);
       input.setAttribute('aria-invalid', String(!valid));
@@ -132,7 +132,7 @@ function renderList() {
     const input = document.createElement('input');
     Object.assign(input, { value: f.expression, placeholder: i ? 'np. sin(x)' : 'np. x^2 - 2', autocomplete: 'off', spellcheck: false });
     input.setAttribute('aria-label', `Funkcja ${i + 1}`); input.setAttribute('aria-describedby', `err-${f.id}`);
-    input.oninput = () => { setExpression(f, input.value); syncRow(f); renderParameters(); $('coordinates').hidden = true; draw(); updateInsights(); };
+    input.oninput = () => { setExpression(f, input.value); syncRow(f); renderParameters(); updateInsights(); };
     input.onfocus = () => { f.editing = true; if (activeId !== f.id) { activeId = f.id; functions.forEach(syncRow); updateInsights(); } else syncRow(f); };
     input.onblur = () => { f.editing = false; syncRow(f); };
     input.onkeydown = e => {
@@ -216,13 +216,44 @@ function draw() {
   for (const m of marks) dot(m.x, m.y, 3.5, theme.label, theme['plot-bg']);
   // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
   for (const e of ends) dot(e.x, e.y, 4, e.closed ? e.color : theme['plot-bg'], e.color);
-  if (pointer && !drag && current?.visible && current.fn) {
-    const y = py(current.fn(fromX(pointer.x)));
-    if (Number.isFinite(y) && y >= 0 && y <= height) {
-      ctx.beginPath(); ctx.arc(pointer.x, y, 5, 0, Math.PI * 2); ctx.fillStyle = current.color; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = theme['plot-bg']; ctx.stroke();
+  drawHover();
+}
+// The cursor dot lives on its own canvas layer: moving the mouse redraws only this, never the graphs,
+// so it keeps up with the cursor. It follows the graph nearest to the cursor and is recomputed after
+// every redraw, so it stays right after panning or zooming too.
+function drawHover() {
+  hoverCtx.clearRect(0, 0, width, height);
+  const tip = $('coordinates');
+  if (!pointer || drag) { tip.hidden = true; return; }
+  // A root or intersection within 8 px wins: show its exact coordinates.
+  const mark = marks.find(m => Math.hypot(px(m.x) - pointer.x, py(m.y) - pointer.y) < 8);
+  let hit = mark && { x: mark.x, y: mark.y, color: active().color, exact: true };
+  if (!hit) {
+    const x = fromX(pointer.x);
+    for (const f of plotted()) {
+      const y = f.fn(x), d = Math.abs(py(y) - pointer.y);
+      if (Number.isFinite(y) && d < 24 && (!hit || d < hit.d)) hit = { x, y, color: f.color, d };
     }
   }
+  tip.hidden = !hit;
+  if (!hit) return;
+  const hx = px(hit.x), hy = py(hit.y);
+  hoverCtx.beginPath(); hoverCtx.arc(hx, hy, 5, 0, Math.PI * 2); hoverCtx.fillStyle = hit.color; hoverCtx.fill();
+  hoverCtx.lineWidth = 2.5; hoverCtx.strokeStyle = theme['plot-bg']; hoverCtx.stroke();
+  tip.textContent = hit.exact ? `x = ${value(hit.x)}   y = ${value(hit.y)}` : `x ${format(hit.x)}   y ${format(hit.y)}`;
+  tip.style.setProperty('--c', hit.color);
+  tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, hx + 14))}px`;
+  tip.style.top = `${Math.max(8, Math.min(height - tip.offsetHeight - 8, hy - 40))}px`;
+}
+// Coalesce bursts of events (drag, wheel) into one redraw per animation frame.
+let frame = 0, needDraw = false, needInsights = false;
+function schedule({ graphs = false, insights = false } = {}) {
+  needDraw ||= graphs; needInsights ||= insights;
+  frame ||= requestAnimationFrame(() => {
+    frame = 0;
+    if (needInsights) updateInsights(); else if (needDraw) draw(); else drawHover();
+    needDraw = needInsights = false;
+  });
 }
 function dot(x, y, r, fill, stroke) {
   x = px(x); y = py(y); if (x < -r || x > width + r || y < -r || y > height + r) return;
@@ -270,11 +301,12 @@ function plot(fn) {
 }
 function resize() {
   const rect = $('canvas-wrap').getBoundingClientRect(); width = rect.width; height = rect.height;
-  const dpr = window.devicePixelRatio || 1; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw();
+  const dpr = window.devicePixelRatio || 1;
+  for (const [c, cx] of [[canvas, ctx], [$('hover'), hoverCtx]]) { c.width = Math.round(width * dpr); c.height = Math.round(height * dpr); cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  draw();
 }
-function setView(next) { view = next; draw(); syncRange(); updateInsights(); }
-function reset() { pointer = null; $('coordinates').hidden = true; $('range-error').textContent = ''; setView({ min: -10, max: 10, cy: 0 }); }
+function setView(next) { view = next; syncRange(); schedule({ insights: true }); }
+function reset() { $('range-error').textContent = ''; setView({ min: -10, max: 10, cy: 0 }); }
 function zoom(factor, x = width / 2, y = height / 2) {
   const range = (view.max - view.min) * factor; if (range < .0001 || range > 1e7) return;
   const anchorX = fromX(x), anchorY = fromY(y), min = anchorX - range * x / width;
@@ -308,27 +340,17 @@ for (const id of ['x-min', 'x-max']) $(id).onchange = () => {
   $('range-error').textContent = ''; setView({ ...view, min, max });
 };
 canvas.addEventListener('wheel', e => { e.preventDefault(); const r = canvas.getBoundingClientRect(); zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
-canvas.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, ...view }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; $('coordinates').hidden = true; };
+canvas.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, ...view }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; schedule(); };
 canvas.onpointermove = e => {
   const r = canvas.getBoundingClientRect(); pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
-  if (drag) {
-    const dx = (e.clientX - drag.x) / scale();
-    view = { min: drag.min - dx, max: drag.max - dx, cy: drag.cy + (e.clientY - drag.y) / scale() }; syncRange();
-  } else {
-    // Snap to a root or intersection under the cursor and show its exact coordinates.
-    const mark = marks.find(m => Math.hypot(px(m.x) - pointer.x, py(m.y) - pointer.y) < 10);
-    if (mark) pointer.x = px(mark.x);
-    const f = active(), x = mark ? mark.x : fromX(pointer.x), y = mark ? mark.y : f?.visible && f.fn ? f.fn(x) : NaN, tip = $('coordinates');
-    tip.hidden = !Number.isFinite(y);
-    tip.textContent = mark ? `x = ${value(x)}   y = ${value(y)}` : `x ${format(x)}   y ${format(Number.isFinite(y) ? y : 0)}`;
-    tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, pointer.x + 14))}px`;
-    tip.style.top = `${Math.max(8, pointer.y - 40)}px`;
-  }
-  draw();
+  if (!drag) return schedule();
+  const dx = (e.clientX - drag.x) / scale();
+  view = { min: drag.min - dx, max: drag.max - dx, cy: drag.cy + (e.clientY - drag.y) / scale() }; syncRange();
+  schedule({ graphs: true });
 };
-function endDrag() { if (drag) { drag = null; canvas.style.cursor = ''; updateInsights(); } }
+function endDrag() { if (drag) { drag = null; canvas.style.cursor = ''; schedule({ insights: true }); } }
 canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = endDrag;
-canvas.onpointerleave = () => { pointer = null; $('coordinates').hidden = true; draw(); };
+canvas.onpointerleave = () => { if (!drag) { pointer = null; schedule(); } };
 canvas.onkeydown = e => {
   const moves = { ArrowLeft: [-40, 0], ArrowRight: [40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
   if (moves[e.key]) { e.preventDefault(); pan(...moves[e.key]); }
@@ -337,7 +359,6 @@ canvas.onkeydown = e => {
   else if (e.key === '0') reset();
 };
 $('export').onclick = () => {
-  pointer = null; $('coordinates').hidden = true; draw();
   const link = document.createElement('a'); link.download = 'bettergebra-wykres.png'; link.href = canvas.toDataURL('image/png'); link.click();
   toast('Wykres zapisany jako PNG.');
 };
