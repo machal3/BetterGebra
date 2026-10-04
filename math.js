@@ -288,13 +288,14 @@ export function intersections(f, g, min, max) {
   return roots(x => f(x) - g(x), min, max).map(x => ({ x, y: f(x) }));
 }
 // Recognise simple closed forms: p/d with d ≤ 100, pπ/d and p√k/d with d ≤ 12. Larger denominators read worse than the decimal.
+// Match only to float rounding (1e-14 relative, ~45 ulp): a looser match would show 1.41421356237663 (root of x² − 2.00000000001) as √2.
 export function exact(v) {
   if (!Number.isFinite(v)) return null;
   if (v === 0) return '0';
   const units = [[1, ''], [Math.PI, 'π'], ...[2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19, 21, 22, 23].map(k => [Math.sqrt(k), `√${k}`])];
   for (const [u, name] of units) for (let d = 1; d <= (name ? 12 : 100); d++) {
     const p = Math.round(v / u * d);
-    if (p && Math.abs(p * u / d - v) < 1e-10 * Math.max(1, Math.abs(v)) && (name || Math.abs(p) < 1e6)) {
+    if (p && Math.abs(p * u / d - v) < 1e-14 * Math.abs(v) && (name || Math.abs(p) < 1e6)) {
       const n = Math.abs(p), num = name ? (n === 1 ? name : `${n}${name}`) : String(n);
       return `${p < 0 ? '−' : ''}${num}${d > 1 ? `/${d}` : ''}`;
     }

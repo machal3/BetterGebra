@@ -134,6 +134,8 @@ test('intersections and exact forms', () => {
     ['0', '2', '−3', '1/2', '1/3', '√2', '−√2/2', 'π/2', '2√3', null]);
   assert.deepEqual([5 / 13, -7 / 100, 347 / 999].map(exact), ['5/13', '−7/100', null]);
   assert.deepEqual(intersections(compile('13x'), compile('5'), -10, 10).map(p => exact(p.x)), ['5/13']);
+  // Close but not equal: only float rounding may separate a value from its closed form.
+  assert.deepEqual([3.14159265359, ...roots(compile('x^2 - 2.00000000001'), 0, 3), Math.sin(Math.PI / 4), Math.sqrt(8) / 4].map(exact), [null, null, '√2/2', '√2/2']);
 });
 test('endpoints: closed when the point belongs to the graph, open when only approached', () => {
   const tol = .01, ends = (expr, a, b) => endpoint(compile(expr), a, b, tol).dots.map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
