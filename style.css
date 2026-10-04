@@ -123,6 +123,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .parameter label { font-family: var(--mono); }
 .parameter input { width: 100%; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-family: var(--mono); }
 .parameter input[aria-invalid="true"] { border-color: var(--danger); }
+.parameter input[type="range"] { grid-column: 1 / -1; height: auto; padding: 0; border: 0; background: none; accent-color: var(--accent); }
 .parameter .error { grid-column: 1 / -1; }
 
 /* Analysis */

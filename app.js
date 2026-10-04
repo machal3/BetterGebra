@@ -41,16 +41,24 @@ function renderParameters() {
     input.setAttribute('aria-label', `Wartość parametru ${name}`);
     const error = document.createElement('p'); error.className = 'error'; error.id = `parameter-error-${name}`; error.setAttribute('role', 'alert');
     input.setAttribute('aria-describedby', error.id);
+    const slider = document.createElement('input');
+    slider.type = 'range'; slider.step = '0.1';
+    slider.setAttribute('aria-label', `Suwak parametru ${name}`);
+    const fitSlider = value => { slider.min = Math.min(-10, Math.floor(value)); slider.max = Math.max(10, Math.ceil(value)); slider.value = value; };
+    fitSlider(parameters[name]);
+    const apply = value => { parameters[name] = value; $('coordinates').hidden = true; draw(); updateInsights(); };
     input.oninput = () => {
       const value = input.valueAsNumber, valid = Number.isFinite(value);
       input.setAttribute('aria-invalid', String(!valid));
       error.textContent = valid ? '' : 'Podaj liczbę. Wykres zachowuje ostatnią poprawną wartość.';
       if (!valid) return;
-      parameters[name] = value;
-      $('coordinates').hidden = true;
-      draw(); updateInsights();
+      fitSlider(value); apply(value);
     };
-    row.append(label, input, error); return row;
+    slider.oninput = () => {
+      input.value = slider.value; input.setAttribute('aria-invalid', 'false'); error.textContent = '';
+      apply(slider.valueAsNumber);
+    };
+    row.append(label, input, slider, error); return row;
   }));
 }
 function addFunction(expression = '', focus = true) {
