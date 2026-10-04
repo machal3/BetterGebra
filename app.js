@@ -1,4 +1,4 @@
-import { compile, roots, parameterNames } from './math.js';
+import { compile, roots, parameterNames, toMathML } from './math.js';
 const parameters = Object.create(null);
 const $ = id => document.getElementById(id);
 const MAX = 8;
@@ -84,6 +84,8 @@ function syncRow(f) {
   row.querySelector('.swatch').setAttribute('aria-label', `${f.visible ? 'Ukryj' : 'Pokaż'} wykres`);
   row.querySelector('input').setAttribute('aria-invalid', String(!!f.error));
   row.querySelector('.error').textContent = f.error;
+  const preview = row.querySelector('.fn-preview');
+  preview.hidden = !f.fn; preview.innerHTML = f.fn ? toMathML(f.expression) : '';
 }
 function renderList() {
   $('function-list').replaceChildren(...functions.map((f, i) => {
@@ -107,8 +109,9 @@ function renderList() {
     field.append(prefix, input);
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon remove'; remove.innerHTML = removeIcon;
     remove.setAttribute('aria-label', `Usuń funkcję ${i + 1}`); remove.onclick = () => removeFunction(f.id);
+    const preview = document.createElement('div'); preview.className = 'fn-preview'; preview.setAttribute('aria-hidden', 'true');
     const error = document.createElement('p'); error.className = 'error'; error.id = `err-${f.id}`; error.setAttribute('role', 'alert');
-    row.append(swatch, field, remove, error);
+    row.append(swatch, field, remove, preview, error);
     return row;
   }));
   functions.forEach(syncRow);
@@ -120,7 +123,7 @@ function renderList() {
 function updateInsights() {
   const f = active(), fn = f?.fn;
   const target = $('analysis-target'); target.style.setProperty('--c', fn ? f.color : 'transparent');
-  target.innerHTML = ''; const label = document.createElement('span'); label.textContent = fn ? `y = ${f.expression}` : 'brak funkcji'; target.append(label);
+  target.innerHTML = ''; const label = document.createElement('span'); if (fn) label.innerHTML = toMathML(f.expression); else label.textContent = 'brak funkcji'; target.append(label);
   for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).textContent = !fn ? '—' : Number.isFinite(fn(x)) ? format(fn(x)) : 'nie istnieje';
   if (!fn) { $('roots').textContent = '—'; return; }
   const allZero = Array.from({ length: 31 }, (_, i) => fn(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);

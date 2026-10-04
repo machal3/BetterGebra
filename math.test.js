@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, roots, parameterNames } from './math.js';
+import { compile, roots, parameterNames, toMathML } from './math.js';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
@@ -37,7 +37,7 @@ test('constants, functions and domains', () => {
   assert.equal(compile('exp(-x^2)')(0), 1);
 });
 test('invalid and executable input is rejected', () => {
-  for (const expr of ['', 'x+', 'sin x', '(x+2', 'x)', 'alert(1)', 'x;alert(1)', 'globalThis', 'x**2']) assert.throws(() => compile(expr), expr);
+  for (const expr of ['', 'x+', 'sin', '(x+2', 'x)', 'alert(1)', 'x;alert(1)', 'globalThis', 'foo(x)', '|x', 'max(1)', 'x_1', '<x>']) assert.throws(() => compile(expr), expr);
 });
 test('roots respect discontinuities', () => {
   assert.deepEqual(roots(compile('x^2'), -10, 10), [0]);
@@ -45,3 +45,68 @@ test('roots respect discontinuities', () => {
   const r = roots(compile('x^2-2'), -10, 10);
   assert.equal(r.length, 2); assert.ok(Math.abs(r[1] - Math.SQRT2) < 1e-6);
 });
+test('rich math syntax', () => {
+  const near = (expr, x, want) => assert.ok(Math.abs(compile(expr)(x) - want) < 1e-9, `${expr} at ${x}: ${compile(expr)(x)} ≠ ${want}`);
+  near('sin x', 1, Math.sin(1));
+  near('sinx', 1, Math.sin(1));
+  near('sin 2x', 1, Math.sin(2));
+  near('2 sin x cos x', 1, Math.sin(2));
+  near('sin²x + cos²x', 0.7, 1);
+  near('sin^-1(x)', .5, Math.asin(.5));
+  near('tg x', 1, Math.tan(1));
+  near('ctg(x)', 1, 1 / Math.tan(1));
+  near('arctg x', 1, Math.PI / 4);
+  near('|x - 3|', 1, 2);
+  near('||x|-1|', -3, 2);
+  near('|x||x|', -2, 4);
+  near('x!', 5, 120);
+  near('x!', .5, Math.sqrt(Math.PI) / 2);
+  near('90°', 0, Math.PI / 2);
+  near('sin(30°)', 0, .5);
+  near('√x', 9, 3);
+  near('√(x+7)', 9, 4);
+  near('∛x', -8, -2);
+  near('root(3; x)', -27, -3);
+  near('log_2(x)', 8, 3);
+  near('log(2, x)', 8, 3);
+  near('log x', 100, 2);
+  near('lg x', 100, 2);
+  near('ln x', Math.E, 1);
+  near('2pix', 1, 2 * Math.PI);
+  near('τ', 0, 2 * Math.PI);
+  near('φ', 0, (1 + Math.sqrt(5)) / 2);
+  near('max(x; 1; 2)', 0, 2);
+  near('min(x, 1)', 0, 0);
+  near('mod(x; 3)', -1, 2);
+  near('2,5x', 2, 5);
+  near('x**2', 3, 9);
+  near('x³', 2, 8);
+  near('x⁻¹', 4, .25);
+  near('6 : x', 2, 3);
+  near('[x+1]{x-1}', 3, 8);
+  near('f(x) = x^2', 3, 9);
+  near(String.raw`\frac{1}{x}`, 4, .25);
+  near(String.raw`\sqrt[3]{x}`, 8, 2);
+  near(String.raw`\left(x \cdot 2\right)^{2}`, 1, 4);
+  near('e^{-x^2}', 0, 1);
+  near('sinh x', 1, Math.sinh(1));
+  near('sgn(x)', -5, -1);
+  near('round(x)', 2.6, 3);
+  assert.deepEqual(parameterNames('a sin(bx) + c'), ['a', 'b', 'c']);
+});
+test('MathML formatting', () => {
+  const m = expr => toMathML(expr);
+  assert.match(m('1/x'), /<mfrac><mrow><mn>1<\/mn><\/mrow><mrow><mi>x<\/mi><\/mrow><\/mfrac>/);
+  assert.match(m('sqrt(x+1)'), /<msqrt>/);
+  assert.match(m('root(3; x)'), /<mroot><mrow><mi>x<\/mi><\/mrow><mrow><mn>3<\/mn><\/mrow><\/mroot>/);
+  assert.match(m('x^2'), /<msup><mrow><mi>x<\/mi><\/mrow><mrow><mn>2<\/mn><\/mrow><\/msup>/);
+  assert.match(m('(x+1)^2'), /<msup><mrow><mrow><mo>\(<\/mo>/);
+  assert.match(m('|x|'), /<mo>\|<\/mo><mi>x<\/mi><mo>\|<\/mo>/);
+  assert.match(m('tan x'), />tg</);
+  assert.match(m('sin^2(x)'), /<msup><mi mathvariant="normal">sin<\/mi><mrow><mn>2<\/mn><\/mrow><\/msup>/);
+  assert.match(m('x*2'), /<mo>·<\/mo>/);
+  assert.doesNotMatch(m('2x'), /·/);
+  assert.match(m('2.5'), /<mn>2,5<\/mn>/);
+  assert.match(m('x-(x+1)'), /<mo>−<\/mo><mrow><mo>\(<\/mo>/);
+  assert.match(m('pi'), /π/);
+  assert.match(m('exp(x)'), /<msup><mi>e<\/mi>/);});

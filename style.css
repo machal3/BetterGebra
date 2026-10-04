@@ -106,6 +106,9 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .remove { opacity: 0; width: 28px; height: 28px; }
 .fn:hover .remove, .fn:focus-within .remove, .remove:focus-visible { opacity: 1; }
 .fn .error { grid-column: 2 / -1; padding: 0 0 6px 4px; }
+.fn-preview { grid-column: 2 / -1; padding: 0 4px 8px; overflow-x: auto; font-size: 17px; color: var(--text); }
+.fn-preview[hidden] { display: none; }
+math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math; }
 @media (hover: none) { .remove { opacity: 1; } }
 
 .add-function {
@@ -130,6 +133,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .target { display: inline-flex; align-items: center; gap: 6px; max-width: 60%; color: var(--text-2); font: 12px var(--mono); }
 .target::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c, transparent); flex: none; }
 .target span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.target math { font-size: 14px; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
 .stats div { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
 .stats .wide { grid-column: 1 / -1; }

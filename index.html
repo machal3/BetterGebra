@@ -103,14 +103,21 @@
     <header><h2 id="help-title">Jak zapisywać funkcje</h2><button class="icon close-dialog" type="button" aria-label="Zamknij"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <p>Wpisz wyrażenie zmiennej <i>x</i> w wierszu na liście — wykres aktualizuje się na bieżąco. Enter w ostatnim wierszu dodaje kolejną funkcję (maksymalnie 8).</p>
     <table class="syntax">
-      <tr><td><code>x^2 + 2x - 3</code></td><td>Potęgi, mnożenie domyślne</td></tr>
+      <tr><td><code>x^2 + 2x - 3   x²   x**2</code></td><td>Potęgi, mnożenie domyślne (2x, 3(x+1))</td></tr>
       <tr><td><code>a*x + b</code></td><td>Litery tworzą parametry o wartości 1. Edytuj je w sekcji Parametry; wartości są wspólne dla wykresów. Możesz też pisać ax+b.</td></tr>
-      <tr><td><code>sin(x)  cos(x)  tan(x)</code></td><td>Trygonometria (radiany)</td></tr>
-      <tr><td><code>asin  acos  atan</code></td><td>Funkcje odwrotne</td></tr>
-      <tr><td><code>sqrt(x)  abs(x)</code></td><td>Pierwiastek, moduł</td></tr>
-      <tr><td><code>ln(x)  log(x)  exp(x)</code></td><td>Logarytm naturalny, dziesiętny, wykładnicza</td></tr>
-      <tr><td><code>floor(x)  ceil(x)</code></td><td>Zaokrąglenia</td></tr>
-      <tr><td><code>pi  e</code></td><td>Stałe</td></tr>
+      <tr><td><code>sin x   sin(2x)   sin²x</code></td><td>Funkcje z nawiasami lub bez; sin^-1 x to arcsin</td></tr>
+      <tr><td><code>tg  ctg  sec  csc</code></td><td>Trygonometria (radiany, lub stopnie: 30°)</td></tr>
+      <tr><td><code>arcsin  arccos  arctg  arcctg</code></td><td>Funkcje odwrotne (też asin, atan…)</td></tr>
+      <tr><td><code>sinh  cosh  tgh  arsinh</code></td><td>Funkcje hiperboliczne</td></tr>
+      <tr><td><code>√x   sqrt(x)   ∛x   root(n; x)</code></td><td>Pierwiastki</td></tr>
+      <tr><td><code>|x|   abs(x)   sgn(x)</code></td><td>Moduł i znak</td></tr>
+      <tr><td><code>ln x   log x   log_2 x   log(b; x)</code></td><td>Logarytmy: naturalny, dziesiętny, o podstawie b</td></tr>
+      <tr><td><code>exp(x)   e^x   x!</code></td><td>Wykładnicza, silnia (też dla ułamków)</td></tr>
+      <tr><td><code>floor  ceil  round  mod(x; n)</code></td><td>Zaokrąglenia, reszta z dzielenia</td></tr>
+      <tr><td><code>min(x; 1)   max(x; 1; 2)</code></td><td>Argumenty oddzielaj średnikiem</td></tr>
+      <tr><td><code>pi  π  e  τ  φ</code></td><td>Stałe</td></tr>
+      <tr><td><code>2,5x   6 : x   [x+1]</code></td><td>Przecinek dziesiętny, dwukropek dzielenia, nawiasy () [] {}</td></tr>
+      <tr><td><code>\frac{1}{x}   \sqrt[3]{x}</code></td><td>Możesz wkleić wzór w LaTeX-u</td></tr>
     </table>
     <p class="muted">Miejsca zerowe są przybliżeniami numerycznymi w widocznym zakresie — pierwiastki styczne i szybkie oscylacje mogą zostać pominięte.</p>
   </dialog>
@@ -128,6 +135,10 @@
       <button type="button" data-expression="1/x"><code>1/x</code><span>Hiperbola</span></button>
       <button type="button" data-expression="ln(x)"><code>ln(x)</code><span>Logarytm naturalny</span></button>
       <button type="button" data-expression="sqrt(x)"><code>sqrt(x)</code><span>Pierwiastek</span></button>
+      <button type="button" data-expression="|x^2 - 4|"><code>|x² − 4|</code><span>Moduł paraboli</span></button>
+      <button type="button" data-expression="sin^2(x)"><code>sin²x</code><span>Kwadrat sinusa</span></button>
+      <button type="button" data-expression="x!"><code>x!</code><span>Silnia (funkcja gamma)</span></button>
+      <button type="button" data-expression="1/(1+x^2)"><code>1/(1+x²)</code><span>Krzywa Agnesi</span></button>
     </div>
   </dialog>
 
