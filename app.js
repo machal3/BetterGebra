@@ -10,6 +10,8 @@ const canvas = $('plot'), ctx = canvas.getContext('2d'), hoverCtx = $('hover').g
 const format = (n, digits = 5) => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits });
 // Exact form when recognisable (√2, π/4, 1/3), otherwise 8 significant digits.
 const value = n => exact(n) ?? `≈ ${format(n, 8)}`;
+// Shows the fractions in value() strings stacked (MathML) instead of as 5/13. Only for our own number strings.
+const stacked = s => s.replace(/([\dπ√]+)\/(\d+)/g, '<math><mfrac><mn>$1</mn><mn>$2</mn></mfrac></math>');
 const list = (items, max = 6) => items.slice(0, max).join(';  ') + (items.length > max ? ';  …' : '');
 const scale = () => width / (view.max - view.min);
 const px = x => (x - view.min) * scale();
@@ -162,16 +164,16 @@ function updateInsights() {
   const f = active(), fn = f?.fn;
   const target = $('analysis-target'); target.style.setProperty('--c', fn ? f.color : 'transparent');
   target.innerHTML = ''; const label = document.createElement('span'); if (fn) label.innerHTML = toMathML(f.expression); else label.textContent = 'brak funkcji'; target.append(label);
-  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).textContent = !fn ? '—' : Number.isFinite(fn(x)) ? value(fn(x)) : 'nie istnieje';
+  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).innerHTML = !fn ? '—' : Number.isFinite(fn(x)) ? stacked(value(fn(x))) : 'nie istnieje';
   marks = [];
   if (!fn) { $('roots').textContent = $('intersections').textContent = '—'; return draw(); }
   const zeroOnView = h => Array.from({ length: 31 }, (_, i) => h(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);
   const allZero = zeroOnView(fn), values = allZero ? [] : roots(fn, view.min, view.max);
-  $('roots').textContent = allZero ? 'cały widoczny zakres' : values.length ? `x = ${list(values.map(value))}` : 'brak';
+  $('roots').innerHTML = allZero ? 'cały widoczny zakres' : values.length ? stacked(`x = ${list(values.map(value))}`) : 'brak';
   const others = plotted().filter(g => g !== f && !zeroOnView(x => fn(x) - g.fn(x)));
   const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max)).sort((a, b) => a.x - b.x)
     .filter((p, i, all) => !i || p.x !== all[i - 1].x || p.y !== all[i - 1].y); // two graphs crossing at one point: list it once
-  $('intersections').textContent = !others.length ? '—' : crossings.length ? list(crossings.map(p => `(${value(p.x)}; ${value(p.y)})`), 4) : 'brak';
+  $('intersections').innerHTML = !others.length ? '—' : crossings.length ? stacked(list(crossings.map(p => `(${value(p.x)}; ${value(p.y)})`), 4)) : 'brak';
   if (f.visible) marks = [...values.map(x => ({ x, y: 0 })), ...crossings];
   draw();
 }
@@ -240,7 +242,7 @@ function drawHover() {
   const hx = px(hit.x), hy = py(hit.y);
   hoverCtx.beginPath(); hoverCtx.arc(hx, hy, 5, 0, Math.PI * 2); hoverCtx.fillStyle = hit.color; hoverCtx.fill();
   hoverCtx.lineWidth = 2.5; hoverCtx.strokeStyle = theme['plot-bg']; hoverCtx.stroke();
-  tip.textContent = hit.exact ? `x = ${value(hit.x)}   y = ${value(hit.y)}` : `x ${format(hit.x)}   y ${format(hit.y)}`;
+  tip.innerHTML = hit.exact ? stacked(`x = ${value(hit.x)}   y = ${value(hit.y)}`) : `x ${format(hit.x)}   y ${format(hit.y)}`;
   tip.style.setProperty('--c', hit.color);
   tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, hx + 14))}px`;
   tip.style.top = `${Math.max(8, Math.min(height - tip.offsetHeight - 8, hy - 40))}px`;

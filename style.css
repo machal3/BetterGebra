@@ -152,6 +152,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .stats .wide { grid-column: 1 / -1; }
 .stats dt { color: var(--text-2); font-size: 12px; font-weight: 500; }
 .stats dd { margin: 2px 0 0; font: 500 15px/1.4 var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stats dd math, .readout math { font-size: 1.25em; }
 
 /* Settings */
 .settings summary { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; margin: -4px 0; padding: 4px 0; }

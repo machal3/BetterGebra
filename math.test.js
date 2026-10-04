@@ -132,6 +132,8 @@ test('intersections and exact forms', () => {
   assert.deepEqual(intersections(compile('sin x'), compile('cos x'), 0, 3).map(p => exact(p.x)), ['π/4']);
   assert.deepEqual([0, 2, -3, .5, 1 / 3, Math.SQRT2, -Math.SQRT1_2, Math.PI / 2, 2 * Math.sqrt(3), 0.7390851332].map(exact),
     ['0', '2', '−3', '1/2', '1/3', '√2', '−√2/2', 'π/2', '2√3', null]);
+  assert.deepEqual([5 / 13, -7 / 100, 347 / 999].map(exact), ['5/13', '−7/100', null]);
+  assert.deepEqual(intersections(compile('13x'), compile('5'), -10, 10).map(p => exact(p.x)), ['5/13']);
 });
 test('endpoints: closed when the point belongs to the graph, open when only approached', () => {
   const tol = .01, ends = (expr, a, b) => endpoint(compile(expr), a, b, tol).dots.map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
