@@ -84,32 +84,45 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .function-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .fn {
   --c: var(--accent);
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px;
-  padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
-  transition: border-color .15s, box-shadow .15s;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 6px;
+  min-height: 54px; padding: 6px 6px 6px 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  transition: border-color .15s, box-shadow .15s, background .15s;
 }
 .fn:hover { border-color: var(--border-strong); }
-.fn.active { border-color: color-mix(in srgb, var(--c) 55%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 14%, transparent); }
-.fn.invalid { border-color: color-mix(in srgb, var(--danger) 60%, var(--border)); }
-.swatch {
-  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent;
-  display: grid; place-items: center;
-}
-.swatch::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px var(--c); transition: background .15s; }
-.swatch[aria-pressed="false"]::before { background: transparent; }
+.fn.active { border-color: color-mix(in srgb, var(--c) 45%, var(--border)); }
+.fn.editing { background: color-mix(in srgb, var(--c) 5%, var(--surface)); border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent); }
+.fn.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent); }
+.swatch { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent; display: grid; place-items: center; }
+.swatch::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px var(--c); transition: background .15s, transform .15s; }
+.fn.hidden-fn .swatch::before { background: transparent; }
 .swatch:hover { background: var(--surface-2); }
-.fn-field { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 4px; font-family: var(--mono); font-size: 14px; }
+.swatch:hover::before, .swatch[aria-expanded="true"]::before { transform: scale(1.15); }
+.fn-field { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; cursor: text; font-family: var(--mono); font-size: 14px; }
 .fn-field span { color: var(--text-3); user-select: none; }
-.fn-field input { flex: 1; min-width: 0; height: 34px; padding: 0; border: 0; background: transparent; outline: none; }
+.fn-field input { flex: 1; min-width: 0; height: 36px; padding: 0; border: 0; background: transparent; outline: none; }
 .fn-field input::placeholder { color: var(--text-3); }
-.fn.hidden-fn .fn-field input { color: var(--text-3); }
+/* Finished row: show the typeset formula; the input stays focusable (Tab / click) but invisible. */
+.fn-math { display: none; min-width: 0; padding: 4px 0; overflow-x: auto; white-space: nowrap; font-family: var(--font); font-size: 20px; color: var(--text); scrollbar-width: thin; }
+.fn:not(.editing) .fn-math { display: block; }
+.fn:not(.editing) .fn-field > span, .fn:not(.editing) .fn-field input { position: absolute; width: 1px; opacity: 0; pointer-events: none; }
+.fn:not(.editing):hover .fn-math { color: color-mix(in srgb, var(--text) 80%, var(--c)); }
+.fn.hidden-fn .fn-math, .fn.hidden-fn .fn-field input { color: var(--text-3); }
 .remove { opacity: 0; width: 28px; height: 28px; }
 .fn:hover .remove, .fn:focus-within .remove, .remove:focus-visible { opacity: 1; }
-.fn .error { grid-column: 2 / -1; padding: 0 0 6px 4px; }
-.fn-preview { grid-column: 2 / -1; padding: 0 4px 8px; overflow-x: auto; font-size: 17px; color: var(--text); }
+.fn .error { grid-column: 2 / -1; padding: 0 0 4px; }
+.fn-preview { grid-column: 2 / -1; margin: 0 0 4px; padding: 6px 10px; overflow-x: auto; border-radius: 8px; background: var(--surface); font-size: 17px; color: var(--text-2); }
 .fn-preview[hidden] { display: none; }
-math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math; }
 @media (hover: none) { .remove { opacity: 1; } }
+
+/* Colour & visibility menu */
+.fn-menu { position: fixed; inset: auto; margin: 0; width: 196px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.menu-title { margin: 0 0 8px; color: var(--text-2); font-size: 12px; font-weight: 500; }
+.colors { display: grid; grid-template-columns: repeat(4, 28px); justify-content: space-between; gap: 10px; }
+.color { aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: var(--sw); transition: transform .15s; }
+.color:hover { transform: scale(1.08); }
+.color[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
+.menu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; }
+.menu-row input[type="color"] { width: 36px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
 
 .add-function {
   display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 38px; margin-top: 8px;

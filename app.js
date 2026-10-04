@@ -75,41 +75,76 @@ function removeFunction(id) {
   functions.splice(index, 1);
   if (!functions.length) return addFunction();
   if (activeId === id) activeId = functions[Math.max(0, index - 1)].id;
+  if (menuFn?.id === id) $('fn-menu').hidePopover();
   renderList(); refresh();
 }
+// --- Colour & visibility menu ---
+let menuFn = null, menuClosedAt = 0;
+$('fn-colors').append(...palette.map(color => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'color'; b.style.setProperty('--sw', color); b.dataset.color = color;
+  b.setAttribute('aria-label', `Kolor ${color}`); b.onclick = () => setColor(menuFn, color); return b;
+}));
+function syncMenu() {
+  $('fn-colors').querySelectorAll('.color').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.color === menuFn.color)));
+  $('fn-custom-color').value = menuFn.color; $('fn-visible').checked = menuFn.visible;
+}
+function setColor(f, color) {
+  f.color = color; document.querySelector(`[data-id="${f.id}"]`).style.setProperty('--c', color);
+  syncMenu(); updateInsights();
+}
+function openMenu(f, swatch) {
+  const menu = $('fn-menu');
+  if (menu.matches(':popover-open') && menuFn === f) return menu.hidePopover();
+  if (menuFn === f && performance.now() - menuClosedAt < 300) return; // this click's pointerdown already light-dismissed it
+  menuFn = f; syncMenu(); menu.showPopover();
+  const r = swatch.getBoundingClientRect();
+  menu.style.left = `${Math.min(r.left, innerWidth - menu.offsetWidth - 8)}px`;
+  menu.style.top = `${Math.min(r.bottom + 6, innerHeight - menu.offsetHeight - 8)}px`;
+}
+$('fn-custom-color').oninput = e => setColor(menuFn, e.target.value);
+$('fn-visible').onchange = e => { menuFn.visible = e.target.checked; syncRow(menuFn); updateInsights(); };
+$('fn-menu').addEventListener('toggle', e => { if (e.newState === 'closed') menuClosedAt = performance.now(); });
+$('fn-menu').addEventListener('toggle', e => document.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-expanded', String(e.newState === 'open' && s.closest('.fn').dataset.id === String(menuFn.id)))));
 const rowInput = id => document.querySelector(`[data-id="${id}"] input`);
 function syncRow(f) {
   const row = document.querySelector(`[data-id="${f.id}"]`);
   row.classList.toggle('active', f.id === activeId);
   row.classList.toggle('invalid', !!f.error);
   row.classList.toggle('hidden-fn', !f.visible);
-  row.querySelector('.swatch').setAttribute('aria-pressed', String(f.visible));
-  row.querySelector('.swatch').setAttribute('aria-label', `${f.visible ? 'Ukryj' : 'Pokaż'} wykres`);
+  row.querySelector('.swatch').setAttribute('aria-label', `Kolor i widoczność: funkcja ${functions.indexOf(f) + 1}${f.visible ? '' : ' (ukryta)'}`);
   row.querySelector('input').setAttribute('aria-invalid', String(!!f.error));
   row.querySelector('.error').textContent = f.error;
+  // Typeset formula when finished; raw text + live preview while editing (or while empty/invalid).
+  const editing = f.editing || !f.fn, math = f.fn ? toMathML(f.expression) : '';
+  row.classList.toggle('editing', editing);
+  row.querySelector('.fn-math').innerHTML = editing ? '' : math;
   const preview = row.querySelector('.fn-preview');
-  preview.hidden = !f.fn; preview.innerHTML = f.fn ? toMathML(f.expression) : '';
+  preview.hidden = !editing || !f.fn; preview.innerHTML = editing ? math : '';
 }
 function renderList() {
   $('function-list').replaceChildren(...functions.map((f, i) => {
     const row = document.createElement('li'); row.className = 'fn'; row.dataset.id = f.id; row.style.setProperty('--c', f.color);
     const swatch = document.createElement('button'); swatch.type = 'button'; swatch.className = 'swatch';
-    swatch.onclick = () => { f.visible = !f.visible; syncRow(f); draw(); updateInsights(); };
+    swatch.setAttribute('aria-haspopup', 'dialog'); swatch.setAttribute('aria-expanded', 'false');
+    swatch.title = 'Kolor i widoczność'; swatch.onclick = () => openMenu(f, swatch);
     const field = document.createElement('label'); field.className = 'fn-field';
     const prefix = document.createElement('span'); prefix.textContent = 'y =';
     const input = document.createElement('input');
     Object.assign(input, { value: f.expression, placeholder: i ? 'np. sin(x)' : 'np. x^2 - 2', autocomplete: 'off', spellcheck: false });
     input.setAttribute('aria-label', `Funkcja ${i + 1}`); input.setAttribute('aria-describedby', `err-${f.id}`);
     input.oninput = () => { setExpression(f, input.value); syncRow(f); renderParameters(); $('coordinates').hidden = true; draw(); updateInsights(); };
-    input.onfocus = () => { if (activeId !== f.id) { activeId = f.id; functions.forEach(syncRow); draw(); updateInsights(); } };
+    input.onfocus = () => { f.editing = true; if (activeId !== f.id) { activeId = f.id; functions.forEach(syncRow); updateInsights(); } else syncRow(f); };
+    input.onblur = () => { f.editing = false; syncRow(f); };
     input.onkeydown = e => {
       const index = functions.indexOf(f);
-      if (e.key === 'Enter') { e.preventDefault(); if (index === functions.length - 1 && input.value.trim() && functions.length < MAX) addFunction(); else input.blur(); }
+      if (e.key === 'Escape') input.blur();
+      else if (e.key === 'Enter') { e.preventDefault(); if (index === functions.length - 1 && input.value.trim() && functions.length < MAX) addFunction(); else input.blur(); }
       else if (e.key === 'ArrowDown' && functions[index + 1]) { e.preventDefault(); rowInput(functions[index + 1].id).focus(); }
       else if (e.key === 'ArrowUp' && index > 0) { e.preventDefault(); rowInput(functions[index - 1].id).focus(); }
       else if (e.key === 'Backspace' && !input.value && functions.length > 1) { e.preventDefault(); removeFunction(f.id); rowInput(activeId).focus(); }
     };
-    field.append(prefix, input);
+    const math = document.createElement('div'); math.className = 'fn-math'; math.setAttribute('aria-hidden', 'true');
+    field.append(prefix, input, math);
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon remove'; remove.innerHTML = removeIcon;
     remove.setAttribute('aria-label', `Usuń funkcję ${i + 1}`); remove.onclick = () => removeFunction(f.id);
     const preview = document.createElement('div'); preview.className = 'fn-preview'; preview.setAttribute('aria-hidden', 'true');
