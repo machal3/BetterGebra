@@ -4,7 +4,7 @@ Polskojęzyczny kalkulator wykresów funkcji z interaktywnym płótnem, porówny
 
 Uruchomienie: `npm run dev`, następnie http://localhost:5173. Wymaga Node.js 20 lub nowszego. Bez instalowania zależności.
 
-`npm test` sprawdza parser matematyczny oraz wyszukiwanie miejsc zerowych. `npm run build` przygotowuje statyczne pliki w katalogu `dist`.
+`npm test` sprawdza parser matematyczny oraz wyszukiwanie miejsc zerowych. `npm run build` przygotowuje statyczne pliki w katalogu `dist`. Deploy na Vercel: zaimportuj repozytorium (konfiguracja w `vercel.json`) albo uruchom `npx vercel --prod`.
 
 Obsługiwane: potęgi `^`, mnożenie domyślne `2x`, stałe `pi` i `e`, funkcje `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sqrt`, `abs`, `ln`, `log` (dziesiętny), `exp`, `floor`, `ceil`. Kąty w radianach. Parser nie wykonuje kodu JavaScript z pola tekstowego.
 
