@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, roots, parameterNames, toMathML, intersections, exact } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact, endpoint, holes } from './math.js';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
@@ -132,4 +132,26 @@ test('intersections and exact forms', () => {
   assert.deepEqual(intersections(compile('sin x'), compile('cos x'), 0, 3).map(p => exact(p.x)), ['π/4']);
   assert.deepEqual([0, 2, -3, .5, 1 / 3, Math.SQRT2, -Math.SQRT1_2, Math.PI / 2, 2 * Math.sqrt(3), 0.7390851332].map(exact),
     ['0', '2', '−3', '1/2', '1/3', '√2', '−√2/2', 'π/2', '2√3', null]);
+});
+test('endpoints: closed when the point belongs to the graph, open when only approached', () => {
+  const tol = .01, ends = (expr, a, b) => endpoint(compile(expr), a, b, tol).map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
+  assert.deepEqual(ends('sqrt(x)', -.013, .007), [[0, 0, true]]);
+  assert.deepEqual(ends('acos(x)', .995, 1.004), [[1, 0, true]]);
+  assert.deepEqual(ends('floor(x)', 2.99, 3.01), [[3, 3, true], [3, 2, false]]);
+  assert.deepEqual(ends('ceil(x)', 2.99, 3.01), [[3, 3, true], [3, 4, false]]);
+  assert.deepEqual(ends('sign(x)', -.01, .02), [[0, 0, true], [0, -1, false], [0, 1, false]]);
+  assert.deepEqual(ends('sqrt(x)/sqrt(x)', -.01, .02), [[0, 1, false]]);
+  assert.deepEqual(ends('ln(x)', -.01, .02), []);
+  assert.deepEqual(ends('1/x', -.01, .02), []);
+  const [edge] = endpoint(compile('sqrt(2-x^2)'), 1.41, 1.42, tol);
+  assert.ok(edge.closed && Math.abs(edge.x - Math.SQRT2) < 1e-12 && Math.abs(edge.y) < 1e-6);
+});
+test('holes: removable gaps are found as open dots', () => {
+  const tol = .01, h = expr => holes(compile(expr), -10, 10, tol).map(({ x, y, closed }) => [x, +y.toFixed(6), closed]);
+  assert.deepEqual(h('sin(x)/x'), [[0, 1, false]]);
+  assert.deepEqual(h('(x^2-1)/(x-1)'), [[1, 2, false]]);
+  assert.deepEqual(h('x/x'), [[0, 1, false]]);
+  assert.deepEqual(h('1/x'), []);
+  assert.deepEqual(h('ln(x)'), []);
+  assert.deepEqual(h('x^2'), []);
 });

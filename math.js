@@ -224,6 +224,46 @@ export function roots(fn, min, max) {
   }
   return found.sort((a, b) => a - b);
 }
+const finite = Number.isFinite;
+function nice(v) {
+  for (const u of [1, Math.PI]) for (let d = 1; d <= 12; d++) {
+    const c = Math.round(v / u * d) * u / d;
+    if (Math.abs(c - v) < 1e-9 * Math.max(1, Math.abs(v))) return c + 0; // + 0 turns -0 into 0
+  }
+  return null;
+}
+// One-sided limit at c, or NaN when it doesn't exist or diverges (ln x, 1/x at 0). tol = what counts as "equal" in y.
+function limit(fn, c, dir, tol) {
+  const h = 1e-9 * Math.max(1, Math.abs(c)), near = fn(c + dir * h), far = fn(c + dir * h * 1e3);
+  return finite(near) && finite(far) && Math.abs(near - far) < tol ? near : NaN;
+}
+// A piece of the graph ends somewhere in (a; b): a domain edge or a jump. Pin the point down and return its dots:
+// closed = the value f(c) itself, open = a one-sided limit the graph approaches but doesn't reach.
+export function endpoint(fn, a, b, tol) {
+  const gap = (u, v) => { const fu = fn(u), fv = fn(v); return finite(fu) !== finite(fv) ? Infinity : finite(fu) ? Math.abs(fu - fv) : 0; };
+  for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) if (gap(a, m) >= gap(m, b)) b = m; else a = m;
+  const c = nice(a) ?? nice(b) ?? (finite(fn(a)) ? a : b), fc = fn(c);
+  const dots = finite(fc) ? [{ x: c, y: fc, closed: true }] : [];
+  for (const dir of [-1, 1]) {
+    const y = limit(fn, c, dir, tol);
+    if (finite(y) && !(finite(fc) && Math.abs(y - fc) < tol)) dots.push({ x: c, y, closed: false });
+  }
+  return dots;
+}
+// Removable gaps the sampler can't see, e.g. sin(x)/x or (x²−1)/(x−1): undefined at one point, same limit on both sides.
+// ponytail: only checks multiples of 1/4 and π/4 (skipped when > 1000 of them are in view); add candidates if other holes matter.
+export function holes(fn, min, max, tol) {
+  const out = [];
+  for (const s of [1, .5, .25, Math.PI / 4]) {
+    if ((max - min) / s > 1000) continue;
+    for (let k = Math.ceil(min / s); k * s <= max; k++) {
+      const c = k * s; if (finite(fn(c)) || out.some(p => Math.abs(p.x - c) < 1e-9)) continue;
+      const l = limit(fn, c, -1, tol), r = limit(fn, c, 1, tol);
+      if (finite(l) && finite(r) && Math.abs(l - r) < tol) out.push({ x: c, y: (l + r) / 2, closed: false });
+    }
+  }
+  return out;
+}
 export function intersections(f, g, min, max) {
   return roots(x => f(x) - g(x), min, max).map(x => ({ x, y: f(x) }));
 }

@@ -1,4 +1,4 @@
-import { compile, roots, parameterNames, toMathML, intersections, exact } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact, endpoint, holes } from './math.js';
 const parameters = Object.create(null);
 const $ = id => document.getElementById(id);
 const MAX = 8;
@@ -205,15 +205,16 @@ function draw() {
   }
   const current = active();
   ctx.lineJoin = ctx.lineCap = 'round';
+  const ends = [];
   for (const f of [...plotted().filter(f => f !== current), ...(current?.visible && current.fn ? [current] : [])]) {
     ctx.beginPath(); ctx.lineWidth = f === current ? 2.75 : 2.25; ctx.strokeStyle = f.color;
-    plot(f.fn); ctx.stroke();
+    for (const e of plot(f.fn)) ends.push({ ...e, color: f.color });
+    ctx.stroke();
   }
-  for (const m of marks) {
-    const x = px(m.x), y = py(m.y); if (x < -6 || x > width + 6 || y < -6 || y > height + 6) continue;
-    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = theme['plot-bg']; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = current.color; ctx.stroke();
-  }
+  // Roots and intersections: small neutral dots, so they don't read as hollow endpoints.
+  for (const m of marks) dot(m.x, m.y, 3.5, theme.label, theme['plot-bg']);
+  // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
+  for (const e of ends) dot(e.x, e.y, 4, e.closed ? e.color : theme['plot-bg'], e.color);
   if (pointer && !drag && current?.visible && current.fn) {
     const y = py(current.fn(fromX(pointer.x)));
     if (Number.isFinite(y) && y >= 0 && y <= height) {
@@ -222,10 +223,16 @@ function draw() {
     }
   }
 }
+function dot(x, y, r, fill, stroke) {
+  x = px(x); y = py(y); if (x < -r || x > width + r || y < -r || y > height + r) return;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = stroke; ctx.stroke();
+}
 // Splits each pixel step until the curve is straight to ½ px, so corners, domain edges (√(1−x²) meets the axis)
 // and asymptotes (tan x, 1/x) are drawn exactly instead of being bridged or cut short.
+// Returns the endpoint dots of the pieces it drew (domain edges, jumps, removable holes).
 function plot(fn) {
-  const Y = p => py(fn(fromX(p))), ok = Number.isFinite, limit = height * 10;
+  const Y = p => py(fn(fromX(p))), ok = Number.isFinite, limit = height * 10, tol = .5 / scale(), ends = [];
   let pen = false;
   const point = (p, y) => {
     if (!ok(y)) { pen = false; return; }
@@ -242,12 +249,15 @@ function plot(fn) {
       if (!both || delta > height || !ok(ym) || Math.abs(ym - (y0 + y1) / 2) > .5) { segment(p0, y0, pm, ym, depth - 1, delta); segment(pm, ym, p1, y1, depth - 1, delta); return; }
     }
     // After 8 halvings a continuous curve's step shrinks (by ~½ per halving, ~0.8 for ∛x); a jump (floor x, tan x) doesn't.
-    if (!depth && both && !offscreen && delta > 2 && (delta > height || delta > .95 * parentDelta)) pen = false;
+    const jump = !depth && both && !offscreen && delta > 2 && (delta > height || delta > .95 * parentDelta);
+    if (jump) pen = false;
+    if (jump || (!depth && !both)) ends.push(...endpoint(fn, fromX(p0), fromX(p1), tol));
     point(p1, y1);
   };
   // ponytail: depth 8 (1/256 px) caps work on wild functions like sin(1/x); raise it if detail near such points matters.
   let p0 = 0, y0 = Y(0); point(p0, y0);
   for (let p = 1; p <= Math.ceil(width); p++) { const y = Y(p); segment(p0, y0, p, y, 8, Infinity); p0 = p; y0 = y; }
+  return [...ends, ...holes(fn, view.min, view.max, tol)];
 }
 function resize() {
   const rect = $('canvas-wrap').getBoundingClientRect(); width = rect.width; height = rect.height;
