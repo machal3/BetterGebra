@@ -207,8 +207,9 @@ export function roots(fn, min, max) {
       let a = x - step, b = x, fa = prev;
       for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) { const fm = fn(m); if (fm === 0) { a = b = m; break; } if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
       // Poles (1/x, tan x) change sign too, but there |f| grows while bisecting instead of shrinking.
-      const r = abs(fn(a)) < abs(fn(b)) ? a : b;
-      if (abs(fn(r)) <= Math.min(abs(prev), abs(y))) add(r);
+      // A sample can also land ~1e-16 from the root (sin(x°) at 180), so a float-noise |f(r)| still counts.
+      const r = abs(fn(a)) < abs(fn(b)) ? a : b, fr = abs(fn(r));
+      if (fr <= Math.min(abs(prev), abs(y)) || fr <= 1e-9 * Math.max(abs(prev), abs(y))) add(r);
     }
     // Touching roots (x², sin²x) never change sign: look for a local minimum of |f| that reaches ~0.
     if (i && i < N && abs(y) < abs(prev) && abs(y) <= abs(next) && Math.sign(prev) === Math.sign(y) && Math.sign(next) === Math.sign(y)) {
@@ -301,4 +302,210 @@ export function exact(v) {
     }
   }
   return null;
+}
+
+// --- Proven closed forms ---
+// exact() above only guesses from a float. Here a guess is checked by re-evaluating the expression in exact arithmetic:
+// a number is r + s√k (r, s rational BigInt fractions, k squarefree) or a rational multiple of π. A value that doesn't
+// fit (sin 1, ln 2, e) throws SKIP, a point where the expression is undefined throws NONE; both mean "not proven".
+const SKIP = Symbol('skip'), NONE = Symbol('undefined'), CAP = 10n ** 400n;
+const babs = v => v < 0n ? -v : v;
+const gcd = (a, b) => { a = babs(a); b = babs(b); while (b) [a, b] = [b, a % b]; return a; };
+function q(n, d = 1n) {
+  if (!d) throw NONE;
+  if (d < 0n) { n = -n; d = -d; }
+  const g = gcd(n, d); n /= g; d /= g;
+  if (babs(n) > CAP || d > CAP) throw SKIP;
+  return { n, d };
+}
+const ZERO = q(0n), ONE = q(1n), HALF = q(1n, 2n);
+const qadd = (a, b) => q(a.n * b.d + b.n * a.d, a.d * b.d), qmul = (a, b) => q(a.n * b.n, a.d * b.d), qdiv = (a, b) => q(a.n * b.d, a.d * b.n);
+const qneg = a => ({ n: -a.n, d: a.d }), qsign = a => a.n > 0n ? 1 : a.n < 0n ? -1 : 0;
+const num = (r, s = ZERO, k = 1n) => !s.n ? { r, s: ZERO, k: 1n } : k === 1n ? { r: qadd(r, s), s: ZERO, k: 1n } : { r, s, k };
+const pim = p => p.n ? { pi: p } : num(ZERO);
+const int = n => num(q(BigInt(n)));
+const toNumber = x => { const f = r => Number(r.n) / Number(r.d); return x.pi ? f(x.pi) * Math.PI : f(x.r) + f(x.s) * Math.sqrt(Number(x.k)); };
+function sgn(x) {
+  if (x.pi) return qsign(x.pi);
+  const a = qsign(x.r), b = qsign(x.s);
+  if (!a || !b || a === b) return a || b;
+  // r and s√k have opposite signs: the larger of r² and s²k wins (never equal, √k is irrational).
+  return qsign(qadd(qmul(x.r, x.r), qneg(qmul(qmul(x.s, x.s), q(x.k))))) > 0 ? a : b;
+}
+const neg = x => x.pi ? pim(qneg(x.pi)) : num(qneg(x.r), qneg(x.s), x.k);
+function add(x, y) {
+  if (x.pi || y.pi) {
+    if (x.pi && y.pi) return pim(qadd(x.pi, y.pi));
+    if (!sgn(x.pi ? y : x)) return x.pi ? x : y;
+    throw SKIP;
+  }
+  if (x.s.n && y.s.n && x.k !== y.k) throw SKIP;
+  return num(qadd(x.r, y.r), qadd(x.s, y.s), x.s.n ? x.k : y.k);
+}
+function mul(x, y) {
+  if (x.pi || y.pi) {
+    const [p, o] = x.pi ? [x, y] : [y, x];
+    if (o.pi || o.s.n) throw SKIP;
+    return pim(qmul(p.pi, o.r));
+  }
+  if (x.s.n && y.s.n && x.k !== y.k) throw SKIP;
+  const k = x.s.n ? x.k : y.k;
+  return num(qadd(qmul(x.r, y.r), qmul(qmul(x.s, y.s), q(k))), qadd(qmul(x.r, y.s), qmul(x.s, y.r)), k);
+}
+function div(x, y) {
+  if (x.pi && y.pi) return num(qdiv(x.pi, y.pi));
+  if (y.pi) { if (!sgn(x)) return x; throw SKIP; }
+  // 1/(r + s√k) = (r − s√k)/(r² − s²k); the denominator is 0 only when y = 0.
+  const den = qadd(qmul(y.r, y.r), qneg(qmul(qmul(y.s, y.s), q(y.k))));
+  return mul(x, num(qdiv(y.r, den), qneg(qdiv(y.s, den)), y.k));
+}
+const sub = (x, y) => add(x, neg(y));
+// Equal, or certainly different: r + s√2 and r' + s'√3 with s, s' ≠ 0 are never equal, so SKIP means "different" here.
+function eq(x, y) { try { return !sgn(sub(x, y)); } catch (e) { if (e === SKIP) return false; throw e; } }
+function pow(x, e) {
+  if (e.pi || e.s.n || e.r.d !== 1n || babs(e.r.n) > 10000n) throw SKIP;
+  let m = babs(e.r.n), out = int(1), base = e.r.n < 0n ? div(int(1), x) : x;
+  while (m) { if (m & 1n) out = mul(out, base); m >>= 1n; if (m) base = mul(base, base); }
+  return out;
+}
+function floorX(x) {
+  if (x.pi) throw SKIP;
+  if (!x.s.n) { const { n, d } = x.r; return int(n / d - (n % d < 0n ? 1n : 0n)); } // BigInt / rounds toward 0
+  const guess = Math.floor(toNumber(x)); if (!Number.isFinite(guess)) throw SKIP;
+  let n = BigInt(guess);
+  while (sgn(sub(x, int(n))) < 0) n--;
+  while (sgn(sub(x, int(n + 1n))) >= 0) n++;
+  return int(n);
+}
+function sqrtX(x) {
+  if (x.pi || x.s.n) throw SKIP;
+  if (x.r.n < 0n) throw NONE;
+  // √(n/d) = √(nd)/d; split nd into square · squarefree by trial division.
+  const m = x.r.n * x.r.d; if (m > 10n ** 10n) throw SKIP;
+  let rest = Number(m), out = 1;
+  for (let p = 2; p * p <= rest; p++) while (rest % (p * p) === 0) { rest /= p * p; out *= p; }
+  return num(ZERO, q(BigInt(out), x.r.d), BigInt(rest));
+}
+// sin(mπ/12) where it has a closed form here: multiples of 30° and 45°.
+function sinT(m) {
+  m = ((m % 24) + 24) % 24;
+  const v = [num(ZERO), , num(HALF), num(ZERO, HALF, 2n), num(ZERO, HALF, 3n), , int(1)][m % 12 > 6 ? 12 - m % 12 : m % 12];
+  if (!v) throw SKIP;
+  return m >= 12 ? neg(v) : v;
+}
+function twelfths(x) {
+  if (!x.pi) { if (!sgn(x)) return 0; throw SKIP; }
+  const t = x.pi.n * 12n; if (t % x.pi.d) throw SKIP;
+  return Number((t / x.pi.d) % 24n);
+}
+const sinX = x => sinT(twelfths(x)), cosX = x => sinT(twelfths(x) + 6);
+// Inverse trig: try each nice angle in the function's range.
+function inverse(f, ms, v) {
+  for (const m of ms) {
+    let y; try { y = f(m); } catch (e) { if (e === SKIP || e === NONE) continue; throw e; }
+    if (eq(y, v)) return pim(q(BigInt(m), 12n));
+  }
+  throw SKIP;
+}
+const absX = x => sgn(x) < 0 ? neg(x) : x;
+const beyondOne = v => sgn(sub(absX(v), int(1))) > 0;
+function logBase(base, v) {
+  if (sgn(v) <= 0 || sgn(base) <= 0 || eq(base, int(1))) throw NONE;
+  const n = Math.round(Math.log(toNumber(v)) / Math.log(toNumber(base)));
+  if (Number.isFinite(n) && Math.abs(n) <= 1000 && eq(pow(base, int(n)), v)) return int(n);
+  throw SKIP;
+}
+const EXACT_FN = {
+  sin: sinX, cos: cosX, tan: x => div(sinX(x), cosX(x)), cot: x => div(cosX(x), sinX(x)), sec: x => div(int(1), cosX(x)), csc: x => div(int(1), sinX(x)),
+  asin: v => { if (beyondOne(v)) throw NONE; return inverse(sinT, [-6, -4, -3, -2, 0, 2, 3, 4, 6], v); },
+  acos: v => { if (beyondOne(v)) throw NONE; return inverse(m => sinT(m + 6), [0, 2, 3, 4, 6, 8, 9, 10, 12], v); },
+  atan: v => inverse(m => div(sinT(m), sinT(m + 6)), [-4, -3, -2, 0, 2, 3, 4], v),
+  acot: v => sub(pim(HALF), EXACT_FN.atan(v)),
+  sqrt: sqrtX, root: (n, x) => { if (eq(n, int(2))) return sqrtX(x); throw SKIP; },
+  abs: absX, sign: x => int(sgn(x)), floor: floorX, ceil: x => neg(floorX(neg(x))), round: x => floorX(add(x, num(HALF))),
+  exp: x => { if (!sgn(x)) return int(1); throw SKIP; },
+  ln: x => { if (sgn(x) <= 0) throw NONE; if (eq(x, int(1))) return int(0); throw SKIP; },
+  log: (a, b) => b === undefined ? logBase(int(10), a) : logBase(a, b), log2: x => logBase(int(2), x),
+  min: (...xs) => xs.reduce((a, b) => sgn(sub(b, a)) < 0 ? b : a), max: (...xs) => xs.reduce((a, b) => sgn(sub(b, a)) > 0 ? b : a),
+  mod: (a, b) => sub(a, mul(b, floorX(div(a, b)))),
+};
+// Exact value of a decimal literal: "2,5", ".5", "1e-3".
+function decimal(s) {
+  const m = s.replace(',', '.').match(/^([+-]?)(\d*)\.?(\d*)(?:e([+-]?\d+))?$/i);
+  if (!m) throw SKIP;
+  const e = BigInt(m[4] ?? 0) - BigInt(m[3].length), n = BigInt(`${m[1]}${m[2]}${m[3]}0`) / 10n;
+  if (babs(e) > 400n) throw SKIP;
+  return num(e < 0n ? q(n, 10n ** -e) : q(n * 10n ** e));
+}
+function evaluate(n, x, p) {
+  const ev = m => evaluate(m, x, p);
+  switch (n.t) {
+    case 'num': return decimal(n.s);
+    case 'x': return x;
+    case 'const': if (n.n === 'pi') return pim(ONE); if (n.n === 'tau') return pim(q(2n)); if (n.n === 'phi') return num(HALF, HALF, 5n); throw SKIP;
+    case 'param': return decimal(String(Object.hasOwn(p, n.n) ? p[n.n] : 1));
+    case 'neg': return neg(ev(n.a));
+    case '+': return add(ev(n.a), ev(n.b));
+    case '-': return sub(ev(n.a), ev(n.b));
+    case '*': return mul(ev(n.a), ev(n.b));
+    case '/': return div(ev(n.a), ev(n.b));
+    case '^': { const e = ev(n.b); if (n.a.t === 'const' && !sgn(e)) return int(1); return pow(ev(n.a), e); } // e⁰ = 1
+    case '°': return mul(ev(n.a), pim(q(1n, 180n)));
+    case '!': {
+      const a = ev(n.a);
+      if (a.pi || a.s.n || a.r.d !== 1n || a.r.n < 0n || a.r.n > 170n) throw SKIP;
+      let r = 1n; for (let i = 2n; i <= a.r.n; i++) r *= i;
+      return num(q(r));
+    }
+    case 'call': if (!EXACT_FN[n.n]) throw SKIP; return EXACT_FN[n.n](...n.args.map(ev));
+  }
+}
+// Closed forms close to v worth checking: rationals (continued fractions), pπ/d, (p + s√k)/d.
+function candidates(v) {
+  const out = [], near = c => Math.abs(c - v) <= 1e-6 * Math.max(1, Math.abs(v));
+  let h0 = 0, h1 = 1, k0 = 1, k1 = 0, r = v;
+  for (let i = 0; i < 40 && Number.isFinite(r); i++) {
+    const a = Math.floor(r);
+    [h0, h1, k0, k1] = [h1, a * h1 + h0, k1, a * k1 + k0];
+    if (k1 > 10000 || !Number.isSafeInteger(h1)) break;
+    if (near(h1 / k1)) out.push(num(q(BigInt(h1), BigInt(k1))));
+    if (r === a) break;
+    r = 1 / (r - a);
+  }
+  for (let d = 1; d <= 12; d++) { const p = Math.round(v / Math.PI * d); if (p && near(p * Math.PI / d)) out.push(pim(q(BigInt(p), BigInt(d)))); }
+  for (const k of [2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19, 21, 22, 23, 26, 29, 30]) for (let d = 1; d <= 12; d++) for (let s = -12; s <= 12; s++) {
+    const p = Math.round(v * d - s * Math.sqrt(k));
+    if (s && Number.isSafeInteger(p) && near((p + s * Math.sqrt(k)) / d)) out.push(num(q(BigInt(p), BigInt(d)), q(BigInt(s), BigInt(d)), BigInt(k)));
+  }
+  return out;
+}
+// Text of a closed form, or null when it would read worse than a decimal.
+function show(x) {
+  const small = (...ns) => ns.every(n => babs(n) <= 10n ** 12n);
+  const times = (n, unit) => `${babs(n) === 1n && unit ? '' : babs(n)}${unit}`;
+  const sign = n => n < 0n ? '−' : '';
+  if (x.pi) { const { n, d } = x.pi; return d <= 1000n && small(n) ? `${sign(n)}${times(n, 'π')}${d > 1n ? `/${d}` : ''}` : null; }
+  const D = x.r.d * x.s.d / gcd(x.r.d, x.s.d), A = x.r.n * D / x.r.d, B = x.s.n * D / x.s.d;
+  if (D > 1000n || !small(A, B)) return null;
+  if (!B) return `${sign(A)}${babs(A)}${D > 1n ? `/${D}` : ''}`;
+  const root = times(B, `√${x.k}`);
+  if (!A) return `${sign(B)}${root}${D > 1n ? `/${D}` : ''}`;
+  const body = `${sign(A)}${babs(A)} ${B < 0n ? '−' : '+'} ${root}`;
+  return D > 1n ? `(${body})/${D}` : body;
+}
+function attempt(f) { try { return f(); } catch (e) { if (e === SKIP || e === NONE) return e; throw e; } }
+// Proven point near x where all the given expressions take the same value (for a root, pass the function and '0').
+// ponytail: accepts a closed form within 1e-6 of x; two different roots closer than that could swap labels.
+export function exactPoint(inputs, parameters, x) {
+  const trees = inputs.map(parse);
+  for (const c of candidates(x)) {
+    const ys = attempt(() => trees.map(t => evaluate(t, c, parameters)));
+    if (Array.isArray(ys) && ys.every(y => eq(y, ys[0]))) return { x: show(c), y: show(ys[0]) };
+  }
+  return null;
+}
+// f(x) at a decimal x: closed form, null if it can't be proven, undefined if f isn't defined there.
+export function exactValue(input, parameters, x) {
+  const y = attempt(() => evaluate(parse(input), decimal(String(x)), parameters));
+  return y === NONE ? undefined : y === SKIP ? null : show(y);
 }

@@ -1,4 +1,4 @@
-import { compile, roots, parameterNames, toMathML, intersections, exact, endpoint, holes } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes } from './math.js';
 const parameters = Object.create(null);
 const $ = id => document.getElementById(id);
 const MAX = 8;
@@ -8,10 +8,10 @@ let functions = [], nextId = 1, activeId = null, marks = [];
 let view = { min: -10, max: 10, cy: 0 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
 const canvas = $('plot'), ctx = canvas.getContext('2d'), hoverCtx = $('hover').getContext('2d');
 const format = (n, digits = 5) => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits });
-// Exact form when recognisable (√2, π/4, 1/3), otherwise 8 significant digits.
-const value = n => exact(n) ?? `≈ ${format(n, 8)}`;
-// Shows the fractions in value() strings stacked (MathML) instead of as 5/13. Only for our own number strings.
-const stacked = s => s.replace(/([\dπ√]+)\/(\d+)/g, '<math><mfrac><mn>$1</mn><mn>$2</mn></mfrac></math>');
+// Values shown without ≈ are proven in exact arithmetic (exactPoint, exactValue). Otherwise: ≈ a recognisable form or 8 digits.
+const approx = n => `≈ ${exact(n) ?? format(n, 8)}`;
+// Shows fractions like 5/13 or (1 + √5)/2 stacked (MathML). Only for our own number strings.
+const stacked = s => s.replace(/\(([^()]+)\)\/(\d+)|([\dπ√]+)\/(\d+)/g, (_, a, b, c, d) => `<math><mfrac><mn>${a ?? c}</mn><mn>${b ?? d}</mn></mfrac></math>`);
 const list = (items, max = 6) => items.slice(0, max).join(';  ') + (items.length > max ? ';  …' : '');
 const scale = () => width / (view.max - view.min);
 const px = x => (x - view.min) * scale();
@@ -164,17 +164,21 @@ function updateInsights() {
   const f = active(), fn = f?.fn;
   const target = $('analysis-target'); target.style.setProperty('--c', fn ? f.color : 'transparent');
   target.innerHTML = ''; const label = document.createElement('span'); if (fn) label.innerHTML = toMathML(f.expression); else label.textContent = 'brak funkcji'; target.append(label);
-  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).innerHTML = !fn ? '—' : Number.isFinite(fn(x)) ? stacked(value(fn(x))) : 'nie istnieje';
+  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) {
+    const proven = fn && exactValue(f.expression, parameters, x);
+    $(id).innerHTML = !fn ? '—' : proven === undefined || !Number.isFinite(fn(x)) ? 'nie istnieje' : stacked(proven ?? approx(fn(x)));
+  }
   marks = [];
   if (!fn) { $('roots').textContent = $('intersections').textContent = '—'; return draw(); }
   const zeroOnView = h => Array.from({ length: 31 }, (_, i) => h(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);
   const allZero = zeroOnView(fn), values = allZero ? [] : roots(fn, view.min, view.max);
-  $('roots').innerHTML = allZero ? 'cały widoczny zakres' : values.length ? stacked(`x = ${list(values.map(value))}`) : 'brak';
+  const rootMarks = values.map(x => ({ x, y: 0, label: exactPoint([f.expression, '0'], parameters, x) }));
+  $('roots').innerHTML = allZero ? 'cały widoczny zakres' : values.length ? stacked(`x = ${list(rootMarks.map(m => m.label?.x ?? approx(m.x)))}`) : 'brak';
   const others = plotted().filter(g => g !== f && !zeroOnView(x => fn(x) - g.fn(x)));
-  const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max)).sort((a, b) => a.x - b.x)
+  const crossings = others.flatMap(g => intersections(fn, g.fn, view.min, view.max).map(p => ({ ...p, label: exactPoint([f.expression, g.expression], parameters, p.x) }))).sort((a, b) => a.x - b.x)
     .filter((p, i, all) => !i || p.x !== all[i - 1].x || p.y !== all[i - 1].y); // two graphs crossing at one point: list it once
-  $('intersections').innerHTML = !others.length ? '—' : crossings.length ? stacked(list(crossings.map(p => `(${value(p.x)}; ${value(p.y)})`), 4)) : 'brak';
-  if (f.visible) marks = [...values.map(x => ({ x, y: 0 })), ...crossings];
+  $('intersections').innerHTML = !others.length ? '—' : crossings.length ? stacked(list(crossings.map(p => `(${p.label?.x ?? approx(p.x)}; ${p.label?.y ?? approx(p.y)})`), 4)) : 'brak';
+  if (f.visible) marks = [...rootMarks, ...crossings];
   draw();
 }
 function syncRange() { $('x-min').value = Number(view.min.toFixed(3)); $('x-max').value = Number(view.max.toFixed(3)); $('scale-label').textContent = `x ∈ [${format(view.min)}; ${format(view.max)}]`; }
@@ -229,7 +233,7 @@ function drawHover() {
   if (!pointer || drag) { tip.hidden = true; return; }
   // A root or intersection within 8 px wins: show its exact coordinates.
   const mark = marks.find(m => Math.hypot(px(m.x) - pointer.x, py(m.y) - pointer.y) < 8);
-  let hit = mark && { x: mark.x, y: mark.y, color: active().color, exact: true };
+  let hit = mark && { ...mark, color: active().color, exact: true };
   if (!hit) {
     const x = fromX(pointer.x);
     for (const f of plotted()) {
@@ -242,7 +246,7 @@ function drawHover() {
   const hx = px(hit.x), hy = py(hit.y);
   hoverCtx.beginPath(); hoverCtx.arc(hx, hy, 5, 0, Math.PI * 2); hoverCtx.fillStyle = hit.color; hoverCtx.fill();
   hoverCtx.lineWidth = 2.5; hoverCtx.strokeStyle = theme['plot-bg']; hoverCtx.stroke();
-  tip.innerHTML = hit.exact ? stacked(`x = ${value(hit.x)}   y = ${value(hit.y)}`) : `x ${format(hit.x)}   y ${format(hit.y)}`;
+  tip.innerHTML = hit.exact ? stacked(`x = ${hit.label?.x ?? approx(hit.x)}   y = ${hit.label?.y ?? approx(hit.y)}`) : `x ${format(hit.x)}   y ${format(hit.y)}`;
   tip.style.setProperty('--c', hit.color);
   tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, hx + 14))}px`;
   tip.style.top = `${Math.max(8, Math.min(height - tip.offsetHeight - 8, hy - 40))}px`;

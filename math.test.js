@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, roots, parameterNames, toMathML, intersections, exact, endpoint, holes } from './math.js';
+import { compile, roots, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes } from './math.js';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
@@ -174,4 +174,28 @@ test('endpoints: where each side of the graph is joined', () => {
   assert.ok(Math.abs(t.x - Math.PI / 2) < 1e-15 && t.left === Infinity && t.right === -Infinity && t.dots.length === 0);
   const steep = endpoint(compile('1000000x'), -1e-6, 1e-6, .01);
   assert.ok(steep.left === steep.right && steep.dots.length === 0);  // continuous: joined, nothing to mark
+});
+
+test('proven exact roots, intersections and values', () => {
+  const root = (e, min = -10, max = 10, p = {}) => roots(compile(e, p), min, max).map(x => exactPoint([e, '0'], p, x)?.x ?? null);
+  assert.deepEqual(root('x^2-x-1'), ['(1 − √5)/2', '(1 + √5)/2']);
+  assert.deepEqual(root('x^4-5x^2+6'), ['−√3', '−√2', '√2', '√3']);
+  assert.deepEqual(root('(x-sqrt(2))^2'), ['√2']);                     // touching root, found less precisely
+  assert.deepEqual(root('2sin(x)-1', 0, 6), ['π/6', '5π/6']);
+  assert.deepEqual(root('|x^2-4|'), ['−2', '2']);
+  assert.deepEqual(root('a*x+b', -1, 1, { a: 3, b: .1 }), ['−1/30']);
+  assert.deepEqual(root('sin(x°)', -400, 400), ['−360', '−180', '0', '180', '360']);
+  // Close to a closed form but not equal, or not provable here: no exact label.
+  assert.deepEqual(root('x^2 - 2.00000000001', 0, 3), [null]);
+  assert.deepEqual(root('x^2-x-1+1e-15', 1, 2), [null]);
+  assert.deepEqual(root('x^3-2'), [null]);
+  assert.deepEqual(root('e^x-2'), [null]);
+  const cross = (f, g) => intersections(compile(f), compile(g), -5, 5).map(p => exactPoint([f, g], {}, p.x));
+  assert.deepEqual(cross('sin x', 'cos x')[1], { x: 'π/4', y: '√2/2' });
+  assert.deepEqual(cross('x^2', 'x+1'), [{ x: '(1 − √5)/2', y: '(3 − √5)/2' }, { x: '(1 + √5)/2', y: '(3 + √5)/2' }]);
+  assert.deepEqual(cross('e^x', 'x+2'), [null, null]);
+  const at = (e, x) => exactValue(e, {}, x);
+  assert.deepEqual([at('cos x', 0), at('x/3', 1), at('e^x', 0), at('sin(pi/3)+x', 1), at('5!', 0), at('2,5x', 1)], ['1', '1/3', '1', '(2 + √3)/2', '120', '5/2']);
+  assert.equal(at('e^x', 1), null);                                      // e is not provable here: shown as ≈
+  assert.deepEqual([at('tan(x pi/2)', 1), at('1/(x-1)', 1), at('sqrt(x-2)', 1)], [undefined, undefined, undefined]); // not defined
 });
