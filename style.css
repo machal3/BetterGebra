@@ -171,6 +171,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .range label { display: grid; gap: 4px; color: var(--text-2); font-size: 12px; font-weight: 500; }
 .range input { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-family: var(--mono); font-size: 13px; }
+.equal-axes { margin-top: 8px; border: 1px solid var(--border); }
 .range input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .settings .error { margin-top: 8px; }
 

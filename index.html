@@ -72,7 +72,10 @@
         <div class="range">
           <label>X od <input id="x-min" type="number" value="-10" step="any"></label>
           <label>X do <input id="x-max" type="number" value="10" step="any"></label>
+          <label>Y od <input id="y-min" type="number" step="any"></label>
+          <label>Y do <input id="y-max" type="number" step="any"></label>
         </div>
+        <button id="equal-axes" class="ghost equal-axes" type="button">Równe osie 1:1</button>
         <p id="range-error" class="error" role="alert"></p>
       </details>
 
@@ -87,7 +90,7 @@
         <button id="zoom-in" type="button" aria-label="Przybliż" title="Przybliż (+)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
         <button id="zoom-out" type="button" aria-label="Oddal" title="Oddal (−)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
         <span class="sep"></span>
-        <button id="fit-view" type="button" aria-label="Dopasuj do wykresu" title="Dopasuj"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button id="fit-view" type="button" aria-label="Dopasuj oś Y do wykresów" title="Dopasuj oś Y do wykresów"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <button id="reset-view" type="button" aria-label="Przywróć widok" title="Przywróć widok (0)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
         <span class="sep"></span>
         <button id="export" type="button" aria-label="Eksportuj PNG" title="Eksportuj PNG"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
@@ -95,7 +98,7 @@
 
       <div id="coordinates" class="readout tabular" hidden></div>
       <div class="stage-foot">
-        <span class="hint">Przeciągnij, aby przesunąć · Przewiń, aby przybliżyć</span>
+        <span class="hint">Przeciągnij, aby przesunąć · Przewiń, aby przybliżyć · Shift: tylko oś Y</span>
         <span id="scale-label" class="tabular"></span>
       </div>
     </main>
@@ -121,6 +124,7 @@
       <tr><td><code>2,5x   6 : x   [x+1]</code></td><td>Przecinek dziesiętny, dwukropek dzielenia, nawiasy () [] {}</td></tr>
       <tr><td><code>\frac{1}{x}   \sqrt[3]{x}</code></td><td>Możesz wkleić wzór w LaTeX-u</td></tr>
     </table>
+    <p class="muted">Widok: kółko myszy, gest szczypania lub dwa palce przybliżają; Shift + kółko skaluje tylko oś Y, Alt + kółko tylko oś X. Przycisk Dopasuj dobiera zakres Y do wykresów (np. 1000x² lub e^x dla x od 0 do 20). W sekcji Widok wpiszesz zakresy X i Y albo wrócisz do równych osi 1:1.</p>
     <p class="muted">Miejsca zerowe i punkty przecięcia są liczone w widocznym zakresie z pełną precyzją; wartości bez znaku ≈ (np. 1/3, √2, π/4, (1 + √5)/2) są sprawdzone w arytmetyce dokładnej, a wartości z ≈ to przybliżenia. Najedź na punkt na wykresie, aby zobaczyć jego współrzędne.</p>
     <p class="muted">Końce wykresu: pełna kropka ● — punkt należy do wykresu (np. √x w 0, schodek floor x z lewej); pusta ○ — funkcja tylko dąży do tego punktu (np. sin(x)/x w 0). Bez kropki, gdy wykres ucieka do nieskończoności.</p>
   </dialog>

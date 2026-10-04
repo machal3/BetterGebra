@@ -5,7 +5,7 @@ const MAX = 8;
 const palette = ['#4f6bed', '#e5484d', '#12a594', '#f08c00', '#8e4ec6', '#0090c1', '#d6409f', '#5c7c2f'];
 const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 let functions = [], nextId = 1, activeId = null, marks = [];
-let view = { min: -10, max: 10, cy: 0 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
+let view = { min: -10, max: 10, cy: 0, ratio: 1 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
 const canvas = $('plot'), ctx = canvas.getContext('2d'), hoverCtx = $('hover').getContext('2d');
 const format = (n, digits = 5) => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits });
 // Values shown without ≈ are proven in exact arithmetic (exactPoint, exactValue). Otherwise: ≈ a recognisable form or 8 digits.
@@ -13,11 +13,14 @@ const approx = n => `≈ ${exact(n) ?? format(n, 8)}`;
 // Shows fractions like 5/13 or (1 + √5)/2 stacked (MathML). Only for our own number strings.
 const stacked = s => s.replace(/\(([^()]+)\)\/(\d+)|([\dπ√]+)\/(\d+)/g, (_, a, b, c, d) => `<math><mfrac><mn>${a ?? c}</mn><mn>${b ?? d}</mn></mfrac></math>`);
 const list = (items, max = 6) => items.slice(0, max).join(';  ') + (items.length > max ? ';  …' : '');
-const scale = () => width / (view.max - view.min);
+// view.ratio = y units per x unit on screen: 1 draws both axes to the same scale, 1000 fits 1000x² next to x.
+const scale = () => width / (view.max - view.min), yscale = () => scale() / view.ratio;
 const px = x => (x - view.min) * scale();
-const py = y => height / 2 - (y - view.cy) * scale();
+const py = y => height / 2 - (y - view.cy) * yscale();
 const fromX = x => view.min + x / scale();
-const fromY = y => view.cy + (height / 2 - y) / scale();
+const fromY = y => view.cy + (height / 2 - y) / yscale();
+// Keeps both visible ranges where floats still draw them cleanly.
+const fits = (range, ratio) => { const ys = height * range * ratio / width; return range >= 1e-4 && range <= 1e7 && ys >= 1e-4 && ys <= 1e12; };
 const active = () => functions.find(f => f.id === activeId);
 const plotted = () => functions.filter(f => f.visible && f.fn);
 
@@ -181,33 +184,40 @@ function updateInsights() {
   if (f.visible) marks = [...rootMarks, ...crossings];
   draw();
 }
-function syncRange() { $('x-min').value = Number(view.min.toFixed(3)); $('x-max').value = Number(view.max.toFixed(3)); $('scale-label').textContent = `x ∈ [${format(view.min)}; ${format(view.max)}]`; }
+function syncRange() {
+  const bottom = fromY(height), top = fromY(0), short = v => Number(v.toPrecision(7));
+  [$('x-min').value, $('x-max').value, $('y-min').value, $('y-max').value] = [view.min, view.max, bottom, top].map(short);
+  $('scale-label').textContent = `x ∈ [${format(view.min)}; ${format(view.max)}]   y ∈ [${format(bottom)}; ${format(top)}]`;
+}
 function refresh() { renderParameters(); draw(); updateInsights(); syncRange(); }
 
 // --- Plot ---
 function draw() {
   if (!width || !height) return;
   ctx.fillStyle = theme['plot-bg']; ctx.fillRect(0, 0, width, height);
-  const unit = scale(), bottom = fromY(height), top = fromY(0);
-  const raw = 70 / unit, magnitude = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map(v => v * magnitude).find(v => v >= raw);
-  function grid(spacing, color) {
+  const bottom = fromY(height), top = fromY(0);
+  const tick = unit => { const raw = 70 / unit, magnitude = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map(v => v * magnitude).find(v => v >= raw); };
+  const step = tick(scale()), ystep = tick(yscale());
+  function grid(sx, sy, color) {
     ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
-    for (let x = Math.ceil(view.min / spacing) * spacing; x <= view.max; x += spacing) { const p = Math.round(px(x)) + .5; ctx.moveTo(p, 0); ctx.lineTo(p, height); }
-    for (let y = Math.ceil(bottom / spacing) * spacing; y <= top; y += spacing) { const p = Math.round(py(y)) + .5; ctx.moveTo(0, p); ctx.lineTo(width, p); }
+    for (let x = Math.ceil(view.min / sx) * sx; x <= view.max; x += sx) { const p = Math.round(px(x)) + .5; ctx.moveTo(p, 0); ctx.lineTo(p, height); }
+    for (let y = Math.ceil(bottom / sy) * sy; y <= top; y += sy) { const p = Math.round(py(y)) + .5; ctx.moveTo(0, p); ctx.lineTo(width, p); }
     ctx.stroke();
   }
-  if ($('grid-toggle').checked) { grid(step / 5, theme['grid-minor']); grid(step, theme['grid-major']); }
+  if ($('grid-toggle').checked) { grid(step / 5, ystep / 5, theme['grid-minor']); grid(step, ystep, theme['grid-major']); }
   if ($('axes-toggle').checked) {
     ctx.strokeStyle = theme.axis; ctx.lineWidth = 1.25; ctx.beginPath();
     ctx.moveTo(Math.round(px(0)) + .5, 0); ctx.lineTo(Math.round(px(0)) + .5, height); ctx.moveTo(0, Math.round(py(0)) + .5); ctx.lineTo(width, Math.round(py(0)) + .5); ctx.stroke();
     ctx.fillStyle = theme.label; ctx.font = '11px "Geist Mono", ui-monospace, monospace';
-    const axisY = Math.max(14, Math.min(height - 40, py(0))), axisX = Math.max(30, Math.min(width - 12, px(0)));
+    const ys = []; for (let y = Math.ceil(bottom / ystep) * ystep; y < top; y += ystep) if (Math.abs(y) > ystep / 100) ys.push(y);
+    // Long y labels (485 165 195) push the pinned axis right instead of running off the canvas.
+    const labelWidth = Math.max(0, ...ys.map(y => ctx.measureText(format(y)).width));
+    const axisY = Math.max(14, Math.min(height - 40, py(0))), axisX = Math.max(labelWidth + 14, Math.min(width - 12, px(0)));
     ctx.textAlign = 'center';
     for (let x = Math.ceil(view.min / step) * step; x < view.max; x += step) if (Math.abs(x) > step / 100 && px(x) > 16 && px(x) < width - 24) ctx.fillText(format(x), px(x), axisY + 16);
     ctx.textAlign = 'right';
-    for (let y = Math.ceil(bottom / step) * step; y < top; y += step) if (Math.abs(y) > step / 100) ctx.fillText(format(y), axisX - 8, py(y) + 4);
-    ctx.fillText('0', axisX - 8, axisY + 16);
+    for (const y of ys) ctx.fillText(format(y), axisX - 8, py(y) + 4);
+    if (axisX === px(0) && axisY === py(0)) ctx.fillText('0', axisX - 8, axisY + 16); // origin label only where the axes really cross
     ctx.font = 'italic 14px Georgia, serif'; ctx.fillText('x', width - 14, axisY - 8); ctx.textAlign = 'left'; ctx.fillText('y', axisX + 8, 18);
   }
   const current = active();
@@ -270,7 +280,7 @@ function dot(x, y, r, fill, stroke) {
 // and asymptotes (tan x, 1/x) are drawn exactly instead of being bridged or cut short.
 // Returns the endpoint dots of the pieces it drew (domain edges, jumps, removable holes).
 function plot(fn) {
-  const Y = p => py(fn(fromX(p))), ok = Number.isFinite, limit = height * 10, tol = .5 / scale(), ends = [];
+  const Y = p => py(fn(fromX(p))), ok = Number.isFinite, limit = height * 10, tol = .5 / yscale(), ends = [];
   let pen = false;
   const point = (p, y) => {
     if (!ok(y)) { pen = false; return; }
@@ -309,24 +319,28 @@ function resize() {
   const rect = $('canvas-wrap').getBoundingClientRect(); width = rect.width; height = rect.height;
   const dpr = window.devicePixelRatio || 1;
   for (const [c, cx] of [[canvas, ctx], [$('hover'), hoverCtx]]) { c.width = Math.round(width * dpr); c.height = Math.round(height * dpr); cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
-  draw();
+  syncRange(); draw(); // the y range depends on the canvas height
 }
 function setView(next) { view = next; syncRange(); schedule({ insights: true }); }
-function reset() { $('range-error').textContent = ''; setView({ min: -10, max: 10, cy: 0 }); }
-function zoom(factor, x = width / 2, y = height / 2) {
-  const range = (view.max - view.min) * factor; if (range < .0001 || range > 1e7) return;
+function reset() { $('range-error').textContent = ''; setView({ min: -10, max: 10, cy: 0, ratio: 1 }); }
+// fx, fy scale the visible x and y range (< 1 zooms in), keeping the point under (x; y) in place.
+function zoom(fx, fy = fx, x = width / 2, y = height / 2) {
+  const range = (view.max - view.min) * fx, ratio = view.ratio * fy / fx; if (!fits(range, ratio)) return;
   const anchorX = fromX(x), anchorY = fromY(y), min = anchorX - range * x / width;
-  setView({ min, max: min + range, cy: anchorY - (height / 2 - y) * range / width });
+  setView({ min, max: min + range, ratio, cy: anchorY - (height / 2 - y) * range * ratio / width });
 }
-function pan(dx, dy) { const s = scale(); setView({ min: view.min + dx / s, max: view.max + dx / s, cy: view.cy + dy / s }); }
+function pan(dx, dy) { const s = scale(); setView({ ...view, min: view.min + dx / s, max: view.max + dx / s, cy: view.cy + dy / yscale() }); }
+// Keeps the x range and fits y to the graphs.
 function fit() {
   const ys = [];
   for (const f of plotted()) for (let i = 0; i <= 200; i++) { const y = f.fn(view.min + (view.max - view.min) * i / 200); if (Number.isFinite(y)) ys.push(y); }
   if (!ys.length) return toast('Brak wartości funkcji w tym zakresie.');
   ys.sort((a, b) => a - b);
-  const low = ys[Math.floor(ys.length * .03)], high = ys[Math.min(ys.length - 1, Math.floor(ys.length * .97))];
-  const range = Math.min(1e7, Math.max(view.max - view.min, (high - low || 2) * width / height * 1.2)), center = (view.min + view.max) / 2;
-  setView({ min: center - range / 2, max: center + range / 2, cy: (low + high) / 2 });
+  let low = ys[Math.floor(ys.length * .03)], high = ys[Math.min(ys.length - 1, Math.floor(ys.length * .97))];
+  // Percentiles drop asymptote spikes but would clip a steep end (e^x on [0; 20]): keep true extremes that are near.
+  const p = high - low; if (ys[0] >= low - 3 * p) low = ys[0]; if (ys.at(-1) <= high + 3 * p) high = ys.at(-1);
+  const k = height * (view.max - view.min) / width, span = (high - low) * 1.2 || Math.max(2, Math.abs(low) / 2);
+  setView({ ...view, cy: (low + high) / 2, ratio: Math.min(1e12 / k, Math.max(1e-4 / k, span / k)) });
 }
 
 // --- Events ---
@@ -337,25 +351,55 @@ $('zoom-in').onclick = () => zoom(.75);
 $('zoom-out').onclick = () => zoom(4 / 3);
 $('fit-view').onclick = fit;
 $('reset-view').onclick = reset;
+$('equal-axes').onclick = () => setView({ ...view, ratio: 1 });
 for (const id of ['grid-toggle', 'axes-toggle']) $(id).onchange = draw;
-for (const id of ['x-min', 'x-max']) $(id).onchange = () => {
-  const min = Number($('x-min').value), max = Number($('x-max').value);
-  if (!$('x-min').value || !$('x-max').value || !Number.isFinite(min) || !Number.isFinite(max) || max - min < .0001 || max - min > 1e7 || Math.max(Math.abs(min), Math.abs(max)) > 1e9) {
-    $('range-error').textContent = 'Podaj rosnący zakres o szerokości od 0,0001 do 10 000 000, w granicach ±10⁹.'; return;
+const rangeInputs = ['x-min', 'x-max', 'y-min', 'y-max'];
+for (const id of rangeInputs) $(id).onchange = () => {
+  const [x0, x1, y0, y1] = rangeInputs.map(id => $(id).value === '' ? NaN : Number($(id).value)), ratio = (y1 - y0) * width / (height * (x1 - x0));
+  if (!fits(x1 - x0, ratio) || Math.max(Math.abs(x0), Math.abs(x1)) > 1e9 || Math.max(Math.abs(y0), Math.abs(y1)) > 1e15) {
+    $('range-error').textContent = 'Podaj rosnące zakresy: X o szerokości od 0,0001 do 10 000 000 w granicach ±10⁹, Y o wysokości od 0,0001 do 10¹² w granicach ±10¹⁵.'; return;
   }
-  $('range-error').textContent = ''; setView({ ...view, min, max });
+  $('range-error').textContent = ''; setView({ min: x0, max: x1, cy: (y0 + y1) / 2, ratio });
 };
-canvas.addEventListener('wheel', e => { e.preventDefault(); const r = canvas.getBoundingClientRect(); zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
-canvas.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, ...view }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; schedule(); };
+// Zoom by how far the wheel moved, not per event: a trackpad sends dozens of small events per gesture.
+// Shift = y axis only (some systems then report the wheel as deltaX), Alt = x axis only.
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect(), delta = (e.shiftKey && !e.deltaY ? e.deltaX : e.deltaY) * [1, 16, height][e.deltaMode];
+  if (!delta) return;
+  // A mouse notch (~100 px) zooms ~13%; trackpad pinch arrives as ctrl+wheel with small deltas.
+  const factor = Math.exp(Math.max(-300, Math.min(300, delta)) * (e.ctrlKey ? .01 : .0012));
+  zoom(e.shiftKey ? 1 : factor, e.altKey ? 1 : factor, e.clientX - r.left, e.clientY - r.top);
+}, { passive: false });
+// One pointer drags the view, two pinch-zoom it. Every move is measured from the gesture's start, keeping the
+// point that was under the start midpoint under the current midpoint (so a pinch also pans).
+const pointers = new Map();
+function startGesture() {
+  const [a, b = a] = pointers.values(), r = canvas.getBoundingClientRect();
+  drag = { view: { ...view }, x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top, d: Math.hypot(a.x - b.x, a.y - b.y) };
+}
+canvas.onpointerdown = e => {
+  canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  startGesture(); canvas.style.cursor = 'grabbing'; schedule();
+};
 canvas.onpointermove = e => {
   const r = canvas.getBoundingClientRect(); pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
-  if (!drag) return schedule();
-  const dx = (e.clientX - drag.x) / scale();
-  view = { min: drag.min - dx, max: drag.max - dx, cy: drag.cy + (e.clientY - drag.y) / scale() }; syncRange();
+  if (!pointers.has(e.pointerId)) return schedule();
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const [a, b = a] = pointers.values(), mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top, d = Math.hypot(a.x - b.x, a.y - b.y);
+  const v = drag.view, range = (v.max - v.min) * (drag.d && d ? drag.d / d : 1);
+  if (!fits(range, v.ratio)) return;
+  const sx = width / (v.max - v.min), anchorX = v.min + drag.x / sx, anchorY = v.cy + (height / 2 - drag.y) * v.ratio / sx;
+  const min = anchorX - mx * range / width;
+  view = { ...v, min, max: min + range, cy: anchorY - (height / 2 - my) * range * v.ratio / width }; syncRange();
   schedule({ graphs: true });
 };
-function endDrag() { if (drag) { drag = null; canvas.style.cursor = ''; schedule({ insights: true }); } }
-canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = endDrag;
+function endPointer(e) {
+  if (!pointers.delete(e.pointerId)) return;
+  if (pointers.size) return startGesture(); // a finger lifted mid-pinch: carry on dragging with the other
+  drag = null; canvas.style.cursor = ''; schedule({ insights: true });
+}
+canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = endPointer;
 canvas.onpointerleave = () => { if (!drag) { pointer = null; schedule(); } };
 canvas.onkeydown = e => {
   const moves = { ArrowLeft: [-40, 0], ArrowRight: [40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
