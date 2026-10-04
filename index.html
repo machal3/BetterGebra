@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Bettergebra — kalkulator wykresów funkcji. Rysuj, porównuj i analizuj funkcje.">
+  <title>Bettergebra — kalkulator wykresów</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="panel" aria-label="Panel funkcji">
+      <header class="panel-head">
+        <a class="brand" href="./">
+          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M7 23c4 0 5-14 9-14s5 14 9 14" fill="none" stroke-width="2.4" stroke-linecap="round"/></svg>
+          Bettergebra
+        </a>
+        <div class="head-actions">
+          <button class="ghost" id="examples-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
+            Przykłady
+          </button>
+          <button class="icon" id="help-button" type="button" aria-label="Pomoc">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M9.2 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4.5"/><path d="M12 17.5h.01"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Funkcje</h2>
+          <span id="function-count" class="muted tabular">1 / 8</span>
+        </div>
+        <ol id="function-list" class="function-list"></ol>
+        <button id="add-function" class="add-function" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Dodaj funkcję
+        </button>
+      </section>
+
+      <section class="section" aria-labelledby="parameters-title">
+        <div class="section-head"><h2 id="parameters-title">Parametry</h2><span class="muted">Wspólne dla wykresów</span></div>
+        <p id="parameter-empty" class="parameter-hint">Wpisz np. a*x+b w polu funkcji. Parametry pojawią się tutaj z wartością 1.</p>
+        <div id="parameter-list" class="parameter-list"></div>
+      </section>
+
+      <section class="section" aria-live="polite">
+        <div class="section-head">
+          <h2>Analiza</h2>
+          <span id="analysis-target" class="target"></span>
+        </div>
+        <dl class="stats">
+          <div><dt>f(0)</dt><dd id="value-zero">—</dd></div>
+          <div><dt>f(1)</dt><dd id="value-one">—</dd></div>
+          <div class="wide"><dt>Miejsca zerowe <span class="muted">w widocznym zakresie</span></dt><dd id="roots">—</dd></div>
+        </dl>
+      </section>
+
+      <details class="section settings">
+        <summary>
+          <h2>Widok</h2>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </summary>
+        <label class="toggle">Siatka <input type="checkbox" id="grid-toggle" checked></label>
+        <label class="toggle">Osie współrzędnych <input type="checkbox" id="axes-toggle" checked></label>
+        <div class="range">
+          <label>X od <input id="x-min" type="number" value="-10" step="any"></label>
+          <label>X do <input id="x-max" type="number" value="10" step="any"></label>
+        </div>
+        <p id="range-error" class="error" role="alert"></p>
+      </details>
+
+      <footer class="panel-foot muted">Kąty w radianach · Enter dodaje kolejną funkcję</footer>
+    </aside>
+
+    <main class="stage" id="canvas-wrap">
+      <canvas id="plot" tabindex="0" aria-label="Wykres funkcji. Przeciągnij lub użyj strzałek, aby przesunąć; plus i minus zmieniają skalę, 0 przywraca widok."></canvas>
+
+      <div class="toolbar" role="toolbar" aria-label="Narzędzia wykresu">
+        <button id="zoom-in" type="button" aria-label="Przybliż" title="Przybliż (+)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button id="zoom-out" type="button" aria-label="Oddal" title="Oddal (−)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <span class="sep"></span>
+        <button id="fit-view" type="button" aria-label="Dopasuj do wykresu" title="Dopasuj"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+        <button id="reset-view" type="button" aria-label="Przywróć widok" title="Przywróć widok (0)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+        <span class="sep"></span>
+        <button id="export" type="button" aria-label="Eksportuj PNG" title="Eksportuj PNG"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+      </div>
+
+      <div id="coordinates" class="readout tabular" hidden></div>
+      <div class="stage-foot">
+        <span class="hint">Przeciągnij, aby przesunąć · Przewiń, aby przybliżyć</span>
+        <span id="scale-label" class="tabular"></span>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <header><h2 id="help-title">Jak zapisywać funkcje</h2><button class="icon close-dialog" type="button" aria-label="Zamknij"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <p>Wpisz wyrażenie zmiennej <i>x</i> w wierszu na liście — wykres aktualizuje się na bieżąco. Enter w ostatnim wierszu dodaje kolejną funkcję (maksymalnie 8).</p>
+    <table class="syntax">
+      <tr><td><code>x^2 + 2x - 3</code></td><td>Potęgi, mnożenie domyślne</td></tr>
+      <tr><td><code>a*x + b</code></td><td>Litery tworzą parametry o wartości 1. Edytuj je w sekcji Parametry; wartości są wspólne dla wykresów. Możesz też pisać ax+b.</td></tr>
+      <tr><td><code>sin(x)  cos(x)  tan(x)</code></td><td>Trygonometria (radiany)</td></tr>
+      <tr><td><code>asin  acos  atan</code></td><td>Funkcje odwrotne</td></tr>
+      <tr><td><code>sqrt(x)  abs(x)</code></td><td>Pierwiastek, moduł</td></tr>
+      <tr><td><code>ln(x)  log(x)  exp(x)</code></td><td>Logarytm naturalny, dziesiętny, wykładnicza</td></tr>
+      <tr><td><code>floor(x)  ceil(x)</code></td><td>Zaokrąglenia</td></tr>
+      <tr><td><code>pi  e</code></td><td>Stałe</td></tr>
+    </table>
+    <p class="muted">Miejsca zerowe są przybliżeniami numerycznymi w widocznym zakresie — pierwiastki styczne i szybkie oscylacje mogą zostać pominięte.</p>
+  </dialog>
+
+  <dialog id="examples-dialog" aria-labelledby="examples-title">
+    <header><h2 id="examples-title">Przykłady</h2><button class="icon close-dialog" type="button" aria-label="Zamknij"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <div class="examples">
+      <button type="button" data-expression="a*x+b"><code>a*x+b</code><span>Prosta z parametrami</span></button>
+      <button type="button" data-expression="x^2"><code>x^2</code><span>Parabola</span></button>
+      <button type="button" data-expression="sin(x)"><code>sin(x)</code><span>Sinusoida</span></button>
+      <button type="button" data-expression="abs(x)"><code>abs(x)</code><span>Wartość bezwzględna</span></button>
+      <button type="button" data-expression="x sin(x)"><code>x sin(x)</code><span>Rosnąca fala</span></button>
+      <button type="button" data-expression="exp(-x^2)"><code>exp(-x^2)</code><span>Krzywa Gaussa</span></button>
+      <button type="button" data-expression="x^3 - 3x"><code>x^3 - 3x</code><span>Wielomian 3. stopnia</span></button>
+      <button type="button" data-expression="1/x"><code>1/x</code><span>Hiperbola</span></button>
+      <button type="button" data-expression="ln(x)"><code>ln(x)</code><span>Logarytm naturalny</span></button>
+      <button type="button" data-expression="sqrt(x)"><code>sqrt(x)</code><span>Pierwiastek</span></button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

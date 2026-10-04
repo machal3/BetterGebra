@@ -1,0 +1,259 @@
+import { compile, roots, parameterNames } from './math.js';
+const parameters = Object.create(null);
+const $ = id => document.getElementById(id);
+const MAX = 8;
+const palette = ['#4f6bed', '#e5484d', '#12a594', '#f08c00', '#8e4ec6', '#0090c1', '#d6409f', '#5c7c2f'];
+const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+let functions = [], nextId = 1, activeId = null;
+let view = { min: -10, max: 10, cy: 0 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
+const canvas = $('plot'), ctx = canvas.getContext('2d');
+const format = n => Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(5)).toLocaleString('pl-PL', { maximumFractionDigits: 5 });
+const scale = () => width / (view.max - view.min);
+const px = x => (x - view.min) * scale();
+const py = y => height / 2 - (y - view.cy) * scale();
+const fromX = x => view.min + x / scale();
+const fromY = y => view.cy + (height / 2 - y) / scale();
+const active = () => functions.find(f => f.id === activeId);
+const plotted = () => functions.filter(f => f.visible && f.fn);
+
+function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').classList.remove('visible'), 2600); }
+function readTheme() { const s = getComputedStyle(document.documentElement); for (const k of ['plot-bg', 'grid-minor', 'grid-major', 'axis', 'label']) theme[k] = s.getPropertyValue(`--${k}`).trim(); }
+
+// --- Function list ---
+function setExpression(f, expression) {
+  f.expression = expression;
+  f.parameters = [];
+  if (!expression.trim()) { f.fn = null; f.error = ''; return; }
+  try {
+    f.parameters = parameterNames(expression);
+    for (const name of f.parameters) if (!Object.hasOwn(parameters, name)) parameters[name] = 1;
+    f.fn = compile(expression, parameters); f.error = '';
+  } catch (e) { f.fn = null; f.error = e.message; }
+}
+function renderParameters() {
+  const names = [...new Set(functions.flatMap(f => f.parameters))].sort();
+  $('parameter-empty').hidden = names.length > 0;
+  $('parameter-list').replaceChildren(...names.map(name => {
+    const row = document.createElement('div'); row.className = 'parameter';
+    const label = document.createElement('label'); label.htmlFor = `parameter-${name}`; label.textContent = `${name} =`;
+    const input = document.createElement('input');
+    Object.assign(input, { id: `parameter-${name}`, type: 'number', step: 'any', value: parameters[name] });
+    input.setAttribute('aria-label', `Wartość parametru ${name}`);
+    const error = document.createElement('p'); error.className = 'error'; error.id = `parameter-error-${name}`; error.setAttribute('role', 'alert');
+    input.setAttribute('aria-describedby', error.id);
+    input.oninput = () => {
+      const value = input.valueAsNumber, valid = Number.isFinite(value);
+      input.setAttribute('aria-invalid', String(!valid));
+      error.textContent = valid ? '' : 'Podaj liczbę. Wykres zachowuje ostatnią poprawną wartość.';
+      if (!valid) return;
+      parameters[name] = value;
+      $('coordinates').hidden = true;
+      draw(); updateInsights();
+    };
+    row.append(label, input, error); return row;
+  }));
+}
+function addFunction(expression = '', focus = true) {
+  if (functions.length >= MAX) return toast('Możesz porównywać do 8 funkcji naraz.');
+  const f = { id: nextId++, color: palette.find(c => !functions.some(g => g.color === c)), visible: true };
+  setExpression(f, expression); functions.push(f); activeId = f.id;
+  renderList(); refresh(); if (focus) rowInput(f.id).focus();
+}
+function removeFunction(id) {
+  const index = functions.findIndex(f => f.id === id);
+  functions.splice(index, 1);
+  if (!functions.length) return addFunction();
+  if (activeId === id) activeId = functions[Math.max(0, index - 1)].id;
+  renderList(); refresh();
+}
+const rowInput = id => document.querySelector(`[data-id="${id}"] input`);
+function syncRow(f) {
+  const row = document.querySelector(`[data-id="${f.id}"]`);
+  row.classList.toggle('active', f.id === activeId);
+  row.classList.toggle('invalid', !!f.error);
+  row.classList.toggle('hidden-fn', !f.visible);
+  row.querySelector('.swatch').setAttribute('aria-pressed', String(f.visible));
+  row.querySelector('.swatch').setAttribute('aria-label', `${f.visible ? 'Ukryj' : 'Pokaż'} wykres`);
+  row.querySelector('input').setAttribute('aria-invalid', String(!!f.error));
+  row.querySelector('.error').textContent = f.error;
+}
+function renderList() {
+  $('function-list').replaceChildren(...functions.map((f, i) => {
+    const row = document.createElement('li'); row.className = 'fn'; row.dataset.id = f.id; row.style.setProperty('--c', f.color);
+    const swatch = document.createElement('button'); swatch.type = 'button'; swatch.className = 'swatch';
+    swatch.onclick = () => { f.visible = !f.visible; syncRow(f); draw(); updateInsights(); };
+    const field = document.createElement('label'); field.className = 'fn-field';
+    const prefix = document.createElement('span'); prefix.textContent = 'y =';
+    const input = document.createElement('input');
+    Object.assign(input, { value: f.expression, placeholder: i ? 'np. sin(x)' : 'np. x^2 - 2', autocomplete: 'off', spellcheck: false });
+    input.setAttribute('aria-label', `Funkcja ${i + 1}`); input.setAttribute('aria-describedby', `err-${f.id}`);
+    input.oninput = () => { setExpression(f, input.value); syncRow(f); renderParameters(); $('coordinates').hidden = true; draw(); updateInsights(); };
+    input.onfocus = () => { if (activeId !== f.id) { activeId = f.id; functions.forEach(syncRow); draw(); updateInsights(); } };
+    input.onkeydown = e => {
+      const index = functions.indexOf(f);
+      if (e.key === 'Enter') { e.preventDefault(); if (index === functions.length - 1 && input.value.trim() && functions.length < MAX) addFunction(); else input.blur(); }
+      else if (e.key === 'ArrowDown' && functions[index + 1]) { e.preventDefault(); rowInput(functions[index + 1].id).focus(); }
+      else if (e.key === 'ArrowUp' && index > 0) { e.preventDefault(); rowInput(functions[index - 1].id).focus(); }
+      else if (e.key === 'Backspace' && !input.value && functions.length > 1) { e.preventDefault(); removeFunction(f.id); rowInput(activeId).focus(); }
+    };
+    field.append(prefix, input);
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon remove'; remove.innerHTML = removeIcon;
+    remove.setAttribute('aria-label', `Usuń funkcję ${i + 1}`); remove.onclick = () => removeFunction(f.id);
+    const error = document.createElement('p'); error.className = 'error'; error.id = `err-${f.id}`; error.setAttribute('role', 'alert');
+    row.append(swatch, field, remove, error);
+    return row;
+  }));
+  functions.forEach(syncRow);
+  $('function-count').textContent = `${functions.length} / ${MAX}`;
+  $('add-function').disabled = functions.length >= MAX;
+}
+
+// --- Analysis ---
+function updateInsights() {
+  const f = active(), fn = f?.fn;
+  const target = $('analysis-target'); target.style.setProperty('--c', fn ? f.color : 'transparent');
+  target.innerHTML = ''; const label = document.createElement('span'); label.textContent = fn ? `y = ${f.expression}` : 'brak funkcji'; target.append(label);
+  for (const [id, x] of [['value-zero', 0], ['value-one', 1]]) $(id).textContent = !fn ? '—' : Number.isFinite(fn(x)) ? format(fn(x)) : 'nie istnieje';
+  if (!fn) { $('roots').textContent = '—'; return; }
+  const allZero = Array.from({ length: 31 }, (_, i) => fn(view.min + (view.max - view.min) * i / 30)).every(y => y === 0);
+  const values = allZero ? [] : roots(fn, view.min, view.max);
+  $('roots').textContent = allZero ? 'cały widoczny zakres' : values.length ? `x ≈ ${values.slice(0, 6).map(format).join(';  ')}${values.length > 6 ? ';  …' : ''}` : 'brak';
+}
+function syncRange() { $('x-min').value = Number(view.min.toFixed(3)); $('x-max').value = Number(view.max.toFixed(3)); $('scale-label').textContent = `x ∈ [${format(view.min)}; ${format(view.max)}]`; }
+function refresh() { renderParameters(); draw(); updateInsights(); syncRange(); }
+
+// --- Plot ---
+function draw() {
+  if (!width || !height) return;
+  ctx.fillStyle = theme['plot-bg']; ctx.fillRect(0, 0, width, height);
+  const unit = scale(), bottom = fromY(height), top = fromY(0);
+  const raw = 70 / unit, magnitude = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map(v => v * magnitude).find(v => v >= raw);
+  function grid(spacing, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = Math.ceil(view.min / spacing) * spacing; x <= view.max; x += spacing) { const p = Math.round(px(x)) + .5; ctx.moveTo(p, 0); ctx.lineTo(p, height); }
+    for (let y = Math.ceil(bottom / spacing) * spacing; y <= top; y += spacing) { const p = Math.round(py(y)) + .5; ctx.moveTo(0, p); ctx.lineTo(width, p); }
+    ctx.stroke();
+  }
+  if ($('grid-toggle').checked) { grid(step / 5, theme['grid-minor']); grid(step, theme['grid-major']); }
+  if ($('axes-toggle').checked) {
+    ctx.strokeStyle = theme.axis; ctx.lineWidth = 1.25; ctx.beginPath();
+    ctx.moveTo(Math.round(px(0)) + .5, 0); ctx.lineTo(Math.round(px(0)) + .5, height); ctx.moveTo(0, Math.round(py(0)) + .5); ctx.lineTo(width, Math.round(py(0)) + .5); ctx.stroke();
+    ctx.fillStyle = theme.label; ctx.font = '11px "Geist Mono", ui-monospace, monospace';
+    const axisY = Math.max(14, Math.min(height - 40, py(0))), axisX = Math.max(30, Math.min(width - 12, px(0)));
+    ctx.textAlign = 'center';
+    for (let x = Math.ceil(view.min / step) * step; x < view.max; x += step) if (Math.abs(x) > step / 100 && px(x) > 16 && px(x) < width - 24) ctx.fillText(format(x), px(x), axisY + 16);
+    ctx.textAlign = 'right';
+    for (let y = Math.ceil(bottom / step) * step; y < top; y += step) if (Math.abs(y) > step / 100) ctx.fillText(format(y), axisX - 8, py(y) + 4);
+    ctx.fillText('0', axisX - 8, axisY + 16);
+    ctx.font = 'italic 14px Georgia, serif'; ctx.fillText('x', width - 14, axisY - 8); ctx.textAlign = 'left'; ctx.fillText('y', axisX + 8, 18);
+  }
+  const current = active();
+  ctx.lineJoin = ctx.lineCap = 'round';
+  for (const f of [...plotted().filter(f => f !== current), ...(current?.visible && current.fn ? [current] : [])]) {
+    ctx.beginPath(); ctx.lineWidth = f === current ? 2.75 : 2.25; ctx.strokeStyle = f.color; let previous = null;
+    for (let p = 0; p <= width; p += .7) {
+      const y = py(f.fn(fromX(p)));
+      if (!Number.isFinite(y) || Math.abs(y) > height * 20) { previous = null; continue; }
+      if (previous === null || Math.abs(y - previous) > height * .8) ctx.moveTo(p, y); else ctx.lineTo(p, y);
+      previous = y;
+    }
+    ctx.stroke();
+  }
+  if (pointer && !drag && current?.visible && current.fn) {
+    const y = py(current.fn(fromX(pointer.x)));
+    if (Number.isFinite(y) && y >= 0 && y <= height) {
+      ctx.beginPath(); ctx.arc(pointer.x, y, 5, 0, Math.PI * 2); ctx.fillStyle = current.color; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = theme['plot-bg']; ctx.stroke();
+    }
+  }
+}
+function resize() {
+  const rect = $('canvas-wrap').getBoundingClientRect(); width = rect.width; height = rect.height;
+  const dpr = window.devicePixelRatio || 1; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw();
+}
+function setView(next) { view = next; draw(); syncRange(); updateInsights(); }
+function reset() { pointer = null; $('coordinates').hidden = true; $('range-error').textContent = ''; setView({ min: -10, max: 10, cy: 0 }); }
+function zoom(factor, x = width / 2, y = height / 2) {
+  const range = (view.max - view.min) * factor; if (range < .0001 || range > 1e7) return;
+  const anchorX = fromX(x), anchorY = fromY(y), min = anchorX - range * x / width;
+  setView({ min, max: min + range, cy: anchorY - (height / 2 - y) * range / width });
+}
+function pan(dx, dy) { const s = scale(); setView({ min: view.min + dx / s, max: view.max + dx / s, cy: view.cy + dy / s }); }
+function fit() {
+  const ys = [];
+  for (const f of plotted()) for (let i = 0; i <= 200; i++) { const y = f.fn(view.min + (view.max - view.min) * i / 200); if (Number.isFinite(y)) ys.push(y); }
+  if (!ys.length) return toast('Brak wartości funkcji w tym zakresie.');
+  ys.sort((a, b) => a - b);
+  const low = ys[Math.floor(ys.length * .03)], high = ys[Math.min(ys.length - 1, Math.floor(ys.length * .97))];
+  const range = Math.min(1e7, Math.max(view.max - view.min, (high - low || 2) * width / height * 1.2)), center = (view.min + view.max) / 2;
+  setView({ min: center - range / 2, max: center + range / 2, cy: (low + high) / 2 });
+}
+
+// --- Events ---
+new ResizeObserver(resize).observe($('canvas-wrap'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); draw(); });
+$('add-function').onclick = () => addFunction();
+$('zoom-in').onclick = () => zoom(.75);
+$('zoom-out').onclick = () => zoom(4 / 3);
+$('fit-view').onclick = fit;
+$('reset-view').onclick = reset;
+for (const id of ['grid-toggle', 'axes-toggle']) $(id).onchange = draw;
+for (const id of ['x-min', 'x-max']) $(id).onchange = () => {
+  const min = Number($('x-min').value), max = Number($('x-max').value);
+  if (!$('x-min').value || !$('x-max').value || !Number.isFinite(min) || !Number.isFinite(max) || max - min < .0001 || max - min > 1e7 || Math.max(Math.abs(min), Math.abs(max)) > 1e9) {
+    $('range-error').textContent = 'Podaj rosnący zakres o szerokości od 0,0001 do 10 000 000, w granicach ±10⁹.'; return;
+  }
+  $('range-error').textContent = ''; setView({ ...view, min, max });
+};
+canvas.addEventListener('wheel', e => { e.preventDefault(); const r = canvas.getBoundingClientRect(); zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+canvas.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, ...view }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; $('coordinates').hidden = true; };
+canvas.onpointermove = e => {
+  const r = canvas.getBoundingClientRect(); pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
+  if (drag) {
+    const dx = (e.clientX - drag.x) / scale();
+    view = { min: drag.min - dx, max: drag.max - dx, cy: drag.cy + (e.clientY - drag.y) / scale() }; syncRange();
+  } else {
+    const f = active(), x = fromX(pointer.x), y = f?.visible && f.fn ? f.fn(x) : NaN, tip = $('coordinates');
+    tip.hidden = !Number.isFinite(y);
+    tip.textContent = `x ${format(x)}   y ${format(Number.isFinite(y) ? y : 0)}`;
+    tip.style.left = `${Math.max(8, Math.min(width - tip.offsetWidth - 8, pointer.x + 14))}px`;
+    tip.style.top = `${Math.max(8, pointer.y - 40)}px`;
+  }
+  draw();
+};
+function endDrag() { if (drag) { drag = null; canvas.style.cursor = ''; updateInsights(); } }
+canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = endDrag;
+canvas.onpointerleave = () => { pointer = null; $('coordinates').hidden = true; draw(); };
+canvas.onkeydown = e => {
+  const moves = { ArrowLeft: [-40, 0], ArrowRight: [40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
+  if (moves[e.key]) { e.preventDefault(); pan(...moves[e.key]); }
+  else if (['+', '='].includes(e.key)) { e.preventDefault(); zoom(.75); }
+  else if (e.key === '-') { e.preventDefault(); zoom(4 / 3); }
+  else if (e.key === '0') reset();
+};
+$('export').onclick = () => {
+  pointer = null; $('coordinates').hidden = true; draw();
+  const link = document.createElement('a'); link.download = 'bettergebra-wykres.png'; link.href = canvas.toDataURL('image/png'); link.click();
+  toast('Wykres zapisany jako PNG.');
+};
+$('help-button').onclick = () => $('help-dialog').showModal();
+$('examples-button').onclick = () => $('examples-dialog').showModal();
+document.querySelectorAll('[data-expression]').forEach(button => button.onclick = () => {
+  $('examples-dialog').close();
+  const f = active();
+  if (f && !f.expression.trim()) { setExpression(f, button.dataset.expression); rowInput(f.id).value = f.expression; syncRow(f); refresh(); }
+  else addFunction(button.dataset.expression, false);
+});
+document.querySelectorAll('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
+document.querySelectorAll('dialog').forEach(dialog => dialog.onclick = e => {
+  const r = dialog.getBoundingClientRect();
+  if (e.target === dialog && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) dialog.close();
+});
+document.fonts.ready.then(draw);
+
+readTheme();
+addFunction('x^2', false);
+addFunction('sin(x)', false);
+activeId = functions[0].id; functions.forEach(syncRow); refresh();
