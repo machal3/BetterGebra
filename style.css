@@ -19,6 +19,8 @@
   --label: #7a7a84;
   --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  /* Geist has no ⟨ ⟩; the fallback draws them like ( ). A math font keeps closed and open ends apart. */
+  --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -109,7 +111,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .fn.hidden-fn .fn-math, .fn.hidden-fn .fn-field input { color: var(--text-3); }
 .remove, .settings-button { opacity: 0; width: 28px; height: 28px; }
 .fn:hover :is(.remove, .settings-button), .fn:focus-within :is(.remove, .settings-button), .settings-button[aria-expanded="true"] { opacity: 1; }
-.fn-domain { grid-column: 2 / -1; margin: -4px 0 2px; color: var(--text-3); font: 12px var(--mono); }
+.fn-domain { grid-column: 2 / -1; margin: -4px 0 2px; color: var(--text-3); font: 14px var(--math); }
 .fn-domain:empty { display: none; }
 .fn .error { grid-column: 2 / -1; padding: 0 0 4px; }
 .fn-preview { grid-column: 2 / -1; margin: 0 0 4px; padding: 6px 10px; overflow-x: auto; border-radius: 8px; background: var(--surface); font-size: 17px; color: var(--text-2); }
@@ -121,8 +123,12 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .menu-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; }
 .menu-label { margin: 0 0 8px; color: var(--text-2); font-size: 12px; font-weight: 500; }
 .menu-label.menu-row { display: block; }
-.domain { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.domain label { display: grid; gap: 4px; color: var(--text-3); font-size: 12px; }
+.domain { display: grid; grid-template-columns: auto auto 1fr auto 1fr auto; align-items: center; gap: 4px; font: 14px var(--mono); }
+.bracket { width: 26px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: 18px/1 var(--math); }
+.bracket:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.bracket:disabled { color: var(--text-3); background: transparent; cursor: default; }
+.domain-hint { margin: 6px 0 0; font-size: 11px; }
+.domain-hint b { font: 400 14px var(--math); }
 .domain input, .fn-menu select { min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font: 13px var(--mono); }
 .domain input:focus, .fn-menu select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .fn-menu .error { margin-top: 6px; }

@@ -153,9 +153,14 @@
     <p class="menu-title" id="fn-menu-title">Ustawienia funkcji</p>
     <p class="menu-label">Przedział <span class="muted">puste = bez ograniczeń</span></p>
     <div class="domain">
-      <label>x od <input id="fn-from" type="number" step="any" placeholder="−∞"></label>
-      <label>x do <input id="fn-to" type="number" step="any" placeholder="+∞"></label>
+      <span class="muted">x ∈</span>
+      <button id="fn-from-open" class="bracket" type="button"></button>
+      <input id="fn-from" type="number" step="any" placeholder="−∞" aria-label="Początek przedziału">
+      <span>;</span>
+      <input id="fn-to" type="number" step="any" placeholder="+∞" aria-label="Koniec przedziału">
+      <button id="fn-to-open" class="bracket" type="button"></button>
     </div>
+    <p class="domain-hint muted">Kliknij nawias: <b>⟨ ⟩</b> domknięty, <b>( )</b> otwarty</p>
     <p id="fn-domain-error" class="error" role="alert"></p>
     <p class="menu-label menu-row">Kolor</p>
     <div id="fn-colors" class="colors"></div>

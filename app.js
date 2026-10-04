@@ -37,7 +37,7 @@ function setExpression(f, expression) {
     f.parameters = parameterNames(expression);
     for (const name of f.parameters) if (!Object.hasOwn(parameters, name)) parameters[name] = 1;
     // Outside the chosen interval the graph doesn't exist: plot, roots and hover all see NaN there.
-    const fn = compile(expression, parameters); f.fn = x => x < f.from || x > f.to ? NaN : fn(x); f.error = '';
+    const fn = compile(expression, parameters); f.fn = x => x < f.from || x > f.to || (f.fromOpen && x === f.from) || (f.toOpen && x === f.to) ? NaN : fn(x); f.error = '';
   } catch (e) { f.fn = null; f.error = e.message; }
 }
 function renderParameters() {
@@ -73,7 +73,7 @@ function renderParameters() {
 }
 function addFunction(expression = '', focus = true, settings = {}) {
   if (functions.length >= MAX) return toast('Możesz porównywać do 8 funkcji naraz.');
-  const f = { id: nextId++, color: palette.find(c => !functions.some(g => g.color === c)), visible: true, from: -Infinity, to: Infinity, width: 2.25, dash: '', ...settings };
+  const f = { id: nextId++, color: palette.find(c => !functions.some(g => g.color === c)), visible: true, from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2.25, dash: '', ...settings };
   setExpression(f, expression); functions.push(f); activeId = f.id;
   renderList(); refresh(); if (focus) rowInput(f.id).focus();
 }
@@ -96,7 +96,17 @@ function syncMenu() {
   $('fn-custom-color').value = menuFn.color; $('fn-visible').checked = menuFn.visible;
   $('fn-from').value = Number.isFinite(menuFn.from) ? menuFn.from : ''; $('fn-to').value = Number.isFinite(menuFn.to) ? menuFn.to : '';
   $('fn-domain-error').textContent = ''; $('fn-dash').value = menuFn.dash; $('fn-width').value = menuFn.width;
+  syncBrackets();
 }
+// An infinite end is always open; a finite one toggles between ⟨ (closed, the point belongs) and ( (open).
+function syncBrackets() {
+  for (const [id, end, open, closed, side] of [['fn-from-open', 'from', '(', '⟨', 'Początek'], ['fn-to-open', 'to', ')', '⟩', 'Koniec']]) {
+    const b = $(id), finite = Number.isFinite(menuFn[end]), isOpen = !finite || menuFn[`${end}Open`];
+    b.textContent = isOpen ? open : closed; b.disabled = !finite;
+    b.setAttribute('aria-label', `${side} przedziału: ${isOpen ? 'otwarty' : 'domknięty'}`); b.title = finite ? 'Kliknij: domknięty ⟷ otwarty' : 'Nieskończoność: zawsze otwarty';
+  }
+}
+const domainText = f => `x ∈ ${Number.isFinite(f.from) ? `${f.fromOpen ? '(' : '⟨'}${format(f.from)}` : '(−∞'}; ${Number.isFinite(f.to) ? `${format(f.to)}${f.toOpen ? ')' : '⟩'}` : '+∞)'}`;
 function setColor(f, color) {
   f.color = color; document.querySelector(`[data-id="${f.id}"]`).style.setProperty('--c', color);
   syncMenu(); updateInsights();
@@ -120,11 +130,12 @@ for (const input of domainInputs) input.oninput = () => {
   const [from, to] = domainInputs.map((el, i) => el.value === '' ? (i ? Infinity : -Infinity) : el.valueAsNumber);
   const valid = from < to;
   $('fn-domain-error').textContent = valid ? '' : 'Początek przedziału musi być mniejszy niż koniec.';
-  if (valid) { Object.assign(menuFn, { from, to }); syncRow(menuFn); updateInsights(); }
+  if (valid) { Object.assign(menuFn, { from, to }); syncBrackets(); syncRow(menuFn); updateInsights(); }
 };
+for (const end of ['from', 'to']) $(`fn-${end}-open`).onclick = () => { menuFn[`${end}Open`] = !menuFn[`${end}Open`]; syncBrackets(); syncRow(menuFn); updateInsights(); };
 $('fn-duplicate').onclick = () => {
-  const { expression, from, to, width, dash } = menuFn; $('fn-menu').hidePopover();
-  addFunction(expression, false, { from, to, width, dash });
+  const { expression, from, to, fromOpen, toOpen, width, dash } = menuFn; $('fn-menu').hidePopover();
+  addFunction(expression, false, { from, to, fromOpen, toOpen, width, dash });
 };
 $('fn-delete').onclick = () => removeFunction(menuFn.id);
 $('fn-menu').addEventListener('toggle', e => { if (e.newState === 'closed') menuClosedAt = performance.now(); });
@@ -137,7 +148,7 @@ function syncRow(f) {
   row.classList.toggle('hidden-fn', !f.visible);
   row.querySelector('.swatch').setAttribute('aria-label', `Ustawienia: funkcja ${functions.indexOf(f) + 1}${f.visible ? '' : ' (ukryta)'}`);
   const bounded = Number.isFinite(f.from) || Number.isFinite(f.to);
-  row.querySelector('.fn-domain').textContent = bounded ? `x ∈ ${Number.isFinite(f.from) ? `⟨${format(f.from)}` : '(−∞'}; ${Number.isFinite(f.to) ? `${format(f.to)}⟩` : '+∞)'}` : '';
+  row.querySelector('.fn-domain').textContent = bounded ? domainText(f) : '';
   row.querySelector('input').setAttribute('aria-invalid', String(!!f.error));
   row.querySelector('.error').textContent = f.error;
   // Typeset formula when finished; raw text + live preview while editing (or while empty/invalid).
