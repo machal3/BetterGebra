@@ -18,6 +18,8 @@ const FN = {
   sqrt: fn(Math.sqrt), cbrt: fn(Math.cbrt), root: fn((n, x) => x < 0 && Number.isInteger(n) && n % 2 ? -((-x) ** (1 / n)) : x ** (1 / n), 'root', 2),
   abs: fn(Math.abs), sign: fn(Math.sign, 'sgn'), floor: fn(Math.floor), ceil: fn(Math.ceil), round: fn(Math.round),
   ln: fn(Math.log), log: fn((a, b) => b === undefined ? Math.log10(a) : Math.log(b) / Math.log(a), 'log', 1, 2), log2: fn(Math.log2, 'log₂'), exp: fn(Math.exp),
+  // On reals: Re x = x, Im x = 0, arg x = 0 or π. Their complex versions are in CFN.
+  re: fn(x => x, 'Re'), im: fn(x => 0 * x, 'Im'), arg: fn(x => x > 0 ? 0 : x < 0 ? Math.PI : NaN), conj: fn(x => x),
   min: fn(Math.min, 'min', 2, Infinity), max: fn(Math.max, 'max', 2, Infinity), mod: fn((a, b) => ((a % b) + b) % b, 'mod', 2), gamma: fn(gamma, 'Γ'),
 };
 const ALIAS = { tg: 'tan', ctg: 'cot', cotg: 'cot', cosec: 'csc', arcsin: 'asin', arccos: 'acos', arctan: 'atan', arctg: 'atan', arccot: 'acot', arcctg: 'acot',
@@ -143,6 +145,122 @@ function build(n, p) {
 }
 export function compile(input, parameters = {}) { return build(parse(input), parameters); }
 
+// --- Complex numbers [re, im]: f(z) on the complex plane ---
+const cadd = ([a, b], [c, d]) => [a + c, b + d], csub = ([a, b], [c, d]) => [a - c, b - d];
+const cmul = ([a, b], [c, d]) => [a * c - b * d, a * d + b * c];
+const cdiv = ([a, b], [c, d]) => { const n = c * c + d * d; return [(a * c + b * d) / n, (b * c - a * d) / n]; };
+const cexp = ([a, b]) => b === 0 ? [Math.exp(a), 0] : [Math.exp(a) * Math.cos(b), Math.exp(a) * Math.sin(b)];
+const clog = ([a, b]) => [Math.log(Math.hypot(a, b)), Math.atan2(b, a)];
+const csqrt = ([a, b]) => { const r = Math.hypot(a, b); return [Math.sqrt((r + a) / 2), (b < 0 ? -1 : 1) * Math.sqrt((r - a) / 2)]; };
+const I = [0, 1], C1 = [1, 0];
+function cpow(z, w) {
+  // Integer powers by multiplication: exact at 0 and on the axes, where exp(w·log z) gives NaN or float noise.
+  if (w[1] === 0 && Number.isInteger(w[0]) && Math.abs(w[0]) <= 1024) {
+    let m = Math.abs(w[0]), out = C1, base = z;
+    while (m) { if (m & 1) out = cmul(out, base); m >>= 1; if (m) base = cmul(base, base); }
+    return w[0] < 0 ? cdiv(C1, out) : out;
+  }
+  if (z[0] === 0 && z[1] === 0) return w[0] > 0 ? [0, 0] : [NaN, NaN];
+  if (z[1] === 0 && w[1] === 0 && z[0] > 0) return [z[0] ** w[0], 0];
+  return cexp(cmul(w, clog(z)));
+}
+const csin = ([a, b]) => [Math.sin(a) * Math.cosh(b), Math.cos(a) * Math.sinh(b)];
+const ccos = ([a, b]) => [Math.cos(a) * Math.cosh(b), -Math.sin(a) * Math.sinh(b)];
+const csinh = ([a, b]) => [Math.sinh(a) * Math.cos(b), Math.cosh(a) * Math.sin(b)];
+const ccosh = ([a, b]) => [Math.cosh(a) * Math.cos(b), Math.sinh(a) * Math.sin(b)];
+const inv = f => z => cdiv(C1, f(z));
+const casin = z => cmul([0, -1], clog(cadd(cmul(I, z), csqrt(csub(C1, cmul(z, z))))));
+const catan = z => cmul([0, .5], csub(clog(csub(C1, cmul(I, z))), clog(cadd(C1, cmul(I, z)))));
+function cgamma(z) {
+  if (z[0] < .5) return cdiv([Math.PI, 0], cmul(csin(cmul([Math.PI, 0], z)), cgamma(csub(C1, z))));
+  const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  z = csub(z, C1); let a = [c[0], 0]; const t = cadd(z, [7.5, 0]);
+  for (let i = 1; i < 9; i++) a = cadd(a, cdiv([c[i], 0], cadd(z, [i, 0])));
+  return cmul(cmul([Math.sqrt(2 * Math.PI), 0], cpow(t, cadd(z, [.5, 0]))), cmul(cexp([-t[0], -t[1]]), a));
+}
+// Principal values (branch cuts as usual). Functions that only make sense on reals (floor, min, mod…) fall back to the real one there.
+const CFN = {
+  sin: csin, cos: ccos, tan: z => cdiv(csin(z), ccos(z)), cot: z => cdiv(ccos(z), csin(z)), sec: inv(ccos), csc: inv(csin),
+  asin: casin, acos: z => csub([Math.PI / 2, 0], casin(z)), atan: catan, acot: z => catan(cdiv(C1, z)),
+  sinh: csinh, cosh: ccosh, tanh: z => cdiv(csinh(z), ccosh(z)), coth: z => cdiv(ccosh(z), csinh(z)),
+  asinh: z => clog(cadd(z, csqrt(cadd(cmul(z, z), C1)))), acosh: z => clog(cadd(z, cmul(csqrt(cadd(z, C1)), csqrt(csub(z, C1))))),
+  atanh: z => cmul([.5, 0], csub(clog(cadd(C1, z)), clog(csub(C1, z)))),
+  sqrt: csqrt, cbrt: z => z[1] === 0 ? [Math.cbrt(z[0]), 0] : cpow(z, [1 / 3, 0]),
+  root: (n, z) => z[1] === 0 && n[1] === 0 && Number.isFinite(FN.root.f(n[0], z[0])) ? [FN.root.f(n[0], z[0]), 0] : cpow(z, cdiv(C1, n)),
+  abs: z => [Math.hypot(...z), 0], sign: z => { const r = Math.hypot(...z); return r ? [z[0] / r, z[1] / r] : [0, 0]; },
+  ln: clog, exp: cexp, log: (a, b) => b === undefined ? cdiv(clog(a), [Math.LN10, 0]) : cdiv(clog(b), clog(a)), log2: z => cdiv(clog(z), [Math.LN2, 0]),
+  gamma: cgamma,
+  // Gaussian: floor 2,5 + 1,7i = 2 + i, as Re and Im separately; mod(a; b) = a − b·floor(a/b) with that floor.
+  floor: z => z.map(Math.floor), ceil: z => z.map(Math.ceil), round: z => z.map(Math.round),
+  mod: (a, b) => b[1] === 0 && a[1] === 0 ? [FN.mod.f(a[0], b[0]), 0] : csub(a, cmul(b, cdiv(a, b).map(Math.floor))),
+  re: z => [z[0], 0], im: z => [z[1], 0], arg: z => [z[0] || z[1] ? Math.atan2(z[1], z[0]) : NaN, 0], conj: z => [z[0], 0 - z[1]],
+};
+const onReals = f => (...zs) => zs.every(z => z[1] === 0) ? [f(...zs.map(z => z[0])), 0] : [NaN, NaN];
+function buildC(n, p) {
+  const a = n.a && buildC(n.a, p), b = n.b && buildC(n.b, p);
+  switch (n.t) {
+    case 'num': return () => [n.v, 0];
+    case 'x': return z => z;
+    case 'const': return () => [CONST[n.n], 0];
+    // On the complex plane i is the imaginary unit and z is another name for the variable.
+    case 'param': return n.n === 'i' ? () => I : n.n === 'z' ? z => z : () => [Object.hasOwn(p, n.n) ? p[n.n] : 1, 0];
+    case 'neg': return z => { const [u, v] = a(z); return [0 - u, 0 - v]; }; // 0 − 0 = +0 keeps ln(−1) = iπ, not −iπ
+    case '+': return z => cadd(a(z), b(z));
+    case '-': return z => csub(a(z), b(z));
+    case '*': return z => cmul(a(z), b(z));
+    case '/': return z => cdiv(a(z), b(z));
+    case '^': return z => cpow(a(z), b(z));
+    case '!': return z => { const w = a(z); return w[1] === 0 ? [factorial(w[0]), 0] : cgamma(cadd(w, C1)); };
+    case '°': return z => cmul(a(z), [Math.PI / 180, 0]);
+    case 'call': { const f = CFN[n.n] ?? onReals(FN[n.n].f), args = n.args.map(g => buildC(g, p)); return z => f(...args.map(g => g(z))); }
+  }
+}
+export function compileComplex(input, parameters = {}) { return buildC(parse(input), parameters); }
+function newton(f, z) {
+  for (let k = 0; k < 100; k++) {
+    const w = f(z), h = 1e-7 * Math.max(1, Math.hypot(...z)), step = cdiv(w, cdiv(csub(f([z[0] + h, z[1]]), w), [h, 0]));
+    if (w[0] === 0 && w[1] === 0) return z;
+    if (!Number.isFinite(step[0]) || !Number.isFinite(step[1])) return null;
+    z = csub(z, step);
+    if (Math.hypot(...step) <= 1e-15 * Math.max(1, Math.hypot(...z))) break;
+  }
+  return z;
+}
+// Like snap() for reals: 1,9999999 + 3,0000001i → 2 + 3i, and a double zero (z²) that Newton only gets to ~1e-9 → 0,
+// when the rounder point is at least as good a zero.
+function polish(f, z) {
+  const tol = 1e-6 * Math.max(1, Math.hypot(...z)), size = w => Math.hypot(...f(w));
+  for (const k of [0, 1]) {
+    const v = z[k], best = size(z), at = c => k ? [z[0], c] : [c, z[1]];
+    const c = [0, ...[1, 2, 3, 4, 6, 8, 12].map(d => Math.round(v * d) / d), ...Array.from({ length: 12 }, (_, n) => Number(v.toFixed(n + 1)))]
+      .find(c => Math.abs(c - v) <= tol && size(at(c)) <= best);
+    if (c !== undefined) z = at(c);
+  }
+  return z;
+}
+// Zeros of f in [x0; x1] × [y0; y1]. The argument of f turns once around each zero and back around each pole
+// (argument principle), so count the turns around every cell of a cols × rows grid, then polish each zero with Newton.
+// ponytail: zeros closer together than a cell are reported once; raise cols/rows if that matters.
+export function complexRoots(f, x0, x1, y0, y1, cols = 64, rows = 48) {
+  const N = 4, W = cols * N + 1, H = rows * N + 1, dx = (x1 - x0) / (W - 1), dy = (y1 - y0) / (H - 1);
+  // Shifted by an odd fraction of a step, so a zero like 0 or i never lies exactly on a sample, where its argument is undefined.
+  const at = (i, j) => [x0 + (i + .37) * dx, y0 + (j + .41) * dy];
+  const arg = new Float64Array(W * H);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const [u, v] = f(at(i, j)); arg[j * W + i] = Math.atan2(v, u); }
+  const turn = (i, j, k, l) => { const d = arg[l * W + k] - arg[j * W + i]; return d - 2 * Math.PI * Math.round(d / (2 * Math.PI)); };
+  const found = [];
+  for (let cj = 0; cj < rows; cj++) for (let ci = 0; ci < cols && found.length < 50; ci++) {
+    const i0 = ci * N, j0 = cj * N; let s = 0;
+    for (let t = 0; t < N; t++) s += turn(i0 + t, j0, i0 + t + 1, j0) + turn(i0 + N, j0 + t, i0 + N, j0 + t + 1) - turn(i0 + t, j0 + N, i0 + t + 1, j0 + N) - turn(i0, j0 + t, i0, j0 + t + 1);
+    if (!(Math.round(s / (2 * Math.PI)) > 0)) continue;
+    const c = at(i0 + N / 2, j0 + N / 2), z = newton(f, c);
+    if (!z || Math.abs(z[0] - c[0]) > N * dx || Math.abs(z[1] - c[1]) > N * dy) continue;
+    const r = polish(f, z);
+    if (!found.some(w => Math.abs(w[0] - r[0]) < dx && Math.abs(w[1] - r[1]) < dy)) found.push(r);
+  }
+  return found.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
 // --- MathML formatting ---
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 const mi = s => `<mi>${esc(s)}</mi>`, mo = s => `<mo>${esc(s)}</mo>`, row = s => `<mrow>${s}</mrow>`;
@@ -189,16 +307,22 @@ function render(n) {
     case 'call': return callMathML(n);
   }
 }
+// A condition like |z − 1| ≤ 2 or 1 < Re z < 3: split into sides and relations (odd indices).
+export const RELATION = /(<=|>=|!=|≤|≥|≠|<|>|=)/;
+export const relationSymbol = op => ({ '<=': '≤', '>=': '≥', '!=': '≠' })[op] ?? op;
+export function relationMathML(input) {
+  return `<math>${input.split(RELATION).map((part, k) => k % 2 ? mo(relationSymbol(part)) : render(parse(part))).join('')}</math>`;
+}
 export function toMathML(input) { return `<math>${mi('y')}${mo('=')}${render(parse(input))}</math>`; }
 
-// Replace e.g. 1.9999999999999998 with 2 when the rounder value is at least as good a root.
-function snap(fn, x, tol) {
+// Replace e.g. 1.9999999999999998 with 2 when the rounder value scores at least as well (g = |f| for a root).
+function snap(g, x, tol) {
   const candidates = [0, ...[1, 2, 3, 4, 6, 8, 12].map(d => Math.round(x * d) / d), ...Array.from({ length: 12 }, (_, k) => Number(x.toFixed(k + 1)))];
-  return candidates.find(c => Math.abs(c - x) <= tol && Math.abs(fn(c)) <= Math.abs(fn(x))) ?? x;
+  return candidates.find(c => Math.abs(c - x) <= tol && g(c) <= g(x)) ?? x;
 }
 export function roots(fn, min, max) {
   const N = 4000, step = (max - min) / N, found = [];
-  const add = x => { x = snap(fn, x, step * 1e-3); if (!found.some(r => Math.abs(r - x) < step / 2)) found.push(x); };
+  const add = x => { x = snap(x => Math.abs(fn(x)), x, step * 1e-3); if (!found.some(r => Math.abs(r - x) < step / 2)) found.push(x); };
   const ys = Array.from({ length: N + 1 }, (_, i) => fn(min + i * step)), abs = Math.abs;
   for (let i = 0; i <= N && found.length < 50; i++) {
     const x = min + i * step, y = ys[i], prev = ys[i - 1], next = ys[i + 1];
@@ -224,6 +348,26 @@ export function roots(fn, min, max) {
     }
   }
   return found.sort((a, b) => a - b);
+}
+// Local minima and maxima {x, y} on [min; max]: a sample above (below) both neighbours, refined by golden section.
+export function extrema(fn, min, max) {
+  const N = 2000, step = (max - min) / N, found = [];
+  const ys = Array.from({ length: N + 1 }, (_, i) => fn(min + i * step));
+  for (let i = 1; i < N && found.length < 50; i++) {
+    const p = ys[i - 1], y = ys[i], n = ys[i + 1];
+    const s = y > p && y > n ? -1 : y < p && y < n ? 1 : 0, g = x => s * fn(x); // minimise g
+    if (!s || !Number.isFinite(p) || !Number.isFinite(n)) continue;
+    let a = min + (i - 1) * step, b = min + (i + 1) * step;
+    for (let k = 0; k < 200 && b - a > 1e-15 * Math.max(1, Math.abs(a)); k++) {
+      const c = b - (b - a) * .618034, d = a + (b - a) * .618034;
+      if (g(c) < g(d)) b = d; else a = c;
+    }
+    const x = snap(g, (a + b) / 2, step * 1e-3), v = fn(x);
+    // ponytail: a pole (1/x²) also peaks between samples; refining a smooth peak gains less than the samples' drop.
+    if (!Number.isFinite(v) || Math.abs(v - y) > Math.abs(y - p) + Math.abs(y - n)) continue;
+    if (!found.some(e => Math.abs(e.x - x) < step / 2)) found.push({ x, y: v });
+  }
+  return found;
 }
 const finite = Number.isFinite;
 function nice(v) {

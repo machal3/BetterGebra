@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, roots, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes } from './math.js';
+import { compile, roots, extrema, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes, compileComplex, complexRoots, relationMathML } from './math.js';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
@@ -198,4 +198,41 @@ test('proven exact roots, intersections and values', () => {
   assert.deepEqual([at('cos x', 0), at('x/3', 1), at('e^x', 0), at('sin(pi/3)+x', 1), at('5!', 0), at('2,5x', 1)], ['1', '1/3', '1', '(2 + √3)/2', '120', '5/2']);
   assert.equal(at('e^x', 1), null);                                      // e is not provable here: shown as ≈
   assert.deepEqual([at('tan(x pi/2)', 1), at('1/(x-1)', 1), at('sqrt(x-2)', 1)], [undefined, undefined, undefined]); // not defined
+});
+
+test('complex plane: values and zeros of f(z)', () => {
+  const at = (s, z = [0, 0]) => compileComplex(s)(z).map(v => Math.round(v * 1e12) / 1e12 + 0);
+  assert.deepEqual(at('i*i'), [-1, 0]);
+  assert.deepEqual(at('e^(i pi)'), [-1, 0]);
+  assert.deepEqual(at('sqrt(-4)'), [0, 2]);
+  assert.deepEqual(at('ln(-1)'), [0, Math.round(Math.PI * 1e12) / 1e12]);
+  assert.deepEqual(at('z^2 + 1', [0, 1]), [0, 0]);
+  assert.deepEqual(at('x!', [4, 0]), [24, 0]);
+  assert.deepEqual(at('min(z; 1)', [1.5, 1]).map(Number.isNaN), [true, true]); // real-only functions are undefined off the axis
+  assert.deepEqual(at('floor(z)', [2.5, -1.7]), [2, -2]); // Gaussian floor
+  const zeros = s => complexRoots(compileComplex(s), -10, 10, -7, 7);
+  assert.deepEqual(zeros('z^2 + 1'), [[0, -1], [0, 1]]);
+  assert.deepEqual(zeros('x^2'), [[0, 0]]); // double zero
+  assert.deepEqual(zeros('(z - 2 - 3i)(z + 1)'), [[-1, 0], [2, 3]]);
+  assert.deepEqual(zeros('x^4 + 4'), [[-1, -1], [-1, 1], [1, -1], [1, 1]]);
+  assert.deepEqual(zeros('1/z'), []); // a pole is not a zero
+  assert.equal(zeros('x^3 - 1').length, 3);
+});
+
+test('sets of complex numbers: Re, Im, arg, conj and conditions', () => {
+  const at = (s, z) => compileComplex(s)(z);
+  assert.deepEqual(at('Re(z) + Im z', [2, 3]), [5, 0]);
+  assert.deepEqual(at('conj z', [1, 2]), [1, -2]);
+  assert.deepEqual(at('arg(z)', [0, 1]), [Math.PI / 2, 0]);
+  assert.equal(compile('re(x) + im(x) + arg(-2)')(3), 3 + Math.PI);
+  assert.match(relationMathML('1 < |z - 1| <= 2'), /<mo>&#60;<\/mo>.*<mo>≤<\/mo>/);
+});
+test('extrema: round x when exact, corners, no poles or steps', () => {
+  const e = expr => extrema(compile(expr), -10, 10);
+  assert.deepEqual(e('x^2 - 4x'), [{ x: 2, y: -4 }]);
+  assert.deepEqual(e('abs(x + 1)'), [{ x: -1, y: 0 }]);
+  assert.deepEqual(e('x^3 - 3x').map(p => p.x), [-1, 1]);
+  assert.deepEqual(e('1/x^2'), []);
+  assert.deepEqual(e('floor(x)'), []);
+  assert.equal(e('sin(x)').length, 6);
 });
