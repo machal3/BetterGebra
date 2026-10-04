@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const MAX = 8;
 const palette = ['#4f6bed', '#e5484d', '#12a594', '#f08c00', '#8e4ec6', '#0090c1', '#d6409f', '#5c7c2f'];
 const removeIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const settingsIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
 let functions = [], nextId = 1, activeId = null, marks = [];
 let view = { min: -10, max: 10, cy: 0, ratio: 1 }, width = 0, height = 0, drag = null, pointer = null, theme = {};
 const canvas = $('plot'), ctx = canvas.getContext('2d'), hoverCtx = $('hover').getContext('2d');
@@ -35,7 +36,8 @@ function setExpression(f, expression) {
   try {
     f.parameters = parameterNames(expression);
     for (const name of f.parameters) if (!Object.hasOwn(parameters, name)) parameters[name] = 1;
-    f.fn = compile(expression, parameters); f.error = '';
+    // Outside the chosen interval the graph doesn't exist: plot, roots and hover all see NaN there.
+    const fn = compile(expression, parameters); f.fn = x => x < f.from || x > f.to ? NaN : fn(x); f.error = '';
   } catch (e) { f.fn = null; f.error = e.message; }
 }
 function renderParameters() {
@@ -69,9 +71,9 @@ function renderParameters() {
     row.append(label, input, slider, error); return row;
   }));
 }
-function addFunction(expression = '', focus = true) {
+function addFunction(expression = '', focus = true, settings = {}) {
   if (functions.length >= MAX) return toast('Możesz porównywać do 8 funkcji naraz.');
-  const f = { id: nextId++, color: palette.find(c => !functions.some(g => g.color === c)), visible: true };
+  const f = { id: nextId++, color: palette.find(c => !functions.some(g => g.color === c)), visible: true, from: -Infinity, to: Infinity, width: 2.25, dash: '', ...settings };
   setExpression(f, expression); functions.push(f); activeId = f.id;
   renderList(); refresh(); if (focus) rowInput(f.id).focus();
 }
@@ -83,7 +85,7 @@ function removeFunction(id) {
   if (menuFn?.id === id) $('fn-menu').hidePopover();
   renderList(); refresh();
 }
-// --- Colour & visibility menu ---
+// --- Function settings menu ---
 let menuFn = null, menuClosedAt = 0;
 $('fn-colors').append(...palette.map(color => {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'color'; b.style.setProperty('--sw', color); b.dataset.color = color;
@@ -92,31 +94,50 @@ $('fn-colors').append(...palette.map(color => {
 function syncMenu() {
   $('fn-colors').querySelectorAll('.color').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.color === menuFn.color)));
   $('fn-custom-color').value = menuFn.color; $('fn-visible').checked = menuFn.visible;
+  $('fn-from').value = Number.isFinite(menuFn.from) ? menuFn.from : ''; $('fn-to').value = Number.isFinite(menuFn.to) ? menuFn.to : '';
+  $('fn-domain-error').textContent = ''; $('fn-dash').value = menuFn.dash; $('fn-width').value = menuFn.width;
 }
 function setColor(f, color) {
   f.color = color; document.querySelector(`[data-id="${f.id}"]`).style.setProperty('--c', color);
   syncMenu(); updateInsights();
 }
-function openMenu(f, swatch) {
+function openMenu(f, anchor) {
   const menu = $('fn-menu');
   if (menu.matches(':popover-open') && menuFn === f) return menu.hidePopover();
   if (menuFn === f && performance.now() - menuClosedAt < 300) return; // this click's pointerdown already light-dismissed it
   menuFn = f; syncMenu(); menu.showPopover();
-  const r = swatch.getBoundingClientRect();
+  if (activeId !== f.id) { activeId = f.id; functions.forEach(syncRow); updateInsights(); }
+  const r = anchor.getBoundingClientRect();
   menu.style.left = `${Math.min(r.left, innerWidth - menu.offsetWidth - 8)}px`;
   menu.style.top = `${Math.min(r.bottom + 6, innerHeight - menu.offsetHeight - 8)}px`;
 }
 $('fn-custom-color').oninput = e => setColor(menuFn, e.target.value);
 $('fn-visible').onchange = e => { menuFn.visible = e.target.checked; syncRow(menuFn); updateInsights(); };
+$('fn-dash').onchange = e => { menuFn.dash = e.target.value; draw(); };
+$('fn-width').oninput = e => { menuFn.width = e.target.valueAsNumber; draw(); };
+const domainInputs = [$('fn-from'), $('fn-to')];
+for (const input of domainInputs) input.oninput = () => {
+  const [from, to] = domainInputs.map((el, i) => el.value === '' ? (i ? Infinity : -Infinity) : el.valueAsNumber);
+  const valid = from < to;
+  $('fn-domain-error').textContent = valid ? '' : 'Początek przedziału musi być mniejszy niż koniec.';
+  if (valid) { Object.assign(menuFn, { from, to }); syncRow(menuFn); updateInsights(); }
+};
+$('fn-duplicate').onclick = () => {
+  const { expression, from, to, width, dash } = menuFn; $('fn-menu').hidePopover();
+  addFunction(expression, false, { from, to, width, dash });
+};
+$('fn-delete').onclick = () => removeFunction(menuFn.id);
 $('fn-menu').addEventListener('toggle', e => { if (e.newState === 'closed') menuClosedAt = performance.now(); });
-$('fn-menu').addEventListener('toggle', e => document.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-expanded', String(e.newState === 'open' && s.closest('.fn').dataset.id === String(menuFn.id)))));
+$('fn-menu').addEventListener('toggle', e => document.querySelectorAll('.swatch, .settings-button').forEach(s => s.setAttribute('aria-expanded', String(e.newState === 'open' && s.closest('.fn').dataset.id === String(menuFn.id)))));
 const rowInput = id => document.querySelector(`[data-id="${id}"] input`);
 function syncRow(f) {
   const row = document.querySelector(`[data-id="${f.id}"]`);
   row.classList.toggle('active', f.id === activeId);
   row.classList.toggle('invalid', !!f.error);
   row.classList.toggle('hidden-fn', !f.visible);
-  row.querySelector('.swatch').setAttribute('aria-label', `Kolor i widoczność: funkcja ${functions.indexOf(f) + 1}${f.visible ? '' : ' (ukryta)'}`);
+  row.querySelector('.swatch').setAttribute('aria-label', `Ustawienia: funkcja ${functions.indexOf(f) + 1}${f.visible ? '' : ' (ukryta)'}`);
+  const bounded = Number.isFinite(f.from) || Number.isFinite(f.to);
+  row.querySelector('.fn-domain').textContent = bounded ? `x ∈ ${Number.isFinite(f.from) ? `⟨${format(f.from)}` : '(−∞'}; ${Number.isFinite(f.to) ? `${format(f.to)}⟩` : '+∞)'}` : '';
   row.querySelector('input').setAttribute('aria-invalid', String(!!f.error));
   row.querySelector('.error').textContent = f.error;
   // Typeset formula when finished; raw text + live preview while editing (or while empty/invalid).
@@ -131,7 +152,7 @@ function renderList() {
     const row = document.createElement('li'); row.className = 'fn'; row.dataset.id = f.id; row.style.setProperty('--c', f.color);
     const swatch = document.createElement('button'); swatch.type = 'button'; swatch.className = 'swatch';
     swatch.setAttribute('aria-haspopup', 'dialog'); swatch.setAttribute('aria-expanded', 'false');
-    swatch.title = 'Kolor i widoczność'; swatch.onclick = () => openMenu(f, swatch);
+    swatch.title = 'Ustawienia funkcji'; swatch.onclick = () => openMenu(f, swatch);
     const field = document.createElement('label'); field.className = 'fn-field';
     const prefix = document.createElement('span'); prefix.textContent = 'y =';
     const input = document.createElement('input');
@@ -150,11 +171,15 @@ function renderList() {
     };
     const math = document.createElement('div'); math.className = 'fn-math'; math.setAttribute('aria-hidden', 'true');
     field.append(prefix, input, math);
+    const settings = document.createElement('button'); settings.type = 'button'; settings.className = 'icon settings-button'; settings.innerHTML = settingsIcon;
+    settings.setAttribute('aria-label', `Ustawienia funkcji ${i + 1}`); settings.setAttribute('aria-haspopup', 'dialog'); settings.setAttribute('aria-expanded', 'false');
+    settings.title = 'Przedział, kolor, linia'; settings.onclick = () => openMenu(f, settings);
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon remove'; remove.innerHTML = removeIcon;
     remove.setAttribute('aria-label', `Usuń funkcję ${i + 1}`); remove.onclick = () => removeFunction(f.id);
     const preview = document.createElement('div'); preview.className = 'fn-preview'; preview.setAttribute('aria-hidden', 'true');
     const error = document.createElement('p'); error.className = 'error'; error.id = `err-${f.id}`; error.setAttribute('role', 'alert');
-    row.append(swatch, field, remove, preview, error);
+    const domain = document.createElement('p'); domain.className = 'fn-domain';
+    row.append(swatch, field, settings, remove, preview, domain, error);
     return row;
   }));
   functions.forEach(syncRow);
@@ -224,10 +249,12 @@ function draw() {
   ctx.lineJoin = ctx.lineCap = 'round';
   const ends = [];
   for (const f of [...plotted().filter(f => f !== current), ...(current?.visible && current.fn ? [current] : [])]) {
-    ctx.beginPath(); ctx.lineWidth = f === current ? 2.75 : 2.25; ctx.strokeStyle = f.color;
+    ctx.beginPath(); ctx.lineWidth = f.width + (f === current ? .5 : 0); ctx.strokeStyle = f.color;
+    ctx.setLineDash(f.dash ? f.dash.split(' ').map(n => n * f.width / 2) : []);
     for (const e of plot(f.fn)) ends.push({ ...e, color: f.color });
     ctx.stroke();
   }
+  ctx.setLineDash([]);
   // Roots and intersections: small neutral dots, so they don't read as hollow endpoints.
   for (const m of marks) dot(m.x, m.y, 3.5, theme.label, theme['plot-bg']);
   // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
@@ -347,6 +374,14 @@ function fit() {
 new ResizeObserver(resize).observe($('canvas-wrap'));
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); draw(); });
 $('add-function').onclick = () => addFunction();
+// Clicking from one row to another: let the mousedown blur the edited row and it collapses (its preview goes),
+// the rows below jump up and the click lands elsewhere. So keep focus put on mousedown and move it ourselves.
+$('functions').onmousedown = e => {
+  if (e.target.matches('input')) return; // caret placement inside the field being edited
+  e.preventDefault();
+  const input = !e.target.closest('button') && e.target.closest('.fn')?.querySelector('input');
+  if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+};
 $('zoom-in').onclick = () => zoom(.75);
 $('zoom-out').onclick = () => zoom(4 / 3);
 $('fit-view').onclick = fit;

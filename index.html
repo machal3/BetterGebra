@@ -31,7 +31,7 @@
         </div>
       </header>
 
-      <section class="section">
+      <section class="section" id="functions">
         <div class="section-head">
           <h2>Funkcje</h2>
           <span id="function-count" class="muted tabular">1 / 8</span>
@@ -106,7 +106,7 @@
 
   <dialog id="help-dialog" aria-labelledby="help-title">
     <header><h2 id="help-title">Jak zapisywać funkcje</h2><button class="icon close-dialog" type="button" aria-label="Zamknij"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-    <p>Wpisz wyrażenie zmiennej <i>x</i> w wierszu na liście — wykres aktualizuje się na bieżąco, a po wyjściu z pola wzór wyświetla się w zapisie matematycznym (kliknij go, aby edytować). Kropka obok wzoru zmienia kolor i widoczność wykresu. Enter w ostatnim wierszu dodaje kolejną funkcję (maksymalnie 8).</p>
+    <p>Wpisz wyrażenie zmiennej <i>x</i> w wierszu na liście — wykres aktualizuje się na bieżąco, a po wyjściu z pola wzór wyświetla się w zapisie matematycznym (kliknij go, aby edytować). Kropka obok wzoru (lub ikona ustawień) otwiera ustawienia funkcji: przedział x, kolor, styl i grubość linii, widoczność. Enter w ostatnim wierszu dodaje kolejną funkcję (maksymalnie 8).</p>
     <table class="syntax">
       <tr><td><code>x^2 + 2x - 3   x²   x**2</code></td><td>Potęgi, mnożenie domyślne (2x, 3(x+1))</td></tr>
       <tr><td><code>a*x + b</code></td><td>Litery tworzą parametry o wartości 1. Edytuj je w sekcji Parametry; wartości są wspólne dla wykresów. Możesz też pisać ax+b.</td></tr>
@@ -149,11 +149,26 @@
     </div>
   </dialog>
 
-  <div id="fn-menu" class="fn-menu" popover role="dialog" aria-label="Kolor i widoczność funkcji">
-    <p class="menu-title">Kolor</p>
+  <div id="fn-menu" class="fn-menu" popover role="dialog" aria-labelledby="fn-menu-title">
+    <p class="menu-title" id="fn-menu-title">Ustawienia funkcji</p>
+    <p class="menu-label">Przedział <span class="muted">puste = bez ograniczeń</span></p>
+    <div class="domain">
+      <label>x od <input id="fn-from" type="number" step="any" placeholder="−∞"></label>
+      <label>x do <input id="fn-to" type="number" step="any" placeholder="+∞"></label>
+    </div>
+    <p id="fn-domain-error" class="error" role="alert"></p>
+    <p class="menu-label menu-row">Kolor</p>
     <div id="fn-colors" class="colors"></div>
     <label class="menu-row">Własny kolor <input id="fn-custom-color" type="color"></label>
+    <label class="menu-row">Linia
+      <select id="fn-dash"><option value="">ciągła</option><option value="8 6">przerywana</option><option value="1 5">kropkowana</option></select>
+    </label>
+    <label class="menu-row">Grubość <input id="fn-width" type="range" min="1" max="6" step=".25"></label>
     <label class="toggle menu-row">Pokaż wykres <input id="fn-visible" type="checkbox"></label>
+    <div class="menu-actions menu-row">
+      <button id="fn-duplicate" class="ghost" type="button">Duplikuj</button>
+      <button id="fn-delete" class="ghost danger" type="button">Usuń</button>
+    </div>
   </div>
   <div id="toast" class="toast" role="status"></div>
   <script type="module" src="app.js"></script>
