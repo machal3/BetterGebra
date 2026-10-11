@@ -89,7 +89,7 @@ function compileSet(expression: string, params: Params): Compiled {
 /** Cache: recompiles a row only when its expression or the mode changes. */
 const cache = new Map<number, { key: string; compiled: Compiled }>();
 export function compiled(f: FnState, mode: Mode, params: Params): Compiled {
-  const key = `${mode}\u0000${f.expression}`, hit = cache.get(f.id);
+  const key = `${mode}\u0000${f.expression}\u0000${f.from}\u0000${f.to}\u0000${f.fromOpen}\u0000${f.toOpen}`, hit = cache.get(f.id);
   if (hit?.key === key) return hit.compiled;
   const c = compileRow(f, mode, params);
   cache.set(f.id, { key, compiled: c });
