@@ -1,6 +1,7 @@
-import { test } from 'node:test';
+// Behaviour carried over from v1 as the specification of the math engine.
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { compile, roots, extrema, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes, compileComplex, complexRoots, relationMathML } from './math.js';
+import { compile, roots, extrema, parameterNames, toMathML, intersections, exact, exactPoint, exactValue, endpoint, holes, compileComplex, complexRoots, relationMathML } from '../src/math';
 
 test('parameters default to one and update all compiled expressions', () => {
   const parameters = { a: 1, b: 1 };
