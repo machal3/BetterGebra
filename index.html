@@ -8,16 +8,39 @@
   <meta name="description" content="Bettergebra — kalkulator wykresów funkcji, płaszczyzny zespolonej i zbiorów liczb zespolonych.">
   <title>Bettergebra</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d4ed8'/%3E%3Cpath d='M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
   <script>
     // Theme before first paint, so a dark-mode reload doesn't flash light.
     try { const t = JSON.parse(localStorage.getItem('bettergebra.v2') || 'null')?.theme; if (t) document.documentElement.dataset.theme = t; } catch {}
   </script>
 </head>
 <body>
+  <main class="home" aria-labelledby="home-title">
+    <h1 id="home-title" class="logo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
+      <span>Bettergebra</span>
+    </h1>
+    <p class="home-lead">Co chcesz dziś robić?</p>
+    <nav class="home-choices" aria-label="Wybierz część">
+      <a href="#wykresy">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg>
+        <b>Wykresy</b>
+        <span>Funkcje, trygonometria, liczby zespolone i zbiory</span>
+      </a>
+      <a href="#geometria">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+        <b>Geometria</b>
+        <span>Punkty, proste, okręgi i konstrukcje</span>
+      </a>
+    </nav>
+  </main>
+
   <div class="app">
     <aside class="sidebar" aria-label="Funkcje i parametry">
       <header class="brand">
-        <a class="logo" href="./" aria-label="Bettergebra — strona główna">
+        <a class="logo" href="#" aria-label="Bettergebra — strona główna">
           <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
           <span>Bettergebra</span>
         </a>
@@ -55,7 +78,7 @@
         </label>
       </div>
 
-      <div class="sidebar-body">
+      <div id="graphs-body" class="sidebar-body">
         <section class="section" aria-labelledby="functions-title">
           <div class="section-head">
             <h2 id="functions-title">Funkcje</h2>
@@ -74,6 +97,31 @@
           <p id="parameters-empty" class="hint">Każda litera inna niż <i>x</i> staje się parametrem z suwakiem. Wpisz np. <code>a·sin(b·x)</code>.</p>
           <div id="parameter-list" class="parameter-list"></div>
         </section>
+      </div>
+
+      <div id="geo-side" class="geo-side">
+        <div class="geo-tabs" role="tablist" aria-label="Panel geometrii">
+          <button id="geo-tab-create" type="button" role="tab" aria-selected="true" aria-controls="geo-create">Tworzenie</button>
+          <button id="geo-tab-objects" type="button" role="tab" aria-selected="false" aria-controls="geo-objects" tabindex="-1">Obiekty <span id="geo-count" class="count"></span></button>
+        </div>
+        <div id="geo-create" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-create">
+          <input id="geo-search" class="geo-search" type="search" spellcheck="false" autocomplete="off" aria-label="Szukaj narzędzia" placeholder="Szukaj narzędzia…">
+          <p id="geo-search-empty" class="hint geo-search-empty" hidden>Nie ma takiego narzędzia.</p>
+          <div id="geo-tools" class="geo-tools"></div>
+        </div>
+        <div id="geo-objects" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-objects" hidden>
+          <form id="geo-input-form" class="geo-input-form">
+            <input id="geo-input" type="text" spellcheck="false" autocomplete="off" aria-label="Definicja obiektu" placeholder="np. A = (1; 2), Okrąg(A; 3), y = 2x + 1">
+            <button class="text-button primary" type="submit">Dodaj</button>
+          </form>
+          <p id="geo-input-error" class="error" role="alert"></p>
+          <details class="geo-commands">
+            <summary>Polecenia i sposoby definiowania</summary>
+            <ul id="geo-reference" class="geo-reference"></ul>
+          </details>
+          <p id="geo-empty" class="hint">Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>Tworzenie</b>.</p>
+          <ol id="geo-list" class="geo-list"></ol>
+        </div>
       </div>
     </aside>
 
@@ -130,6 +178,34 @@
         <p id="range-error" class="error" role="alert"></p>
       </div>
     </main>
+
+    <main id="geometry" class="stage geometry" aria-label="Geometria">
+      <canvas id="geo-canvas" aria-label="Rysunek geometryczny. Wybierz narzędzie w panelu bocznym i klikaj na płaszczyźnie."></canvas>
+      <p id="geo-hint" class="geo-hint" aria-live="polite"></p>
+      <form id="geo-coords" class="geo-coords" aria-label="Współrzędne punktu" hidden onsubmit="return false">
+        <span id="geo-coords-name" class="geo-coords-name"></span>
+        <label>x <input id="geo-x" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
+        <label>y <input id="geo-y" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
+        <p id="geo-coords-note" class="geo-coords-note"></p>
+        <p id="geo-coords-error" class="error" role="alert"></p>
+      </form>
+      <div class="toolbar" role="toolbar" aria-label="Narzędzia rysunku">
+        <div class="tool-group">
+          <button id="geo-undo" type="button" aria-label="Cofnij" title="Cofnij  Ctrl+Z"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+          <button id="geo-redo" type="button" aria-label="Ponów" title="Ponów  Ctrl+Y"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="geo-zoom-in" type="button" aria-label="Przybliż" title="Przybliż"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button id="geo-zoom-out" type="button" aria-label="Oddal" title="Oddal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+          <button id="geo-reset" type="button" aria-label="Przywróć widok" title="Przywróć widok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 3.5v5h5"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="geo-grid" type="button" aria-pressed="false" aria-label="Siatka i osie" title="Siatka i osie"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></button>
+          <button id="geo-export" type="button" aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+          <button id="geo-clear" type="button" aria-label="Wyczyść rysunek" title="Wyczyść rysunek"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+        </div>
+      </div>
+    </main>
   </div>
 
   <dialog id="help" class="help" aria-labelledby="help-title">
@@ -154,6 +230,7 @@
         <h3>Tryby</h3>
         <ul class="plain">
           <li><b>Zespolone</b>: <code>z^2 + 1</code>. Kolor to argument f(z), ciemny punkt to zero, jasny to biegun.</li>
+          <li><b>Geometria</b>: wybierz narzędzie i klikaj — puste miejsce tworzy punkt, kliknięcie linii kładzie punkt na niej. Narzędziem <b>Przesuń</b> przeciągasz punkty, a zależne obiekty podążają za nimi. Współrzędne zaznaczonego punktu (lub dwukrotnie klikniętego) wpiszesz w okienku x, y. Każdy obiekt ma definicję, np. <code>Okrąg(A; B; C)</code> — kliknij ją na liście, aby ją zmienić, albo wpisz nową w polu nad listą (<code>c = Okrąg(A; 3)</code>, <code>y = 2x + 1</code>). <kbd>Ctrl</kbd>+<kbd>Z</kbd> cofa, <kbd>Delete</kbd> usuwa zaznaczony obiekt, <kbd>Esc</kbd> przerywa.</li>
           <li><b>Zbiory</b>: warunki <code>|z - 1| &lt;= 2</code>, <code>1 &lt; Re z &lt; 3</code>, równania <code>z^2 = -1</code>, krzywe i obszary <code>t + 2i</code>, <code>a + bi</code>.</li>
         </ul>
       </section>
@@ -172,6 +249,18 @@
       </section>
       <p class="hint">Miejsca zerowe i przecięcia są szukane numerycznie w widocznym zakresie. Wartość bez znaku ≈ jest udowodniona w arytmetyce dokładnej. Stan zapisuje się w przeglądarce.</p>
     </div>
+  </dialog>
+
+  <dialog id="geo-ask" class="geo-ask" aria-labelledby="geo-ask-label">
+    <form method="dialog">
+      <label id="geo-ask-label" for="geo-ask-input"></label>
+      <input id="geo-ask-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false">
+      <p id="geo-ask-error" class="error" role="alert"></p>
+      <div class="setting-actions">
+        <button id="geo-ask-cancel" class="text-button" type="button">Anuluj</button>
+        <button class="text-button primary" value="ok">OK</button>
+      </div>
+    </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

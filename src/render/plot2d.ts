@@ -10,7 +10,7 @@ export function readTheme(): Theme {
   return { bg: v('plot-bg'), gridMinor: v('grid-minor'), gridMajor: v('grid-major'), axis: v('axis'), label: v('plot-label') };
 }
 
-export const MONO = '11px ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace';
+export const MONO = '11px "JetBrains Mono", ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace';
 export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Georgia, serif';
 
 export interface AxesOptions { grid: boolean; axes: boolean; trig: boolean; plane: boolean; minorGrid: boolean; halo: boolean }

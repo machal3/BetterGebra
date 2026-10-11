@@ -31,6 +31,7 @@ export class Scene {
   private hoverCtx: CanvasRenderingContext2D;
   private frame = 0;
   private plotDirty = false;
+  private ends: (Dot & { color: string; fn: RealFunction; expr: string })[] = [];
 
   constructor(private plot: HTMLCanvasElement, private hover: HTMLCanvasElement, private tip: HTMLElement) {
     this.ctx = plot.getContext('2d')!;
@@ -81,7 +82,7 @@ export class Scene {
     drawAxes(ctx, vp, theme, axes);
 
     ctx.lineJoin = ctx.lineCap = 'round';
-    const ends: (Dot & { color: string })[] = [];
+    const ends: (Dot & { color: string; fn: RealFunction; expr: string })[] = [];
     this.found.clear();
     if (mode === 'set') {
       for (const { f, c } of shown) {
@@ -94,11 +95,12 @@ export class Scene {
         ctx.lineWidth = f.width + (f === active ? 0.5 : 0);
         ctx.strokeStyle = f.color;
         ctx.setLineDash(dashPattern(f.dash, f.width));
-        for (const e of traceCurve(ctx, vp, c.fn!)) ends.push({ ...e, color: f.color });
+        for (const e of traceCurve(ctx, vp, c.fn!)) ends.push({ ...e, color: f.color, fn: c.fn!, expr: f.expression });
         ctx.stroke();
       }
       ctx.setLineDash([]);
     }
+    this.ends = ends;
     // Roots and intersections: small neutral dots, so they don't read as hollow endpoints.
     if (mode !== 'set') for (const m of this.analysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
     // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
@@ -134,31 +136,69 @@ export class Scene {
     return marks.filter(m => dist(m) < radius).sort((a, b) => dist(a) - dist(b))[0];
   }
 
-  /** The point of fn's graph nearest the cursor: the graph sampled every px within 24 px, the cursor projected onto it. */
-  private nearestOnGraph(fn: RealFunction): { d: number; x: number; y: number } | null {
+  /** The point of fn's graph nearest the cursor: the graph sampled every px within 24 px, plus ends of pieces, the cursor projected onto it. */
+  private nearestOnGraph(fn: RealFunction, fnEnds: Dot[] = []): { d: number; x: number; y: number } | null {
     const vp = this.vp, p = this.pointer!;
-    let best: { d: number; x: number } | null = null, a: [number, number] | null = null;
+    let best: { d: number; x: number; y: number } | null = null, a: [number, number] | null = null;
+
+    const check = (x0: number, y0: number, x1: number, y1: number, xVal0?: number, xVal1?: number) => {
+      const dx = x1 - x0, dy = y1 - y0, lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return;
+      const t = Math.max(0, Math.min(1, ((p.x - x0) * dx + (p.y - y0) * dy) / lenSq));
+      const projX = x0 + t * dx, projY = y0 + t * dy;
+      const d = Math.hypot(projX - p.x, projY - p.y);
+      if (d < 24 && (!best || d < best.d)) {
+        const x = xVal0 !== undefined && xVal1 !== undefined ? xVal0 + t * (xVal1 - xVal0) : vp.fromX(projX);
+        const yVal = fn(x);
+        best = { d, x, y: Number.isFinite(yVal) ? yVal : vp.fromY(projY) };
+      }
+    };
+
     for (let i = -24; i <= 24; i++) {
       const b: [number, number] = [p.x + i, vp.py(fn(vp.fromX(p.x + i)))];
       if (!Number.isFinite(b[1])) { a = null; continue; }
       // A segment whose middle isn't between its ends spans a jump or an asymptote, not the graph.
       const mid = a && vp.py(fn(vp.fromX(p.x + i - 0.5)));
       if (a && mid !== null && mid >= Math.min(a[1], b[1]) - 1 && mid <= Math.max(a[1], b[1]) + 1) {
-        const dx = b[0] - a[0], dy = b[1] - a[1];
-        const t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dy) / (dx * dx + dy * dy)));
-        const d = Math.hypot(a[0] + t * dx - p.x, a[1] + t * dy - p.y);
-        if (!best || d < best.d) best = { d, x: vp.fromX(a[0] + t * dx) };
+        check(a[0], a[1], b[0], b[1]);
       }
       a = b;
     }
-    return best && { ...best, y: fn(best.x) };
+
+    for (const e of fnEnds) {
+      const ex = vp.px(e.x), ey = vp.py(e.y);
+      if (!Number.isFinite(ex) || !Number.isFinite(ey)) continue;
+      const de = Math.hypot(ex - p.x, ey - p.y);
+      if (de < 24 && (!best || de < best.d)) best = { d: de, x: e.x, y: e.y };
+
+      const pl = Math.floor(ex);
+      if (Math.abs(pl - p.x) <= 25) {
+        const xl = vp.fromX(pl), yl = fn(xl);
+        if (Number.isFinite(yl)) check(pl, vp.py(yl), ex, ey, xl, e.x);
+      }
+      const pr = Math.ceil(ex);
+      if (Math.abs(pr - p.x) <= 25) {
+        const xr = vp.fromX(pr), yr = fn(xr);
+        if (Number.isFinite(yr)) check(ex, ey, pr, vp.py(yr), e.x, xr);
+      }
+    }
+
+    return best;
   }
 
   private realHit(): Hit | null {
     const vp = this.vp, active = activeFn(), trig = state.mode === 'trig';
-    // The nearest root, intersection, extremum or y-intercept within 8 px wins, with its exact coordinates.
+    // The nearest root, intersection, extremum, y-intercept or endpoint within 8 px wins, with its exact coordinates.
     if (state.snap) {
-      const marks = [...(this.analysis?.marks ?? []).map(m => ({ ...m, color: active?.color })), ...(this.analysis?.snaps ?? [])];
+      const marks: Mark[] = [
+        ...(this.analysis?.marks ?? []).map(m => ({ ...m, color: active?.color })),
+        ...(this.analysis?.snaps ?? []),
+        ...this.ends.map(e => {
+          const xText = exactPoint([e.expr, String(e.y)], state.params, e.x)?.x ?? (trig ? piLabel(e.x) : format(e.x, 12));
+          const yText = exactValue(e.expr, state.params, e.x) ?? (trig ? piLabel(e.y) : format(e.y, 12));
+          return { x: e.x, y: e.y, text: `x = ${xText}   y = ${yText}`, color: e.color };
+        }),
+      ];
       const m = this.nearestMark(marks, 8);
       if (m) return { x: m.x, y: m.y, color: m.color ?? 'currentColor', html: stacked(m.text), dot: true };
     }
@@ -166,7 +206,8 @@ export class Scene {
     let best: { d: number; x: number; y: number; f: FnState; fn: RealFunction } | null = null;
     for (const { f, c } of this.rows()) {
       if (!f.visible || !c.fn) continue;
-      const p = this.nearestOnGraph(c.fn);
+      const fnEnds = this.ends.filter(e => e.fn === c.fn);
+      const p = this.nearestOnGraph(c.fn, fnEnds);
       if (p && p.d < 24 && (!best || p.d < best.d)) best = { ...p, f, fn: c.fn };
     }
     if (!best) return null;

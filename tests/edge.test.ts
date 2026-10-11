@@ -60,3 +60,12 @@ test('interval ends accept constants, not variables', () => {
   expect(() => constant('pi/')).toThrow(MathError);
   expect(() => constant('sqrt(-1)')).toThrow(/wartości/);
 });
+
+test('exact values at endpoints of arcsin, arccos and square roots', () => {
+  expect(exactValue('asin(x)', {}, 1)).toBe('π/2');
+  expect(exactValue('asin(x)', {}, -1)).toBe('−π/2');
+  expect(exactValue('acos(x)', {}, 1)).toBe('0');
+  expect(exactValue('acos(x)', {}, -1)).toBe('π');
+  expect(exactValue('sqrt(x)', {}, 0)).toBe('0');
+});
+

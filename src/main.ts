@@ -2,6 +2,7 @@ import './styles/app.css';
 import { AnalysisClient } from './analysis/client';
 import type { AnalysisResult } from './analysis/compute';
 import { format } from './format';
+import { initGeometry, redrawGeometry } from './geometry/panel';
 import { forget } from './model';
 import { Scene } from './render/scene';
 import { fits } from './render/viewport';
@@ -48,6 +49,7 @@ function applyTheme(): void {
   $('theme-button').setAttribute('aria-label', dark ? 'Jasny motyw' : 'Ciemny motyw');
   $('theme-button').title = dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw';
   scene.refreshTheme();
+  redrawGeometry();
 }
 systemDark.addEventListener('change', applyTheme);
 $('theme-button').addEventListener('click', () => {
@@ -70,6 +72,12 @@ $('modes').addEventListener('change', e => {
   }
   commit('mode', 'view');
 });
+
+// --- Panels: home | graphs | geometry (the hash keeps the choice across reloads) ---
+function syncPanel(): void {
+  document.body.dataset.panel = ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[location.hash] ?? 'home';
+}
+addEventListener('hashchange', syncPanel);
 
 // --- View panel ---
 const toggles = { grid: $<HTMLInputElement>('grid-toggle'), axes: $<HTMLInputElement>('axes-toggle'), snap: $<HTMLInputElement>('snap-toggle') };
@@ -109,7 +117,7 @@ $('help-button').addEventListener('click', () => help.showModal());
 help.addEventListener('click', e => { if (e.target === help) help.close(); }); // click on the backdrop
 document.addEventListener('keydown', e => {
   const t = e.target as HTMLElement;
-  if (e.ctrlKey || e.metaKey || e.altKey || t.closest('input, textarea, select, [contenteditable]') || help.open) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || t.closest('input, textarea, select, [contenteditable]') || help.open || document.body.dataset.panel !== 'graphs') return;
   if (e.key === '?') { e.preventDefault(); help.showModal(); }
   else if (e.key === 'b' || e.key === 'B') { state.analysisOpen = !state.analysisOpen; commit('panel'); }
   else if (e.key === 'f' || e.key === 'F') fitY();
@@ -136,6 +144,8 @@ initFunctionList();
 initParameters(settle);
 initAnalysisPanel();
 initCanvasInput(scene);
+initGeometry();
+syncPanel();
 syncModes();
 syncToggles();
 syncPanelVisibility();
@@ -149,7 +159,7 @@ new ResizeObserver(() => {
   requestAnalysis();
 }).observe(stage);
 // MathML and the plot's label fonts may arrive after the first paint.
-document.fonts?.ready.then(() => scene.request());
+document.fonts?.ready.then(() => { scene.request(); redrawGeometry(); });
 
 // Exposed for debugging in the console.
 Object.assign(window, { bettergebra: { state, scene } });
