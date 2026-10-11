@@ -133,19 +133,19 @@ type ToolId = keyof typeof TOOLS;
 const toolOf = (id: ToolId): Tool => TOOLS[id];
 
 /** Icons in two tones: what the tool starts from in grey, hollow points for the picks, what it makes in the accent. */
-const pt = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="2.1" class="pt"/>`;
-const made = (x: number, y: number, r = 2.6) => `<circle cx="${x}" cy="${y}" r="${r}" class="fill acc"/>`;
+const pt = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="1.9" class="pt"/>`;
+const made = (x: number, y: number, r = 2.2) => `<circle cx="${x}" cy="${y}" r="${r}" class="fill acc"/>`;
 const acc = (paths: string) => `<g class="acc">${paths}</g>`;
 const filled = (d: string) => `<path d="${d}" class="soft"/><path d="${d}"/>`;
-const thin = 'stroke-width="1.1"', dash = 'stroke-dasharray="2 2.4"';
+const thin = 'stroke-width="0.9"', dash = 'stroke-dasharray="2 2.4"';
 const TRIANGLE = '<path d="M12 4 3.5 19.5h17z"/>', WEDGE = 'M4 19h7A7 7 0 0 0 8.52 13.65z';
 const ICON: Record<ToolId, string> = {
   move: icon(filled('M6.5 3.5v14l3.4-3.2 2.5 5.8 2.4-1-2.5-5.7h4.9z')),
   hide: icon(`<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>${acc('<path d="M4 20 20 4"/>')}`),
   delete: ICONS.trash,
 
-  point: icon(`<circle cx="12" cy="12" r="6.5" class="soft acc"/>${made(12, 12, 3.2)}`),
-  intersect: icon(`<path d="M4 6.5 20 17.5M4 17.5 20 6.5"/>${made(12, 12, 3)}`),
+  point: icon(`<circle cx="12" cy="12" r="6.5" class="soft acc"/>${made(12, 12, 2.8)}`),
+  intersect: icon(`<path d="M4 6.5 20 17.5M4 17.5 20 6.5"/>${made(12, 12, 2.6)}`),
   midpoint: icon(`<path d="M4 18 20 6"/>${pt(4, 18)}${pt(20, 6)}${made(12, 12)}`),
   foot: icon(`<path d="M3 18.5h18"/><path d="M12 5.5v13" ${thin} ${dash}/><path d="M12 15.5h3v3" ${thin}/>${pt(12, 5)}${made(12, 18.5)}`),
   centroid: icon(`${TRIANGLE}<path d="M12 4v15.5M3.5 19.5l12.75-7.75M20.5 19.5 7.75 11.75" ${thin} ${dash}/>${made(12, 14.33)}`),
