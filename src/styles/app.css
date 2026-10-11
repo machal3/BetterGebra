@@ -234,11 +234,11 @@ math { font-family: var(--math); }
 .domain-preview { font: 12px var(--mono); color: var(--muted); }
 .interval { display: grid; grid-template-columns: auto 1fr auto auto 1fr auto; align-items: center; gap: 6px; }
 .interval > label { color: var(--muted); font-size: 12.5px; }
-.interval input[type="number"], .range-grid input, .width-row input[type="number"], .parameter input[type="number"] {
+.interval input[type="text"], .range-grid input, .width-row input[type="number"], .parameter input[type="number"] {
   width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px;
   background: var(--surface); font: 13px var(--mono);
 }
-.interval input[type="number"]:focus, .range-grid input:focus, .width-row input[type="number"]:focus, .parameter input[type="number"]:focus {
+.interval input[type="text"]:focus, .range-grid input:focus, .width-row input[type="number"]:focus, .parameter input[type="number"]:focus {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .brackets { display: flex; padding: 2px; gap: 1px; border-radius: 7px; background: var(--surface-2); }
