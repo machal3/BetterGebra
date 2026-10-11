@@ -6,7 +6,10 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 const mi = (s: string) => `<mi>${esc(s)}</mi>`;
 const mo = (s: string) => `<mo>${esc(s)}</mo>`;
 const row = (s: string) => `<mrow>${s}</mrow>`;
-const paren = (s: string) => row(`${mo('(')}${s}${mo(')')}`);
+/** Fences grow only around tall content; stretchy fences get extra space in Chrome, so sin(bx) would read sin ( bx ). */
+const tall = (s: string) => /<m(?:frac|sqrt|root)/.test(s);
+const fence = (c: string, inner: string) => tall(inner) ? mo(c) : `<mo stretchy="false">${esc(c)}</mo>`;
+const paren = (s: string) => row(`${fence('(', s)}${s}${fence(')', s)}`);
 const INVISIBLE_TIMES = '<mo>&#x2062;</mo>', APPLY = '<mo>&#x2061;</mo>';
 
 const PRECEDENCE: Partial<Record<Node['t'], number>> = { '+': 1, '-': 1, '*': 2, neg: 3, '^': 4, '!': 5, '°': 5 };
@@ -21,9 +24,9 @@ function call(n: Extract<Node, { t: 'call' }>, sup?: string): string {
   const [x, y] = n.args.map(render);
   if (!sup) {
     switch (n.n) {
-      case 'abs': return row(`${mo('|')}${x}${mo('|')}`);
-      case 'floor': return row(`${mo('⌊')}${x}${mo('⌋')}`);
-      case 'ceil': return row(`${mo('⌈')}${x}${mo('⌉')}`);
+      case 'abs': return row(`${fence('|', x)}${x}${fence('|', x)}`);
+      case 'floor': return row(`${fence('⌊', x)}${x}${fence('⌋', x)}`);
+      case 'ceil': return row(`${fence('⌈', x)}${x}${fence('⌉', x)}`);
       case 'sqrt': return `<msqrt>${x}</msqrt>`;
       case 'cbrt': return `<mroot>${row(x)}<mn>3</mn></mroot>`;
       case 'root': return `<mroot>${row(y)}${row(x)}</mroot>`;

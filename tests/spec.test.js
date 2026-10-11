@@ -95,20 +95,21 @@ test('rich math syntax', () => {
   near('round(x)', 2.6, 3);
   assert.deepEqual(parameterNames('a sin(bx) + c'), ['a', 'b', 'c']);
 });
+// v2: fences around short content carry stretchy="false" (Chrome spaces stretchy ones), so <mo[^>]*> below.
 test('MathML formatting', () => {
   const m = expr => toMathML(expr);
   assert.match(m('1/x'), /<mfrac><mrow><mn>1<\/mn><\/mrow><mrow><mi>x<\/mi><\/mrow><\/mfrac>/);
   assert.match(m('sqrt(x+1)'), /<msqrt>/);
   assert.match(m('root(3; x)'), /<mroot><mrow><mi>x<\/mi><\/mrow><mrow><mn>3<\/mn><\/mrow><\/mroot>/);
   assert.match(m('x^2'), /<msup><mrow><mi>x<\/mi><\/mrow><mrow><mn>2<\/mn><\/mrow><\/msup>/);
-  assert.match(m('(x+1)^2'), /<msup><mrow><mrow><mo>\(<\/mo>/);
-  assert.match(m('|x|'), /<mo>\|<\/mo><mi>x<\/mi><mo>\|<\/mo>/);
+  assert.match(m('(x+1)^2'), /<msup><mrow><mrow><mo[^>]*>\(<\/mo>/);
+  assert.match(m('|x|'), /<mo[^>]*>\|<\/mo><mi>x<\/mi><mo[^>]*>\|<\/mo>/);
   assert.match(m('tan x'), />tg</);
   assert.match(m('sin^2(x)'), /<msup><mi mathvariant="normal">sin<\/mi><mrow><mn>2<\/mn><\/mrow><\/msup>/);
   assert.match(m('x*2'), /<mo>·<\/mo>/);
   assert.doesNotMatch(m('2x'), /·/);
   assert.match(m('2.5'), /<mn>2,5<\/mn>/);
-  assert.match(m('x-(x+1)'), /<mo>−<\/mo><mrow><mo>\(<\/mo>/);
+  assert.match(m('x-(x+1)'), /<mo>−<\/mo><mrow><mo[^>]*>\(<\/mo>/);
   assert.match(m('pi'), /π/);
   assert.match(m('exp(x)'), /<msup><mi>e<\/mi>/);});
 test('accurate roots: exact values, touching roots, poles', () => {

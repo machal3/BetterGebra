@@ -8,6 +8,13 @@ test('bad input fails with a readable MathError, never anything else', () => {
   expect(parameterNames('x+')).toEqual([]);
 });
 
+test('square roots of zero and perfect squares read as plain numbers', () => {
+  expect(exactValue('sqrt(1-x^2)', {}, 1)).toBe('0');
+  expect(exactValue('sqrt(x)', {}, 0)).toBe('0');
+  expect(exactValue('sqrt(x)', {}, 2.25)).toBe('3/2');
+  expect(exactValue('sqrt(x)', {}, 8)).toBe('2√2');
+});
+
 test('exact helpers tolerate unparsable input', () => {
   expect(exactValue('x+', {}, 1)).toBeNull();
   expect(exactPoint(['x+', '0'], {}, 1)).toBeNull();

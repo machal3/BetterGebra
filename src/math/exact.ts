@@ -132,6 +132,7 @@ function sqrt(x: X): X {
   const r = rational(x);
   if (!r) throw SKIP;
   if (r.n < 0n) throw UNDEFINED;
+  if (!r.n) return int(0); // otherwise 1·√0, shown as "√0"
   // √(n/d) = √(nd)/d; nd = square · squarefree by trial division.
   const m = r.n * r.d;
   if (m > 10n ** 10n) throw SKIP;
