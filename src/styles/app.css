@@ -216,8 +216,8 @@ math { font-family: var(--math); }
 .fn-card.typeset .fn-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .fn-field math { font-size: 1em; }
 .fn-more, .fn-remove { opacity: 0.55; }
-.fn-card:hover .fn-more, .fn-card:hover .fn-remove, .fn-card:focus-within .fn-more, .fn-card:focus-within .fn-remove, .fn-more[aria-expanded="true"] { opacity: 1; }
-.fn-more[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.fn-card:hover .fn-more, .fn-card:hover .fn-remove, .fn-card:focus-within .fn-more, .fn-card:focus-within .fn-remove, .fn-more.open { opacity: 1; }
+.fn-more.open { background: var(--accent-soft); color: var(--accent); }
 .fn-remove:hover { color: var(--danger); }
 .fn-error, .fn-domain { margin: -4px 12px 8px 46px; font-size: 12.5px; }
 .fn-error { color: var(--danger); }
@@ -225,7 +225,9 @@ math { font-family: var(--math); }
 .fn-error:empty, .fn-domain:empty { display: none; }
 
 /* Inline settings */
-.fn-settings { border-top: 1px solid var(--border); padding: 12px 14px 12px; display: grid; gap: 14px; animation: reveal 0.18s var(--ease); }
+/* Settings popover, placed by JS next to its button */
+.popover.fn-settings { position: fixed; inset: auto; width: 320px; max-height: calc(100dvh - 16px); overflow: auto; border-top: 3px solid var(--c, var(--accent)); }
+.fn-settings:popover-open { display: grid; gap: 14px; animation: reveal 0.16s var(--ease); }
 @keyframes reveal { from { opacity: 0; transform: translateY(-4px); } }
 .subhead { margin: 0 0 6px; font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .setting-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -433,6 +435,7 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
   .analysis { right: 10px; left: 10px; bottom: 64px; width: auto; max-height: calc(100% - 84px); }
   .view-panel { position: fixed; inset: auto 10px 10px 10px; width: auto; }
   .fn-more, .fn-remove { opacity: 1; }
+  .fn-settings { inset: auto 0 0 0; width: auto; max-height: 75dvh; border-radius: 16px 16px 0 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
   .fn-field { height: 48px; }
   .icon-button.small { width: 40px; height: 40px; }
   .modes { margin: 4px 12px 8px; }

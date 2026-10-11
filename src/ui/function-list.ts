@@ -23,7 +23,6 @@ interface Row {
 }
 
 const rows = new Map<number, Row>();
-let openSettings: number | null = null;
 const list = () => $<HTMLOListElement>('function-list');
 
 const PREFIX = { graph: 'y =', trig: 'y =', complex: 'f(z) =', set: '' };
@@ -63,13 +62,15 @@ function createRow(f: FnState): Row {
   const prefix = h('span', { class: 'fn-prefix', 'aria-hidden': 'true' });
   const math = h('div', { class: 'fn-math', 'aria-hidden': 'true' });
   const swatch = h('button', { class: 'fn-swatch', type: 'button' });
-  const more = h('button', { class: 'icon-button small fn-more', type: 'button', 'aria-expanded': 'false', 'aria-controls': `fn-settings-${f.id}`, html: ICONS.sliders, title: 'Dziedzina, kolor, linia' });
+  const more = h('button', { class: 'icon-button small fn-more', type: 'button', popovertarget: `fn-settings-${f.id}`, html: ICONS.sliders, title: 'Dziedzina, kolor, linia' });
   const removeButton = h('button', { class: 'icon-button small fn-remove', type: 'button', html: ICONS.trash, title: 'Usuń' });
   const error = h('p', { class: 'fn-error', id: `fn-error-${f.id}`, role: 'alert' });
   const domain = h('p', { class: 'fn-domain' });
-  const settings = h('div', { class: 'fn-settings', id: `fn-settings-${f.id}`, hidden: true });
+  // A popover in the top layer: light-dismissed by a click outside or Esc. Lives in <body>, so moving rows never closes it.
+  const settings = h('div', { class: 'popover fn-settings', id: `fn-settings-${f.id}`, popover: 'auto', role: 'dialog' });
+  document.body.append(settings);
   const field = h('label', { class: 'fn-field' }, prefix, input, math);
-  const el = h('li', { class: 'fn-card', 'data-id': f.id }, h('div', { class: 'fn-main' }, swatch, field, more, removeButton), error, domain, settings);
+  const el = h('li', { class: 'fn-card', 'data-id': f.id }, h('div', { class: 'fn-main' }, swatch, field, more, removeButton), error, domain);
   const row: Row = { el, input, prefix, math, swatch, more, error, domain, settings, editing: false };
 
   // Clicking the typeset formula opens the raw text with the caret at the end, not wherever the hidden text was hit.
@@ -96,17 +97,34 @@ function createRow(f: FnState): Row {
   });
   swatch.addEventListener('click', () => { f.visible = !f.visible; commit('style'); });
   removeButton.addEventListener('click', () => remove(f));
-  more.addEventListener('click', () => {
-    openSettings = openSettings === f.id ? null : f.id;
-    if (openSettings === f.id) setActive(f.id);
-    syncList();
+  settings.addEventListener('beforetoggle', e => {
+    if ((e as ToggleEvent).newState !== 'open') return;
+    if (!row.sync) buildSettings(f, row);
+    row.sync!();
+    setActive(f.id);
+  });
+  settings.addEventListener('toggle', e => {
+    more.classList.toggle('open', (e as ToggleEvent).newState === 'open');
+    if ((e as ToggleEvent).newState === 'open') placeSettings(settings, more);
   });
   // Clicking anywhere on the card makes it the analysed one.
   el.addEventListener('pointerdown', () => setActive(f.id));
   return row;
 }
 
-/** Inline settings: domain, colour, line. Built on first open. */
+/** Next to the button: to the right of the sidebar on wide screens, below it otherwise; always inside the window. */
+function placeSettings(pop: HTMLElement, anchor: HTMLElement): void {
+  if (matchMedia('(max-width: 760px)').matches) { pop.style.left = pop.style.top = ''; return; } // bottom sheet in CSS
+  const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight, gap = 8;
+  const edge = anchor.closest('.sidebar')?.getBoundingClientRect().right ?? r.right;
+  const right = edge + gap + w <= innerWidth - gap;
+  const left = right ? edge + gap : Math.max(gap, Math.min(r.left, innerWidth - w - gap));
+  const top = right ? r.top - 8 : r.bottom + 6;
+  pop.style.left = `${left}px`;
+  pop.style.top = `${Math.max(gap, Math.min(top, innerHeight - hgt - gap))}px`;
+}
+
+/** Settings popover: domain, colour, line. Built on first open. */
 function buildSettings(f: FnState, row: Row): void {
   const id = (s: string) => `fn-${f.id}-${s}`;
   const endInput = (which: 'from' | 'to') => {
@@ -167,6 +185,7 @@ function buildSettings(f: FnState, row: Row): void {
   widthValue.addEventListener('change', () => { widthValue.value = String(Number(f.width.toFixed(2))); });
   duplicate.addEventListener('click', () => {
     const { expression, from: a, to: b, fromOpen, toOpen, width: w, dash } = f;
+    row.settings.hidePopover();
     const copy = addFunction(expression, { from: a, to: b, fromOpen, toOpen, width: w, dash }, f);
     if (!copy) toast(`Możesz porównywać do ${MAX_FUNCTIONS} funkcji naraz.`);
   });
@@ -224,20 +243,17 @@ function syncRow(f: FnState): void {
   const unknowns = c.set?.kind === 'parametric' ? c.set.unknowns : null;
   const bounded = Number.isFinite(f.from) || Number.isFinite(f.to);
   row.domain.textContent = !bounded || mode === 'complex' || (mode === 'set' && !unknowns?.length) ? '' : domainText(f, unknowns?.join(', ') ?? 'x');
-  const open = openSettings === f.id;
-  row.more.setAttribute('aria-expanded', String(open));
   row.more.setAttribute('aria-label', `Ustawienia funkcji ${index}`);
   row.el.querySelector('.fn-remove')!.setAttribute('aria-label', `Usuń funkcję ${index}`);
-  row.el.classList.toggle('expanded', open);
-  if (open && !row.sync) buildSettings(f, row);
-  row.settings.hidden = !open;
-  if (open) row.sync!();
+  row.settings.setAttribute('aria-label', `Ustawienia funkcji ${index}`);
+  row.settings.style.setProperty('--c', f.color);
+  if (row.settings.matches(':popover-open')) row.sync!();
 }
 
 /** Reconciles the DOM with state.functions: creates, removes and orders rows without rebuilding existing ones. */
 export function syncList(): void {
   const ol = list(), ids = new Set(state.functions.map(f => f.id));
-  for (const [id, row] of rows) if (!ids.has(id)) { row.el.remove(); rows.delete(id); if (openSettings === id) openSettings = null; }
+  for (const [id, row] of rows) if (!ids.has(id)) { row.el.remove(); row.settings.remove(); rows.delete(id); }
   state.functions.forEach((f, i) => {
     let row = rows.get(f.id);
     if (!row) { row = createRow(f); rows.set(f.id, row); }
