@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { MathError, compile, compileComplex, exactPoint, exactValue, parameterNames, relationMathML, roots, toMathML, extrema } from '../src/math';
+import { MathError, compile, constant, compileComplex, exactPoint, exactValue, parameterNames, relationMathML, roots, toMathML, extrema } from '../src/math';
 
 test('bad input fails with a readable MathError, never anything else', () => {
   for (const s of ['', '   ', 'x'.repeat(301), 'x+', '2**', 'sin(', '|', '()', '1..2', 'max(1,2)']) {
@@ -43,4 +43,20 @@ test('MathML escapes relations and typesets inverse functions', () => {
   expect(relationMathML('|z| < 2')).toContain('<mo>&#60;</mo>');
   expect(toMathML('sin^-1 x')).toContain('arcsin');
   expect(toMathML('a<b'.replace('<', '+'))).toContain('<mi>a</mi>');
+});
+
+test('interval ends accept constants, not variables', () => {
+  expect(constant('pi')).toBe(Math.PI);
+  expect(constant('-pi/2')).toBe(-Math.PI / 2);
+  expect(constant('2π')).toBe(2 * Math.PI);
+  expect(constant('−e')).toBe(-Math.E);
+  expect(constant('√2')).toBe(Math.SQRT2);
+  expect(constant('tau/4')).toBe(Math.PI / 2);
+  expect(constant('2,5')).toBe(2.5);
+  expect(constant('∞')).toBe(Infinity);
+  expect(constant('-inf')).toBe(-Infinity);
+  expect(() => constant('x')).toThrow(/zależeć od x/);
+  expect(() => constant('a+1')).toThrow(/nie jest stałą/);
+  expect(() => constant('pi/')).toThrow(MathError);
+  expect(() => constant('sqrt(-1)')).toThrow(/wartości/);
 });

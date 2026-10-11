@@ -2,9 +2,9 @@
  * The list of function cards. Rows are keyed by function id and reused, so typing never loses focus or caret,
  * and every visual detail is derived from state in sync() — handlers only change state and commit.
  */
-import { expressionMathML, relationMathML } from '../math';
+import { constant, expressionMathML, relationMathML } from '../math';
 import { compiled } from '../model';
-import { domainText } from '../format';
+import { domainText, symbolic } from '../format';
 import { MAX_FUNCTIONS, PALETTE, addFunction, commit, removeFunction, setActive, state, type Dash, type FnState } from '../state';
 import { $, ICONS, fillRange, h, setHTML, toast } from './dom';
 
@@ -124,11 +124,15 @@ function placeSettings(pop: HTMLElement, anchor: HTMLElement): void {
   pop.style.top = `${Math.max(gap, Math.min(top, innerHeight - hgt - gap))}px`;
 }
 
+/** An interval end as typed back into its field: π/2, −√2, 0.75; empty when unbounded. */
+const endText = (v: number) => !Number.isFinite(v) ? '' : symbolic(v) ?? String(v);
+
 /** Settings popover: domain, colour, line. Built on first open. */
 function buildSettings(f: FnState, row: Row): void {
   const id = (s: string) => `fn-${f.id}-${s}`;
   const endInput = (which: 'from' | 'to') => {
-    const input = h('input', { type: 'number', step: 'any', inputmode: 'decimal', id: id(which), placeholder: which === 'from' ? '−∞' : '+∞' });
+    // Text, not type=number: ends can be constants like pi/2, −e or √2.
+    const input = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', id: id(which), placeholder: which === 'from' ? '−∞' : '+∞', title: 'Liczba lub stała, np. 2, pi/2, −e, √2' });
     return input;
   };
   const bracket = (which: 'from' | 'to') => {
@@ -167,12 +171,24 @@ function buildSettings(f: FnState, row: Row): void {
   const del = h('button', { type: 'button', class: 'text-button danger', html: `${ICONS.trash}<span>Usuń</span>` });
   row.settings.append(domain, colors, line, h('div', { class: 'setting-actions' }, duplicate, del));
 
-  const readEnds = () => {
-    const a = from.value === '' ? -Infinity : from.valueAsNumber, b = to.value === '' ? Infinity : to.valueAsNumber;
-    const valid = !Number.isNaN(a) && !Number.isNaN(b) && a < b;
-    domainError.textContent = valid ? '' : 'Początek przedziału musi być mniejszy niż koniec.';
-    if (valid) { f.from = a; f.to = b; commit('style'); }
+  // Empty = unbounded. While a value is unfinished ("pi/", "2*") the graph keeps the last valid interval.
+  const read = (input: HTMLInputElement, empty: number): number | string => {
+    if (!input.value.trim()) return empty;
+    try { return constant(input.value); } catch (e) { return (e as Error).message; }
   };
+  const readEnds = () => {
+    const a = read(from, -Infinity), b = read(to, Infinity);
+    from.setAttribute('aria-invalid', String(typeof a === 'string'));
+    to.setAttribute('aria-invalid', String(typeof b === 'string'));
+    const problem = typeof a === 'string' ? a : typeof b === 'string' ? b : a < b ? '' : 'Początek przedziału musi być mniejszy niż koniec.';
+    domainError.textContent = problem;
+    if (!problem) { f.from = a as number; f.to = b as number; commit('style'); }
+  };
+  // On leaving a valid field, show the value in its tidy form (pi/2 → π/2).
+  // Not while the interval is wrong: then the field keeps what was typed, so it can be fixed.
+  const tidy = (input: HTMLInputElement, v: number) => { if (!domainError.textContent) input.value = endText(v); };
+  from.addEventListener('blur', () => tidy(from, f.from));
+  to.addEventListener('blur', () => tidy(to, f.to));
   from.addEventListener('input', readEnds);
   to.addEventListener('input', readEnds);
   fromEnds.addEventListener('change', e => { f.fromOpen = (e.target as HTMLInputElement).value === 'open'; commit('style'); });
@@ -199,8 +215,8 @@ function buildSettings(f: FnState, row: Row): void {
     domainTitle.textContent = mode === 'set' ? `Zakres ${unknowns?.join(', ') ?? ''}` : 'Dziedzina';
     preview.value = domainText(f, mode === 'set' ? unknowns?.join(', ') ?? 't' : 'x');
     // Don't overwrite what's being typed (e.g. "-" or "1e").
-    if (document.activeElement !== from) from.value = Number.isFinite(f.from) ? String(f.from) : '';
-    if (document.activeElement !== to) to.value = Number.isFinite(f.to) ? String(f.to) : '';
+    if (document.activeElement !== from && !domainError.textContent) from.value = endText(f.from);
+    if (document.activeElement !== to && !domainError.textContent) to.value = endText(f.to);
     for (const [end, group] of [['from', fromEnds], ['to', toEnds]] as const) {
       const finite = Number.isFinite(f[end]), open = !finite || f[`${end}Open`];
       for (const r of group.querySelectorAll('input')) { r.disabled = !finite; r.checked = (r.value === 'open') === open; }

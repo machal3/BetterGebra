@@ -32,10 +32,14 @@ export const stacked = (s: string) => escapeHTML(s).replace(/\(([^()]+)\)\/(\d+)
 
 export const list = (items: string[], max = 6) => items.slice(0, max).join(';  ') + (items.length > max ? ';  …' : '');
 
-/** x ∈ ⟨a; b) */
+/** π/2, −√2… for values that are simple multiples of π or a root; null for plain decimals, which read better as such. */
+export const symbolic = (v: number) => { const e = exact(v); return e && /[π√]/.test(e) ? e : null; };
+
+/** x ∈ ⟨a; b), ends set as constants shown as such: ⟨0; π), not ⟨0; 3,1416). */
 export function domainText(f: Pick<FnState, 'from' | 'to' | 'fromOpen' | 'toOpen'>, variable = 'x'): string {
-  const left = Number.isFinite(f.from) ? `${f.fromOpen ? '(' : '⟨'}${format(f.from)}` : '(−∞';
-  const right = Number.isFinite(f.to) ? `${format(f.to)}${f.toOpen ? ')' : '⟩'}` : '+∞)';
+  const end = (v: number) => symbolic(v) ?? format(v);
+  const left = Number.isFinite(f.from) ? `${f.fromOpen ? '(' : '⟨'}${end(f.from)}` : '(−∞';
+  const right = Number.isFinite(f.to) ? `${end(f.to)}${f.toOpen ? ')' : '⟩'}` : '+∞)';
   return `${variable} ∈ ${left}; ${right}`;
 }
 
