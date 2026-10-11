@@ -11,7 +11,7 @@ import { $, ICONS, h, icon, toast } from '../ui/dom';
 import { REFERENCE, angle as angleValue, definition, parseInput, type Parsed } from './commands';
 import {
   compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, nextName, pointOn, primed, project, topoSort,
-  type Def, type Draft, type GeoObject, type Kind, type Line, type Pt, type Shape,
+  type Def, type Draft, type GeoObject, type Kind, type Line, type Pt, type Shape, type Style,
 } from './construct';
 
 type Slot = 'point' | 'line' | 'curve' | 'circle' | 'vector' | 'region' | 'pointOrLine' | 'any';
@@ -216,7 +216,7 @@ let objects: GeoObject[] = [];
 let shapes = new Map<number, Shape | null>();
 let nextId = 1;
 let view: View = { ...HOME };
-let grid = false;
+let grid = false, axes = false;
 let tool: ToolId = 'move';
 /** Objects picked so far for the current tool, by slot (polygon: in click order). */
 let picked: (number | undefined)[] = [];
@@ -240,6 +240,7 @@ function add(drafts: Draft[], replace = new Map<number, GeoObject>()): number[] 
     const fresh = name && (!taken.has(name) || name === old?.name) ? name : old ? old.name : imageOf ? primed(imageOf, taken) : nextName(d.kind, taken);
     const o: GeoObject = { ...d, of: d.of.map(id => id < 0 ? ids[-id - 1] : id), id: old?.id ?? nextId++, name: fresh };
     if (old?.hidden) o.hidden = true;
+    if (old?.style) o.style = old.style;
     if (old) objects[objects.indexOf(old)] = o; else objects.push(o);
     taken.add(o.name);
     ids.push(o.id);
@@ -316,10 +317,10 @@ function travel(from: string[], to: string[]): void {
 const KINDS = new Set<Kind>(['point', 'segment', 'line', 'ray', 'vector', 'circle', 'arc', 'sector', 'polygon', 'angle', 'measure']);
 let saveTimer = 0;
 function save(): void {
-  try { localStorage.setItem(STORE, JSON.stringify({ objects, view, grid })); } catch { /* private mode: don't remember */ }
+  try { localStorage.setItem(STORE, JSON.stringify({ objects, view, grid, axes })); } catch { /* private mode: don't remember */ }
 }
 function restore(): void {
-  let data: { objects?: GeoObject[]; view?: View; grid?: boolean } | null = null;
+  let data: { objects?: GeoObject[]; view?: View; grid?: boolean; axes?: boolean } | null = null;
   try { data = JSON.parse(localStorage.getItem(STORE) ?? 'null'); } catch { /* corrupt: start empty */ }
   if (!data) return;
   const seen = new Set<number>();
@@ -334,6 +335,8 @@ function restore(): void {
   const v = data.view;
   if (v && [v.min, v.max, v.cy].every(Number.isFinite) && v.max > v.min) view = { min: v.min, max: v.max, cy: v.cy, ratio: 1 };
   grid = !!data.grid;
+  // Saved before the axes had their own switch: they went with the grid.
+  axes = !!(data.axes ?? grid);
 }
 
 function update(): void {
@@ -560,9 +563,9 @@ function draw(): void {
   const theme = readTheme(), ink = c('text'), free = c('accent'), bound = c('muted'), poly = c('geo-polygon'), arc = c('geo-angle');
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
-  const axes = { grid, axes: grid, trig: false, plane: false, minorGrid: true, halo: false };
-  drawGrid(ctx, v, theme, axes);
-  drawAxes(ctx, v, theme, axes);
+  const options = { grid, axes, trig: false, plane: false, minorGrid: true, halo: false };
+  drawGrid(ctx, v, theme, options);
+  drawAxes(ctx, v, theme, options);
   ctx.lineJoin = ctx.lineCap = 'round';
 
   const ghost = preview(), names = new Map(objects.map(o => [o.id, o.name])), hover = hoverTarget();
@@ -571,23 +574,36 @@ function draw(): void {
     .filter((i): i is { o: GeoObject; s: Shape; ghost: boolean } => !!i.s && (!i.o.hidden || tool === 'hide'))
     .sort((a, b) => LAYER[a.s.kind] - LAYER[b.s.kind]);
 
+  const byId = new Map(objects.map(o => [o.id, o]));
   for (const { o, s, ghost: isGhost } of items) {
-    const color = s.kind === 'polygon' || s.kind === 'sector' ? poly : s.kind === 'angle' ? arc : s.kind === 'point' ? (o.def === 'free' || o.def === 'on' ? free : bound) : ink;
-    const hot = marked.has(o.id);
+    const st = (o.def === 'edge' ? byId.get(o.of[2])?.style : o.style) ?? {};
+    const auto = o.def === 'edge' || s.kind === 'polygon' || s.kind === 'sector' ? poly : s.kind === 'angle' ? arc : s.kind === 'point' ? (o.def === 'free' || o.def === 'on' ? free : bound) : ink;
+    const color = st.color === 'ink' ? ink : st.color ?? auto;
+    const hot = marked.has(o.id), text = isGhost ? '' : caption(o, s, st.label, id => names.get(id) ?? '?'), font = text === o.name ? SERIF : MONO;
     ctx.globalAlpha = isGhost ? 0.55 : o.hidden ? 0.3 : 1;
+    ctx.setLineDash([]);
     if (s.kind === 'point') {
-      const X = v.px(s.x), Y = v.py(s.y);
-      if (hot) { ctx.beginPath(); ctx.arc(X, Y, 9, 0, 2 * Math.PI); paint('fill', color, 0.22); }
-      ctx.beginPath(); ctx.arc(X, Y, o.def === 'free' ? 4.5 : 3.8, 0, 2 * Math.PI);
-      ctx.fillStyle = color; ctx.fill();
-      ctx.lineWidth = 1.2; ctx.strokeStyle = theme.bg; ctx.stroke();
-      if (o.name) label(o.name, X + 7, Y - 8, color, theme.bg, SERIF);
+      const X = v.px(s.x), Y = v.py(s.y), r = st.size ?? (o.def === 'free' ? 4.5 : 3.8);
+      if (hot) { ctx.beginPath(); ctx.arc(X, Y, r + 5, 0, 2 * Math.PI); paint('fill', color, 0.22); }
+      ctx.beginPath();
+      if (st.shape === 'cross') {
+        const k = r * 0.85;
+        ctx.moveTo(X - k, Y - k); ctx.lineTo(X + k, Y + k); ctx.moveTo(X + k, Y - k); ctx.lineTo(X - k, Y + k);
+        ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+      } else {
+        ctx.arc(X, Y, r, 0, 2 * Math.PI);
+        ctx.fillStyle = st.shape === 'ring' ? theme.bg : color; ctx.fill();
+        ctx.lineWidth = st.shape === 'ring' ? 2 : 1.2; ctx.strokeStyle = st.shape === 'ring' ? color : theme.bg; ctx.stroke();
+      }
+      if (text) label(text, X + r + 3, Y - r - 4, color, theme.bg, font);
       continue;
     }
     if (s.kind === 'measure') {
-      if (o.name) label(describe(o, s, id => names.get(id) ?? '?').text, v.px(s.x), v.py(s.y) - 10, hot ? free : ink, theme.bg, MONO, 'center');
+      if (text) label(text, v.px(s.x), v.py(s.y) - 10, hot ? free : color, theme.bg, MONO, 'center');
       continue;
     }
+    const w = st.width ?? (s.kind === 'angle' ? 1.5 : s.kind === 'polygon' || o.def === 'edge' ? 2 : 1.8);
+    const dash = () => ctx.setLineDash(st.dash === 'dashed' ? [w * 3 + 3, w * 2 + 3] : st.dash === 'dotted' ? [0.1, w * 2 + 2] : []);
     ctx.beginPath();
     if (s.kind === 'polygon') s.pts.forEach((p, i) => i ? ctx.lineTo(v.px(p.x), v.py(p.y)) : ctx.moveTo(v.px(p.x), v.py(p.y)));
     else if (s.kind === 'circle') ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, 0, 2 * Math.PI);
@@ -604,19 +620,22 @@ function draw(): void {
       } else { ctx.moveTo(X, Y); ctx.arc(X, Y, ARC, -s.from, -(s.from + s.sweep), true); }
       ctx.closePath();
       const mid = -(s.from + s.sweep / 2);
-      if (o.name) label(`${o.name} = ${Math.round(s.sweep * 1800 / Math.PI) / 10}°`.replace('.', ','), X + (ARC + 30) * Math.cos(mid), Y + (ARC + 30) * Math.sin(mid), color, theme.bg, MONO, 'center');
+      if (text) label(text, X + (ARC + 30) * Math.cos(mid), Y + (ARC + 30) * Math.sin(mid), color, theme.bg, font, 'center');
     } else lineThrough(v, s as Line);
     if (s.kind === 'polygon' || s.kind === 'sector' || s.kind === 'angle') {
       ctx.closePath();
-      paint('fill', color, hot ? 0.3 : 0.16);
-      ctx.lineWidth = s.kind === 'angle' ? 1.5 : 2; ctx.strokeStyle = color; ctx.stroke();
-      continue;
+      paint('fill', color, (st.fill ?? 0.16) + (hot ? 0.14 : 0));
+      dash(); ctx.lineWidth = w; ctx.strokeStyle = color; ctx.stroke();
+    } else {
+      if (s.kind === 'circle' && st.fill) paint('fill', color, st.fill + (hot ? 0.14 : 0));
+      if (hot) { ctx.lineWidth = w + 6; paint('stroke', color, 0.18); }
+      dash(); ctx.lineWidth = w; ctx.strokeStyle = color;
+      ctx.stroke();
+      if (s.kind === 'vector') arrowhead(v.px(s.x1), v.py(s.y1), v.px(s.x2), v.py(s.y2), color, w);
     }
-    if (hot) { ctx.lineWidth = 8; paint('stroke', color, 0.18); }
-    ctx.lineWidth = o.def === 'edge' ? 2 : 1.8; ctx.strokeStyle = o.def === 'edge' ? poly : color;
-    ctx.stroke();
-    if (s.kind === 'vector') arrowhead(v.px(s.x1), v.py(s.y1), v.px(s.x2), v.py(s.y2), color);
+    if (text && s.kind !== 'angle') { const [X, Y] = anchor(v, s); label(text, X + 6, Y - 10, color, theme.bg, font); }
   }
+  ctx.setLineDash([]);
   ctx.globalAlpha = 1;
   // Where a click would put the point: a ring, filled when it lands on something (grid, line, intersection).
   const at = hover?.snap;
@@ -637,8 +656,34 @@ function lineThrough(v: Viewport, s: Line): void {
   ctx.lineTo(X1 + t1 * (X2 - X1), Y1 + t1 * (Y2 - Y1));
 }
 
-function arrowhead(x1: number, y1: number, x2: number, y2: number, color: string): void {
-  const a = Math.atan2(y2 - y1, x2 - x1), k = 12;
+/** What an object's label says on the board, '' for none. */
+function caption(o: GeoObject, s: Shape, mode: Style['label'], nameOf: (id: number) => string): string {
+  if (mode === 'none' || !o.name) return '';
+  if (s.kind === 'measure') return describe(o, s, nameOf).text;
+  if (s.kind === 'angle') return mode === 'name' ? o.name : `${o.name} = ${Math.round(s.sweep * 1800 / Math.PI) / 10}°`.replace('.', ',');
+  if (mode === 'value') return describe(o, s, nameOf).text;
+  return mode === 'name' || s.kind === 'point' ? o.name : '';
+}
+
+/** Where a label sits: a segment's middle, the place of a line nearest the middle of the board, a circle's upper right… */
+function anchor(v: Viewport, s: Shape): [number, number] {
+  switch (s.kind) {
+    case 'segment': case 'vector': return [v.px((s.x1 + s.x2) / 2), v.py((s.y1 + s.y2) / 2)];
+    case 'line': case 'ray': {
+      const X = v.px(s.x1), Y = v.py(s.y1), dx = v.px(s.x2) - X, dy = v.py(s.y2) - Y;
+      let t = ((width / 2 - X) * dx + (height / 2 - Y) * dy) / (dx * dx + dy * dy || 1);
+      if (s.kind === 'ray') t = Math.max(t, 0);
+      return [X + t * dx, Y + t * dy];
+    }
+    case 'circle': return [v.px(s.cx + s.r * Math.SQRT1_2), v.py(s.cy + s.r * Math.SQRT1_2)];
+    case 'arc': case 'sector': { const m = s.from + s.sweep / 2; return [v.px(s.cx + s.r * Math.cos(m)), v.py(s.cy + s.r * Math.sin(m))]; }
+    case 'polygon': return [v.px(s.pts.reduce((a, p) => a + p.x, 0) / s.pts.length), v.py(s.pts.reduce((a, p) => a + p.y, 0) / s.pts.length)];
+    default: return [v.px(s.x), v.py(s.y)];
+  }
+}
+
+function arrowhead(x1: number, y1: number, x2: number, y2: number, color: string, w = 1.8): void {
+  const a = Math.atan2(y2 - y1, x2 - x1), k = 9 + 1.6 * w;
   ctx.beginPath();
   ctx.moveTo(x2, y2);
   ctx.lineTo(x2 - k * Math.cos(a - 0.4), y2 - k * Math.sin(a - 0.4));
@@ -679,7 +724,8 @@ function renderList(): void {
     value.addEventListener('click', () => { selected = selected === o.id ? null : o.id; renderList(); request(); });
     const def = h('button', { class: 'geo-def', type: 'button', title: `${detail}. Kliknij, aby zmienić definicję.` }, definition(o, id => names.get(id) ?? '?'));
     def.addEventListener('click', () => editDefinition(def, o));
-    const li = h('li', { class: `geo-item${o.id === selected ? ' selected' : ''}${o.hidden ? ' hidden-obj' : ''}`, 'data-kind': o.kind, 'data-free': String(o.def === 'free' || o.def === 'on') },
+    const c = o.style?.color, tint = c ? `--c: ${c === 'ink' ? 'var(--text)' : c}` : undefined;
+    const li = h('li', { class: `geo-item${o.id === selected ? ' selected' : ''}${o.hidden ? ' hidden-obj' : ''}`, 'data-kind': o.kind, 'data-free': String(o.def === 'free' || o.def === 'on'), style: tint },
       toggle, h('div', { class: 'geo-body' }, value, def), del);
     return li;
   }));
@@ -691,11 +737,13 @@ const coordText = (v: number) => format(v, 8).replace(/^-/, '−');
 
 /** Shows the selected point's x and y; editable for free points and points on a line or circle. */
 function syncCoords(force = false): void {
-  const card = $('geo-coords'), o = objects.find(o => o.id === selected), s = o && shapes.get(o.id);
-  card.hidden = !o || o.kind !== 'point';
+  const o = objects.find(o => o.id === selected), s = o && shapes.get(o.id), target = styled();
+  $('geo-inspect').hidden = !target;
+  $('geo-coords-name').textContent = target?.name ?? '';
+  if (target) syncStyle(target);
+  $('geo-coords').hidden = !o || o.kind !== 'point';
   if (!o || o.kind !== 'point') return;
   const editable = o.def === 'free' || o.def === 'on', names = new Map(objects.map(o => [o.id, o.name]));
-  $('geo-coords-name').textContent = o.name;
   for (const [id, v] of [['geo-x', isPoint(s) ? s.x : NaN], ['geo-y', isPoint(s) ? s.y : NaN]] as const) {
     const input = $<HTMLInputElement>(id);
     input.disabled = !editable;
@@ -755,6 +803,96 @@ function initCoords(): void {
   });
 }
 
+// --- Style of the selected object ---
+const PALETTE: [string, string][] = [
+  ['ink', 'Atramentowy'], ['#e5484d', 'Czerwony'], ['#f2811d', 'Pomarańczowy'], ['#d4a106', 'Żółty'], ['#30a46c', 'Zielony'],
+  ['#12a594', 'Morski'], ['#0d74ce', 'Niebieski'], ['#6e56cf', 'Fioletowy'], ['#d6409f', 'Różowy'], ['#8d8d86', 'Szary'],
+];
+const STYLE_OPEN = 'bettergebra.geometry.style';
+const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
+const defaultWidth = (o: GeoObject) => o.kind === 'angle' ? 1.5 : o.kind === 'polygon' ? 2 : 1.8;
+const defaultSize = (o: GeoObject) => o.def === 'free' ? 4.5 : 3.8;
+const decimal = (v: number) => String(v).replace('.', ',');
+
+/** The object the style card edits: the selected one, a polygon's side standing for its polygon. */
+function styled(): GeoObject | undefined {
+  const o = objects.find(o => o.id === selected);
+  return o?.def === 'edge' ? objects.find(p => p.id === o.of[2]) : o;
+}
+
+let styling = false;
+/** Changes the selected object's look; a slider dragged (`live`) is one undo step until it is let go. */
+function restyle(change: Partial<Style>, live = false): void {
+  const o = styled();
+  if (!o) return;
+  if (!styling) checkpoint();
+  styling = live;
+  const st: Style = { ...o.style, ...change };
+  for (const k of Object.keys(st) as (keyof Style)[]) if (st[k] === undefined) delete st[k];
+  if (Object.keys(st).length) o.style = st; else delete o.style;
+  update();
+}
+
+/** Shows the object's look in the card, with only the settings its kind has. */
+function syncStyle(o: GeoObject): void {
+  const st = o.style ?? {}, point = o.kind === 'point', measure = o.kind === 'measure';
+  const custom = !!st.color && !PALETTE.some(([c]) => c === st.color);
+  for (const b of $('geo-colors').querySelectorAll<HTMLElement>('.geo-swatch')) b.setAttribute('aria-pressed', String(b.dataset.value === (st.color ?? '')));
+  const pick = $<HTMLInputElement>('geo-color');
+  pick.classList.toggle('chosen', custom);
+  if (custom && st.color!.startsWith('#')) pick.value = st.color!;
+  const width = $<HTMLInputElement>('geo-width');
+  $('geo-width-row').hidden = measure;
+  $('geo-width-label').textContent = point ? 'Rozmiar' : 'Grubość';
+  [width.min, width.max] = point ? ['2', '10'] : ['1', '8'];
+  width.value = String(point ? st.size ?? defaultSize(o) : st.width ?? defaultWidth(o));
+  $('geo-width-out').textContent = decimal(+width.value);
+  $('geo-dash-row').hidden = point || measure;
+  $('geo-shape-row').hidden = !point;
+  $('geo-fill-row').hidden = !FILLED.has(o.kind);
+  const fill = $<HTMLInputElement>('geo-fill');
+  fill.value = String(st.fill ?? (o.kind === 'circle' ? 0 : 0.16));
+  $('geo-fill-out').textContent = `${Math.round(+fill.value * 100)}%`;
+  for (const seg of document.querySelectorAll<HTMLElement>('#geo-style .geo-seg')) {
+    const now = st[seg.dataset.key as 'dash' | 'shape'] ?? '';
+    for (const b of seg.querySelectorAll<HTMLElement>('button')) b.setAttribute('aria-pressed', String(b.dataset.value === now));
+  }
+  $<HTMLSelectElement>('geo-label').value = st.label ?? '';
+  $<HTMLButtonElement>('geo-style-reset').disabled = !o.style;
+}
+
+function initStyle(): void {
+  const colors = $('geo-colors');
+  for (const [c, name] of [['', 'Automatyczny'], ...PALETTE]) {
+    const b = h('button', { type: 'button', class: 'geo-swatch', 'data-value': c, 'aria-label': name, title: name, style: c ? `--swatch: ${c === 'ink' ? 'var(--text)' : c}` : undefined });
+    b.addEventListener('click', () => restyle({ color: c || undefined }));
+    colors.append(b);
+  }
+  const pick = h('input', { id: 'geo-color', type: 'color', class: 'geo-swatch-custom', value: '#0d74ce', 'aria-label': 'Własny kolor', title: 'Własny kolor' });
+  pick.addEventListener('input', () => restyle({ color: pick.value }, true));
+  colors.append(pick);
+
+  const width = $<HTMLInputElement>('geo-width'), fill = $<HTMLInputElement>('geo-fill');
+  width.addEventListener('input', () => restyle(styled()?.kind === 'point' ? { size: +width.value } : { width: +width.value }, true));
+  fill.addEventListener('input', () => restyle({ fill: +fill.value }, true));
+  for (const input of [width, fill, pick]) input.addEventListener('change', () => { styling = false; });
+  for (const seg of document.querySelectorAll<HTMLElement>('#geo-style .geo-seg')) {
+    for (const b of seg.querySelectorAll<HTMLElement>('button')) b.addEventListener('click', () => restyle({ [seg.dataset.key!]: b.dataset.value || undefined }));
+  }
+  const labels = $<HTMLSelectElement>('geo-label');
+  labels.addEventListener('change', () => restyle({ label: (labels.value || undefined) as Style['label'] }));
+  $('geo-style-reset').addEventListener('click', () => { const o = styled(); if (o?.style) { checkpoint(); delete o.style; update(); } });
+
+  // The settings fold away; whether they are open is remembered.
+  const toggle = $('geo-style-toggle'), panel = $('geo-style');
+  const open = (on: boolean) => { panel.hidden = !on; toggle.setAttribute('aria-expanded', String(on)); };
+  try { open(localStorage.getItem(STYLE_OPEN) === '1'); } catch { /* closed */ }
+  toggle.addEventListener('click', () => {
+    open(!!panel.hidden);
+    try { localStorage.setItem(STYLE_OPEN, panel.hidden ? '' : '1'); } catch { /* just don't remember */ }
+  });
+}
+
 /** The definition turns into a field: Enter redefines the object, Esc (or leaving) keeps it as it was. */
 function editDefinition(button: HTMLElement, o: GeoObject): void {
   const input = h('input', { class: 'geo-def-input', type: 'text', value: button.textContent ?? '', spellcheck: 'false', autocomplete: 'off', 'aria-label': `Definicja ${o.name}` });
@@ -806,6 +944,17 @@ function renderTools(): void {
   let favs: ToolId[] = ['move', 'point', 'segment', 'line', 'polygon', 'circle', 'intersect', 'delete'];
   try { const saved = JSON.parse(localStorage.getItem(FAV_STORE) ?? 'null'); if (Array.isArray(saved)) favs = saved.filter((id): id is ToolId => id in TOOLS); } catch { /* keep the default */ }
   const groups = [{ name: FAVOURITES, tools: favs as GroupEntry[] }, ...GROUPS];
+  const saveFavs = (next: ToolId[]) => {
+    try { localStorage.setItem(FAV_STORE, JSON.stringify(next)); } catch { /* just don't remember */ }
+    renderTools();
+  };
+  /** Moves a favourite to where another one stands. */
+  const moveFav = (id: ToolId, to: number) => {
+    const next = favs.filter(f => f !== id);
+    next.splice(Math.max(0, Math.min(to, next.length)), 0, id);
+    saveFavs(next);
+  };
+  let dragged: ToolId | null = null;
   $('geo-tools').replaceChildren(...groups.map(g => {
     const grid = h('div', { class: 'geo-tool-grid' }, ...g.tools.map(entry => {
       const [id, label] = typeof entry === 'string' ? [entry, TOOLS[entry].label] : entry;
@@ -814,13 +963,43 @@ function renderTools(): void {
       b.addEventListener('click', () => setTool(id));
       const star = h('button', { type: 'button', class: 'geo-star', 'aria-pressed': String(fav), 'aria-label': `${what}: ${TOOLS[id].label}`, title: what, html: STAR });
       star.addEventListener('click', () => {
-        try { localStorage.setItem(FAV_STORE, JSON.stringify(fav ? favs.filter(f => f !== id) : [...favs, id])); } catch { /* just don't remember */ }
-        renderTools();
+        saveFavs(fav ? favs.filter(f => f !== id) : [...favs, id]);
         // Keep the keyboard where it was: on this star, or the group's first one when it just left the favourites.
         const group = document.querySelector(`.geo-group[data-name="${g.name}"]`);
         (group?.querySelector<HTMLElement>(`[data-tool="${id}"] + .geo-star`) ?? $('geo-search')).focus();
       });
-      return h('div', { class: 'geo-tool-cell' }, b, star);
+      const cell = h('div', { class: 'geo-tool-cell' }, b, star);
+      if (g.name !== FAVOURITES) return cell;
+
+      // Favourites are put in order by dragging, or with Alt + arrows from the keyboard.
+      const at = favs.indexOf(id);
+      b.title += ' Przeciągnij albo Alt + strzałki, aby zmienić kolejność.';
+      cell.draggable = true;
+      cell.addEventListener('dragstart', e => {
+        dragged = id;
+        e.dataTransfer!.effectAllowed = 'move';
+        e.dataTransfer!.setData('text/plain', id);
+        requestAnimationFrame(() => cell.classList.add('dragging'));
+      });
+      cell.addEventListener('dragend', () => { dragged = null; cell.classList.remove('dragging'); });
+      cell.addEventListener('dragover', e => {
+        if (!dragged || dragged === id) return;
+        e.preventDefault();
+        cell.classList.add('drop-target');
+      });
+      cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
+      cell.addEventListener('drop', e => {
+        e.preventDefault();
+        if (dragged && dragged !== id) moveFav(dragged, at);
+      });
+      b.addEventListener('keydown', e => {
+        const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+        if (!e.altKey || !step) return;
+        e.preventDefault();
+        moveFav(id, at + step);
+        document.querySelector<HTMLElement>(`.geo-group[data-name="${FAVOURITES}"] [data-tool="${id}"]`)?.focus();
+      });
+      return cell;
     }));
     const body = g.tools.length ? grid : h('p', { class: 'hint geo-fav-empty' }, 'Kliknij gwiazdkę przy narzędziu, aby przypiąć je tutaj.');
     return h('section', { class: 'geo-group', 'data-name': g.name }, h('h3', {}, h('span', {}, g.name), h('span', { class: 'count' }, String(g.tools.length))), body);
@@ -937,6 +1116,7 @@ export function initGeometry(): void {
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => { pointer = null; request(); });
   initCoords();
+  initStyle();
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const p = local(e), delta = e.deltaY * [1, 16, height][e.deltaMode];
@@ -959,6 +1139,8 @@ export function initGeometry(): void {
   $('geo-reset').addEventListener('click', () => { view = { ...HOME }; request(); save(); });
   $('geo-grid').addEventListener('click', () => { grid = !grid; $('geo-grid').setAttribute('aria-pressed', String(grid)); request(); save(); });
   $('geo-grid').setAttribute('aria-pressed', String(grid));
+  $('geo-axes').addEventListener('click', () => { axes = !axes; $('geo-axes').setAttribute('aria-pressed', String(axes)); request(); save(); });
+  $('geo-axes').setAttribute('aria-pressed', String(axes));
   $('geo-clear').addEventListener('click', () => {
     if (!objects.length) return;
     checkpoint(); objects = []; selected = null; picked = []; update();

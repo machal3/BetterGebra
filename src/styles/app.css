@@ -441,14 +441,55 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
   background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(10px); color: var(--muted); font-size: 13px;
 }
 .geo-hint b { color: var(--text); font-weight: 600; margin-right: 4px; }
-.geo-coords {
-  position: absolute; left: 14px; bottom: 14px; display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px 10px; align-items: center;
+.geo-inspect {
+  position: absolute; left: 14px; bottom: 14px; display: grid; gap: 8px; max-height: calc(100% - 80px); overflow-y: auto;
   width: min(330px, calc(100% - 90px)); margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); box-shadow: var(--shadow);
   animation: reveal 0.14s var(--ease);
 }
+.geo-inspect-head { display: flex; align-items: center; gap: 8px; }
+.geo-style-toggle {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto; height: 28px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 550;
+}
+.geo-style-toggle svg { width: 15px; height: 15px; stroke-width: 1.6; }
+.geo-style-toggle:hover { color: var(--text); background: var(--surface-2); }
+.geo-style-toggle[aria-expanded="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--accent-soft); }
+.geo-coords { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; align-items: center; margin: 0; }
+.geo-style { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.geo-style-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.geo-style-row > :nth-child(2):last-child { grid-column: 2 / -1; }
+.geo-style-row output { min-width: 3.2em; text-align: right; font: 12px var(--mono); color: var(--text); }
+.geo-style-row input[type="range"] { width: 100%; }
+.geo-style-row select {
+  height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 12.5px;
+}
+.geo-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.geo-swatch, .geo-swatch-custom {
+  position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--swatch, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+/* Automatic: a slashed empty swatch. */
+.geo-swatch:not([style]) { background: linear-gradient(135deg, transparent 45%, var(--faint) 45% 55%, transparent 55%); }
+.geo-swatch[aria-pressed="true"], .geo-swatch-custom.chosen { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+.geo-swatch-custom { overflow: hidden; cursor: pointer; background: conic-gradient(#e5484d, #d4a106, #30a46c, #0d74ce, #6e56cf, #d6409f, #e5484d); }
+.geo-swatch-custom::-webkit-color-swatch-wrapper { padding: 0; }
+.geo-swatch-custom::-webkit-color-swatch { border: 0; opacity: 0; }
+.geo-swatch-custom::-moz-color-swatch { border: 0; opacity: 0; }
+.geo-swatch-custom.chosen::-webkit-color-swatch { opacity: 1; border-radius: 50%; }
+.geo-swatch-custom.chosen::-moz-color-swatch { opacity: 1; border-radius: 50%; }
+.geo-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--surface-2); justify-self: start; }
+.geo-seg button { display: grid; place-items: center; width: 36px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--muted); }
+.geo-seg button svg { width: 20px; height: 20px; }
+.geo-seg button:hover { color: var(--text); }
+.geo-seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+.geo-style-reset {
+  justify-self: start; padding: 4px 0; border: 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: 3px;
+}
+.geo-style-reset:hover:not(:disabled) { color: var(--text); }
+.geo-style-reset:disabled { opacity: 0.45; cursor: default; text-decoration: none; }
 .geo-coords-name { font: italic 17px var(--math); color: var(--accent); min-width: 1.2em; }
-.geo-coords label { display: flex; align-items: center; gap: 6px; font: italic 15px var(--math); color: var(--muted); }
+.geo-coords label { min-width: 0; display: flex; align-items: center; gap: 6px; font: italic 15px var(--math); color: var(--muted); }
 .geo-coords input {
   flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font: 13px var(--mono); font-style: normal;
 }
@@ -474,7 +515,10 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
 .geo-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 0 12px; }
 .geo-fav-empty { margin: 0 6px 12px; }
 .geo-tools svg .soft { fill: currentColor; stroke: none; opacity: 0.18; }
-.geo-tool-cell { position: relative; min-width: 0; }
+.geo-tool-cell { position: relative; min-width: 0; border-radius: 10px; }
+.geo-tool-cell[draggable="true"] .geo-tool { cursor: grab; }
+.geo-tool-cell.dragging { opacity: 0.35; }
+.geo-tool-cell.drop-target { outline: 1.5px dashed var(--accent); outline-offset: 2px; }
 .geo-tool {
   display: flex; align-items: center; gap: 10px; width: 100%; height: 100%; min-height: 44px; padding: 6px 20px 6px 10px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
@@ -599,7 +643,7 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
   .modes { margin: 4px 12px 8px; }
   .help td:first-child { white-space: normal; }
   .geo-hint { top: 10px; left: 10px; right: 10px; max-width: none; }
-  .geo-coords { top: 52px; bottom: auto; left: 10px; right: 10px; width: auto; }
+  .geo-inspect { top: 52px; bottom: auto; left: 10px; right: 10px; width: auto; max-height: 55%; }
   .geo-remove { opacity: 1; }
 }
 

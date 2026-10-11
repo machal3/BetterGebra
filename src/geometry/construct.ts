@@ -57,6 +57,22 @@ export interface GeoObject {
   /** An equation as the user typed it, shown as the definition. */
   text?: string;
   hidden?: boolean;
+  style?: Style;
+}
+/** How an object looks; whatever is left out is the default for its kind. A polygon's sides look like the polygon. */
+export interface Style {
+  /** A CSS colour, or 'ink' for the text colour of the theme. */
+  color?: string;
+  /** Line width in pixels. */
+  width?: number;
+  dash?: 'dashed' | 'dotted';
+  /** Fill opacity, 0 to 1. */
+  fill?: number;
+  /** Point radius in pixels. */
+  size?: number;
+  shape?: 'ring' | 'cross';
+  /** Left out: as usual for the kind (points their name, angles and measures their value, the rest nothing). */
+  label?: 'none' | 'name' | 'value';
 }
 /** An object yet to be added: named `name`, or after its original if it is an image (A → A′), or the next free letter. */
 export type Draft = Omit<GeoObject, 'id' | 'name'> & { name?: string; imageOf?: string };
