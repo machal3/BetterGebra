@@ -2,7 +2,8 @@
  * The single source of truth. UI handlers mutate `state` and call `commit(topics)`; listeners subscribed to those
  * topics run once per microtask, however many commits happened. Nothing else keeps its own copy of this data.
  */
-export type Mode = 'graph' | 'complex' | 'set';
+/** Wykresy (graphs y = f(x) and sets on the plane, row by row) or Zespolone (f(z) by colour). */
+export type Mode = 'graph' | 'complex';
 /** Axis labels: plain numbers, multiples of π, or radians shown in degrees. */
 export type AxisUnit = 'num' | 'pi' | 'deg';
 export type Dash = '' | '8 6' | '1 5';
@@ -166,14 +167,22 @@ const num = (v: unknown, fallback: number) => typeof v === 'number' && !Number.i
 const validView = (v: Partial<View> | undefined): View | null =>
   v && [v.min, v.max, v.cy, v.ratio].every(n => typeof n === 'number' && Number.isFinite(n)) && v.max! > v.min! && v.ratio! > 0 ? v as View : null;
 
+/**
+ * A row saved in the former Zbiory mode, where x was another name for z (|x − 1| ≤ 2). In Wykresy x and y without
+ * z or i are the coordinates, so such a row is rewritten with z to keep its meaning.
+ */
+const zbioryRow = (text: string) => /(?<![a-z])[zi](?![a-z])/i.test(text) ? text : text.replace(/(?<![a-z])x(?![a-z])/gi, 'z');
+
 /** Restores the last session (also from v1's storage). Returns false when there was nothing to restore. */
 export function restore(): boolean {
   let data: Partial<Saved> & { graphs?: Omit<FnState, 'id'>[]; parameters?: Record<string, number> } | null = null;
   try { data = JSON.parse(localStorage.getItem(STORE) ?? localStorage.getItem(LEGACY) ?? 'null'); } catch { /* corrupt: start fresh */ }
   const fns = data?.functions ?? data?.graphs;
   if (!data || !Array.isArray(fns) || !fns.length) return false;
-  const modes: Mode[] = ['graph', 'complex', 'set'], units: AxisUnit[] = ['num', 'pi', 'deg'];
+  const modes: Mode[] = ['graph', 'complex'], units: AxisUnit[] = ['num', 'pi', 'deg'];
+  // The former Zbiory mode is part of Wykresy now: its rows (|z − 1| ≤ 2, t + 2i) are recognised as sets there.
   state.mode = modes.includes(data.mode as Mode) ? data.mode as Mode : 'graph';
+  const fromSets = String(data.mode) === 'set';
   // The former trigonometry mode is now the graph mode with π on the x axis.
   [state.xUnit, state.yUnit] = [0, 1].map(i => units.includes(data!.units?.[i] as AxisUnit) ? data!.units![i] : i === 0 && String(data!.mode) === 'trig' ? 'pi' : 'num');
   toggleNames.forEach((k, i) => { state[k] = data!.toggles?.[i] ?? true; });
@@ -182,7 +191,7 @@ export function restore(): boolean {
   state.analysisOpen = !!data.analysisOpen;
   state.theme = data.theme === 'light' || data.theme === 'dark' ? data.theme : null;
   for (const g of fns.slice(0, MAX_FUNCTIONS)) {
-    addFunction(String(g.expression ?? ''), {
+    addFunction(fromSets ? zbioryRow(String(g.expression ?? '')) : String(g.expression ?? ''), {
       // JSON writes ±Infinity (an unbounded end) as null.
       color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : undefined,
       visible: g.visible !== false,

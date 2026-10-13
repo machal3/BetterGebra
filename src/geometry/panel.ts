@@ -444,6 +444,8 @@ function hoverTarget(): { snap?: Snap; id?: number } | null {
 function setTool(id: ToolId): void {
   tool = id;
   picked = [];
+  selected = null;
+  renderList();
   for (const b of document.querySelectorAll<HTMLElement>('#geo-tools .geo-tool')) b.setAttribute('aria-pressed', String(b.dataset.tool === id));
   $('geo-hint').innerHTML = `<b>${TOOLS[id].label}</b> ${TOOLS[id].hint}`;
   canvas.dataset.tool = id;
@@ -459,20 +461,22 @@ async function click(x: number, y: number): Promise<void> {
     if (o) { checkpoint(); o.hidden = !o.hidden; update(); }
     return;
   }
+  // Drawing doesn't select: the inspector stays closed while building.
+  selected = null;
   if (fresh) checkpoint();
-  if (tool === 'point') { selected = pointAt(x, y); update(); return; }
+  if (tool === 'point') { pointAt(x, y); update(); return; }
   // Clicking a segment (or circle) itself: its midpoint (centre), its length.
   if ((tool === 'midpoint' || tool === 'distance') && fresh && hit(x, y, isPoint) === null) {
     const seg = objects.find(o => o.id === hit(x, y, s => s.kind === 'segment' || (tool === 'midpoint' && s.kind === 'circle')));
     if (seg) {
-      selected = add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }])[0];
+      add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }])[0];
       update();
       return;
     }
   }
   if (tool === 'polygon') {
     const id = pointAt(x, y);
-    if (id === picked[0] && picked.length >= 3) { selected = polygonFrom(picked as number[]); picked = []; }
+    if (id === picked[0] && picked.length >= 3) { polygonFrom(picked as number[]); picked = []; }
     else if (id !== picked[picked.length - 1]) picked.push(id);
     update();
     return;
@@ -493,11 +497,11 @@ async function click(x: number, y: number): Promise<void> {
     if (spec.ask) {
       update();
       const value = await ask(spec.ask);
-      if (value !== null) selected = spec.ask.run(ids, value) ?? selected;
+      if (value !== null) spec.ask.run(ids, value);
     } else {
       const drafts = spec.existing ? existing(spec.make!(ids)) : spec.make!(ids);
       if (!drafts.length && spec.existing) toast(spec.existing);
-      selected = add(drafts).at(-1) ?? selected;
+      add(drafts);
     }
   }
   update();
@@ -719,6 +723,8 @@ function renderList(): void {
     const { text, detail } = describe(o, shapes.get(o.id) ?? null, id => names.get(id) ?? '?');
     const toggle = h('button', { class: 'geo-eye', type: 'button', 'aria-pressed': String(!o.hidden), 'aria-label': `${o.hidden ? 'Pokaż' : 'Ukryj'} ${o.name}`, title: o.hidden ? 'Pokaż' : 'Ukryj' });
     toggle.addEventListener('click', () => { checkpoint(); o.hidden = !o.hidden; update(); });
+    const gear = h('button', { class: 'icon-button small geo-settings', type: 'button', 'aria-label': `Wygląd ${o.name}`, title: 'Wygląd', html: ICONS.sliders });
+    gear.addEventListener('click', () => { selected = o.id; renderList(); request(); });
     const del = h('button', { class: 'icon-button small geo-remove', type: 'button', 'aria-label': `Usuń ${o.name}`, title: 'Usuń', html: ICONS.trash });
     del.addEventListener('click', () => remove(o.id));
     const value = h('button', { class: 'geo-text', type: 'button', title: detail }, text);
@@ -727,7 +733,7 @@ function renderList(): void {
     def.addEventListener('click', () => editDefinition(def, o));
     const c = o.style?.color, tint = c ? `--c: ${c === 'ink' ? 'var(--text)' : c}` : undefined;
     const li = h('li', { class: `geo-item${o.id === selected ? ' selected' : ''}${o.hidden ? ' hidden-obj' : ''}`, 'data-kind': o.kind, 'data-free': String(o.def === 'free' || o.def === 'on'), style: tint },
-      toggle, h('div', { class: 'geo-body' }, value, def), del);
+      toggle, h('div', { class: 'geo-body' }, value, def), gear, del);
     return li;
   }));
   syncCoords();
@@ -809,7 +815,6 @@ const PALETTE: [string, string][] = [
   ['ink', 'Atramentowy'], ['#d13438', 'Czerwony'], ['#ca5010', 'Pomarańczowy'], ['#eaa300', 'Żółty'], ['#107c10', 'Zielony'],
   ['#038387', 'Morski'], ['#0f6cbd', 'Niebieski'], ['#8764b8', 'Fioletowy'], ['#c239b3', 'Różowy'], ['#7a7574', 'Szary'],
 ];
-const STYLE_OPEN = 'bettergebra.geometry.style';
 const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
 // Defaults on the Fluent stroke scale: lines take the thick (2px) stroke.
 const DEFAULT_WIDTH = 2;
@@ -886,13 +891,7 @@ function initStyle(): void {
   $('geo-style-reset').addEventListener('click', () => { const o = styled(); if (o?.style) { checkpoint(); delete o.style; update(); } });
 
   // The settings fold away; whether they are open is remembered.
-  const toggle = $('geo-style-toggle'), panel = $('geo-style');
-  const open = (on: boolean) => { panel.hidden = !on; toggle.setAttribute('aria-expanded', String(on)); };
-  try { open(localStorage.getItem(STYLE_OPEN) === '1'); } catch { /* closed */ }
-  toggle.addEventListener('click', () => {
-    open(!!panel.hidden);
-    try { localStorage.setItem(STYLE_OPEN, panel.hidden ? '' : '1'); } catch { /* just don't remember */ }
-  });
+  $('geo-inspect-close').addEventListener('click', () => { selected = null; renderList(); request(); });
 }
 
 /** The definition turns into a field: Enter redefines the object, Esc (or leaving) keeps it as it was. */
@@ -1130,7 +1129,7 @@ export function initGeometry(): void {
     const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
     if (mod && key === 'z') { e.preventDefault(); if (e.shiftKey) travel(redoStack, undoStack); else travel(undoStack, redoStack); }
     else if (mod && key === 'y') { e.preventDefault(); travel(redoStack, undoStack); }
-    else if (e.key === 'Escape') { if (picked.length) { picked = []; request(); } else setTool('move'); }
+    else if (e.key === 'Escape') { if (picked.length) { picked = []; request(); } else setTool('move'); } // setTool also deselects
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected !== null) { e.preventDefault(); remove(selected); }
   });
 

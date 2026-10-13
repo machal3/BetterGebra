@@ -8,6 +8,8 @@ import { Scene } from './render/scene';
 import { fits } from './render/viewport';
 import { addFunction, commit, on, restore, save, state, type AxisUnit, type Mode } from './state';
 import { initAnalysisPanel, renderAnalysis, syncPanelVisibility } from './ui/analysis-panel';
+import { redrawCalcPlots } from './ui/calc-plot';
+import { calculatorFromHash, initCalculator } from './ui/calculator';
 import { fitY, initCanvasInput, setView, settle } from './ui/canvas-input';
 import { $, initTooltips, toast } from './ui/dom';
 import { initFunctionList, syncList } from './ui/function-list';
@@ -50,6 +52,7 @@ function applyTheme(): void {
   $('theme-button').title = dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw';
   scene.refreshTheme();
   redrawGeometry();
+  redrawCalcPlots();
 }
 systemDark.addEventListener('change', applyTheme);
 $('theme-button').addEventListener('click', () => {
@@ -61,7 +64,7 @@ $('theme-button').addEventListener('click', () => {
 // --- Modes ---
 // The navigation rail holds the four graph modes and the geometry panel; the current one gets aria-current.
 const navItems = [...document.querySelectorAll<HTMLAnchorElement>('#modes a')];
-const TITLES: Record<Mode, string> = { graph: 'Wykresy', complex: 'Zespolone', set: 'Zbiory' };
+const TITLES: Record<Mode, string> = { graph: 'Wykresy', complex: 'Zespolone' };
 function syncModes(): void {
   const panel = document.body.dataset.panel;
   for (const a of navItems) {
@@ -69,7 +72,7 @@ function syncModes(): void {
     if (current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
   document.body.dataset.mode = state.mode;
-  $('pane-title').textContent = panel === 'geometry' ? 'Geometria' : TITLES[state.mode];
+  $('pane-title').textContent = panel === 'geometry' ? 'Geometria' : panel === 'calculator' ? 'Kalkulator' : TITLES[state.mode];
 }
 $('modes').addEventListener('click', e => {
   const mode = (e.target as Element).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
@@ -77,17 +80,20 @@ $('modes').addEventListener('click', e => {
   if (!mode || mode === state.mode) return;
   state.mode = mode;
   // The complex plane needs equal axes.
-  if (mode === 'complex' || mode === 'set') state.view = { ...state.view, ratio: 1 };
+  if (mode === 'complex') state.view = { ...state.view, ratio: 1 };
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     $('plot').animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
   }
   commit('mode', 'view');
 });
 
-// --- Panels: home | graphs | geometry (the hash keeps the choice across reloads) ---
+// --- Panels: home | graphs | geometry | calculator (the hash keeps the choice across reloads) ---
 function syncPanel(): void {
-  document.body.dataset.panel = ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[location.hash] ?? 'home';
+  const hash = location.hash;
+  // #kalkulator?q=… opens the calculator with that question (links to a result)
+  document.body.dataset.panel = hash.startsWith('#kalkulator') ? 'calculator' : ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[hash] ?? 'home';
   syncModes();
+  if (document.body.dataset.panel === 'calculator') calculatorFromHash();
 }
 addEventListener('hashchange', syncPanel);
 
@@ -164,6 +170,7 @@ initParameters(settle);
 initAnalysisPanel();
 initCanvasInput(scene);
 initGeometry();
+initCalculator();
 initTooltips();
 syncPanel();
 syncModes();

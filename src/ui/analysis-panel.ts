@@ -1,5 +1,5 @@
 import type { AnalysisResult } from '../analysis/compute';
-import { complexValue, domainText, list, stacked } from '../format';
+import { approx, complexValue, domainText, list, stacked } from '../format';
 import { expressionMathML, relationMathML } from '../math';
 import { compiled } from '../model';
 import type { SetFound } from '../render/sets';
@@ -24,7 +24,8 @@ const row = (name: string) => document.querySelector<HTMLElement>(`#analysis [da
  */
 export function renderAnalysis(result: AnalysisResult | null, found: ReadonlyMap<number, SetFound>): void {
   if (!state.analysisOpen) return;
-  const f = activeFn(), c = f && compiled(f, state.mode, state.params), set = state.mode === 'set';
+  // a set row (|z − 1| ≤ 2, y > x², t + 2i) gets what its points are; a graph its values, zeros and crossings
+  const f = activeFn(), c = f && compiled(f, state.mode, state.params), set = !!c?.set;
   const target = $('analysis-target');
   target.style.setProperty('--c', c?.ok ? f!.color : 'transparent');
   let math = '';
@@ -52,9 +53,11 @@ function setText(id: number, c: NonNullable<ReturnType<typeof compiled>>, result
     return `${unknowns.length > 1 ? 'obszar' : 'krzywa'}: ${unknowns.join(', ')}${range}`;
   }
   if (!f.visible || !found) return '—';
-  const marks = result?.setPoints[id]?.solutions.map(({ z, sure }) => complexValue(z, sure)) ?? [];
-  if (!marks.length && found.single) marks.push(complexValue(found.single.z, found.single.sure && found.single.z.every(Number.isInteger)));
-  if (marks.length) return `z = ${list(marks)}`;
+  // the points of a condition in x and y are (x; y); of one on z, complex numbers
+  const name = (z: [number, number], sure: boolean) => c.xy ? `(${sure ? z[0] : approx(z[0]).replace('≈ ', '')}; ${sure ? z[1] : approx(z[1]).replace('≈ ', '')})` : complexValue(z, sure);
+  const marks = result?.setPoints[id]?.solutions.map(({ z, sure }) => name(z, sure)) ?? [];
+  if (!marks.length && found.single) marks.push(name(found.single.z, found.single.sure && found.single.z.every(Number.isInteger)));
+  if (marks.length) return c.xy ? `${marks.length > 1 ? 'punkty' : 'punkt'} ${list(marks)}` : `z = ${list(marks)}`;
   const ops = c.set?.kind === 'condition' ? c.set.ops : [], equation = ops.includes('=');
   const edge = ops.every(o => o === '≤' || o === '≥') ? ', brzeg należy' : ops.every(o => o === '<' || o === '>' || o === '≠') ? ', brzeg nie należy' : '';
   if (found.all || (!equation && found.inside === found.valid && !found.lines && found.valid > 0)) return 'cała widoczna płaszczyzna';

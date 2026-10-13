@@ -75,7 +75,9 @@ export class Scene {
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, this.width, this.height);
     const activeRow = rows.find(r => r.f === active);
-    const complex = mode === 'complex', plane = complex || mode === 'set';
+    const sets = shown.filter(r => r.c.set), graphs = shown.filter(r => r.c.fn);
+    // Re and Im on the axes only when the plot is all complex numbers (|z − 1| ≤ 2), not with y = f(x) or y > x²
+    const complex = mode === 'complex', plane = complex || (!graphs.length && sets.length > 0 && sets.every(r => !r.c.xy));
     if (complex && activeRow?.f.visible && activeRow.c.cfn) paintDomain(ctx, vp, activeRow.f.expression, activeRow.c.cfn, state.params, this.moving || this.dragging);
     const axes = { grid: state.grid, axes: state.axes, xUnit: state.xUnit, yUnit: state.yUnit, plane, minorGrid: !complex, halo: complex };
     drawGrid(ctx, vp, theme, axes);
@@ -84,13 +86,13 @@ export class Scene {
     ctx.lineJoin = ctx.lineCap = 'round';
     const ends: (Dot & { color: string; fn: RealFunction; expr: string })[] = [];
     this.found.clear();
-    if (mode === 'set') {
-      for (const { f, c } of shown) {
+    if (!complex) {
+      // sets first, so their fills lie under the graphs
+      for (const { f, c } of sets) {
         if (c.set?.kind === 'condition') this.found.set(f.id, paintCondition(ctx, vp, theme, f, c.set, this.analysis?.setPoints[f.id], this.moving || this.dragging));
         else if (c.set) drawParametric(ctx, vp, theme, f, c.set);
       }
-    } else if (!complex) {
-      for (const { f, c } of shown) {
+      for (const { f, c } of graphs) {
         ctx.beginPath();
         ctx.lineWidth = f.width + (f === active ? 1 : 0);
         ctx.strokeStyle = f.color;
@@ -101,8 +103,8 @@ export class Scene {
       ctx.setLineDash([]);
     }
     this.ends = ends;
-    // Roots and intersections: small neutral dots, so they don't read as hollow endpoints.
-    if (mode !== 'set') for (const m of this.analysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
+    // Roots and intersections: small neutral dots, so they don't read as hollow endpoints (a set draws its own points).
+    if (!activeRow?.c.set) for (const m of this.analysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
     // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
     for (const e of ends) dot(ctx, vp, e.x, e.y, 4, e.closed ? e.color : theme.bg, e.color);
     this.drawHover();
@@ -115,7 +117,8 @@ export class Scene {
     const h = this.hoverCtx, tip = this.tip;
     h.clearRect(0, 0, this.width, this.height);
     if (!this.pointer || this.dragging) { tip.hidden = true; return; }
-    const hit = state.mode === 'graph' ? this.realHit() : this.planeHit();
+    // On Wykresy the graph under the cursor wins; elsewhere the point of the plane, read for the active set
+    const hit = state.mode === 'graph' ? this.realHit() ?? this.planeHit() : this.planeHit();
     if (!hit) { tip.hidden = true; return; }
     const vp = this.vp, hx = vp.px(hit.x), hy = vp.py(hit.y);
     if (hit.dot) {
@@ -245,9 +248,11 @@ export class Scene {
     const f = activeFn(), vp = this.vp, p = this.pointer!;
     if (!f) return null;
     const c = compiled(f, state.mode, state.params);
-    if (!c.ok) return null;
+    // on Wykresy only a set reads points of the plane; a graph is read along its curve
+    if (!c.ok || (state.mode === 'graph' && !c.set)) return null;
     const m = this.nearestMark(this.analysis?.marks ?? [], 8);
     if (m) return { x: m.x, y: m.y, color: f.color, html: stacked(m.text), dot: true };
+    if (c.xy) return { x: vp.fromX(p.x), y: vp.fromY(p.y), color: f.color, html: `x ${format(vp.fromX(p.x))}   y ${format(vp.fromY(p.y))}`, dot: false };
     const z: [number, number] = [vp.fromX(p.x), vp.fromY(p.y)], short = (v: number) => format(v);
     const zText = `z = ${complexText(z, short)}`;
     const html = c.cfn ? `${zText}   f(z) = ${complexText(c.cfn(z), short) ?? 'nie istnieje'}` : zText;

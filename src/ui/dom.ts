@@ -57,12 +57,18 @@ export function fillRange(el: HTMLInputElement): void {
 }
 
 let toastTimer = 0;
-export function toast(message: string): void {
+/** A short message; with an action (Cofnij) it stays longer and the button takes clicks. */
+export function toast(message: string, action?: { label: string; run: () => void }): void {
   const el = $('toast');
-  el.textContent = message;
+  el.replaceChildren(h('span', {}, message));
+  if (action) {
+    const b = h('button', { type: 'button', class: 'toast-action' }, action.label);
+    b.addEventListener('click', () => { el.classList.remove('visible'); action.run(); });
+    el.append(b);
+  }
   el.classList.add('visible');
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => el.classList.remove('visible'), 2600);
+  toastTimer = window.setTimeout(() => el.classList.remove('visible'), action ? 7000 : 2600);
 }
 
 /** Fluent tooltips in place of the native title bubble: shown after a short delay on hover or keyboard focus. */

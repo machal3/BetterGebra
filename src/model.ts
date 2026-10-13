@@ -1,5 +1,6 @@
 /** Turns a function row into what the renderer and the analysis need. Pure apart from registering new parameters. */
 import { MathError, RELATION, buildComplex, compile, compileComplex, parameterNames, parse, relationSymbol } from './math';
+import { tokenize } from './math/parser';
 import type { Complex, ComplexFunction, Node, Params, RealFunction } from './math';
 import type { FnState, Mode } from './state';
 
@@ -20,9 +21,39 @@ export interface Compiled {
   /** The expression read on the real axis (z → x), or null when it needs i. Used for exact values. */
   real: string | null;
   set: ConditionSet | ParametricSet | null;
+  /** A condition in x and y (x² + y² ≤ 25): its points are (x; y), not complex numbers z. */
+  xy: boolean;
 }
 
-const EMPTY: Compiled = { error: '', ok: false, parameters: [], fn: null, cfn: null, real: null, set: null };
+const EMPTY: Compiled = { error: '', ok: false, parameters: [], fn: null, cfn: null, real: null, set: null, xy: false };
+
+/** "y =" or "f(x) =" in front of a graph y = f(x); not a comparison like y >= x. */
+const GRAPH_PREFIX = /^\s*(?:y|[a-z]\s*\(\s*x\s*\))\s*=(?![=<>])/i;
+/** Whether some side mentions z or i (a half-typed side is judged by its letters). */
+const usesZ = (text: string) => text.split(RELATION).some((part, k) => {
+  if (k % 2 || !part.trim()) return false;
+  try { const n = parameterNames(part); return n.includes('i') || n.includes('z'); } catch { return /(?<![a-z])[zi](?![a-z])/i.test(part); }
+});
+
+/**
+ * What a row of the Wykresy panel is. A graph: y = f(x), f(x) = …, or an expression in x (other letters get
+ * sliders). A set: a condition or equation (|z − 1| ≤ 2, z² = −1, y > x², x = 2), or a number with real unknowns
+ * (t + 2i). With z or i it lives on the complex plane as before; without them x and y are the coordinates.
+ */
+export function rowKind(expression: string): { kind: 'graph' } | { kind: 'set'; text: string; xy: boolean } {
+  const body = expression.replace(GRAPH_PREFIX, '');
+  if (body !== expression && !RELATION.test(body)) return usesZ(body) ? { kind: 'set', text: body, xy: false } : { kind: 'graph' };
+  if (RELATION.test(expression)) return { kind: 'set', text: expression, xy: !usesZ(expression) };
+  return usesZ(expression) ? { kind: 'set', text: expression, xy: false } : { kind: 'graph' };
+}
+
+/** A condition in x and y as one on z = x + yi: x → Re z, y → Im z, side by side, comparisons kept. */
+function xyToZ(text: string): string {
+  return text.split(RELATION).map((part, k) => {
+    if (k % 2 || !part.trim()) return part;
+    return tokenize(part).map(t => (t === 'x' ? 're(z)' : t === 'y' ? 'im(z)' : t)).join(' ');
+  }).join(' ');
+}
 
 const mentions = (n: Node, t: Node['t']): boolean => n.t === t || Object.values(n).some(v =>
   Array.isArray(v) ? v.some(c => mentions(c as Node, t)) : typeof v === 'object' && v !== null && 't' in v && mentions(v as Node, t));
@@ -40,7 +71,11 @@ export function compileRow(f: FnState, mode: Mode, params: Params): Compiled {
   const expression = f.expression;
   if (!expression.trim()) return EMPTY;
   try {
-    if (mode === 'set') return compileSet(expression, params);
+    if (mode === 'graph') {
+      // Wykresy holds graphs and sets alike: each row says which it is
+      const kind = rowKind(expression);
+      if (kind.kind === 'set') return { ...compileSet(kind.xy ? xyToZ(kind.text) : kind.text, params), xy: kind.xy };
+    }
     const names = parameterNames(expression);
     if (mode === 'complex') {
       const parameters = names.filter(n => n !== 'i' && n !== 'z');

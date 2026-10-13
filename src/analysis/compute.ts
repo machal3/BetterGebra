@@ -42,9 +42,11 @@ export function analyse(req: AnalysisRequest): AnalysisResult {
   const active = rows.find(r => r.f.id === req.activeId);
   const shown = rows.filter(r => r.f.visible && r.c.ok);
   const result: AnalysisResult = { gen: req.gen, activeId: req.activeId, values: null, roots: '—', intersections: null, marks: [], snaps: [], setPoints: {} };
-  if (req.mode === 'set') return analyseSets(req, rows, active, result);
-  if (!active?.c.ok) return result;
-  return req.mode === 'complex' ? analyseComplex(req, active, shown, result) : analyseReal(req, active, shown, result);
+  if (req.mode === 'complex') return active?.c.ok ? analyseComplex(req, active, shown, result) : result;
+  // Wykresy: the sets' solutions are needed for drawing whichever row is active; the graph analysis for a graph
+  analyseSets(req, rows, active, result);
+  if (!active?.c.ok || !active.c.fn) return result;
+  return analyseReal(req, active, shown.filter(r => r.c.fn), result);
 }
 
 function valueText(c: Compiled, fn: (x: number) => number, params: Params, x: number): string {
@@ -135,6 +137,6 @@ function analyseSets(req: AnalysisRequest, rows: Row[], active: Row | undefined,
     out.setPoints[f.id] = points;
   }
   const mine = active && out.setPoints[active.f.id];
-  if (mine) out.marks = mine.solutions.map(({ z, sure }) => ({ x: z[0], y: z[1], text: `z = ${complexValue(z, sure)}` }));
+  if (mine) out.marks = mine.solutions.map(({ z, sure }) => ({ x: z[0], y: z[1], text: active!.c.xy ? pointText(sure ? String(z[0]) : approx(z[0]), sure ? String(z[1]) : approx(z[1])) : `z = ${complexValue(z, sure)}` }));
   return out;
 }

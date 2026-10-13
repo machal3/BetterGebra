@@ -2,11 +2,12 @@
  * The list of function cards. Rows are keyed by function id and reused, so typing never loses focus or caret,
  * and every visual detail is derived from state in sync() — handlers only change state and commit.
  */
-import { constant, expressionMathML, relationMathML } from '../math';
-import { compiled } from '../model';
+import { RELATION, constant, expressionMathML, relationMathML, type Params } from '../math';
+import { tokenize } from '../math/parser';
+import { compiled, rowKind } from '../model';
 import { domainText, symbolic } from '../format';
-import { MAX_FUNCTIONS, PALETTE, addFunction, commit, removeFunction, setActive, state, type Dash, type FnState } from '../state';
-import { $, ICONS, fillRange, h, setHTML, toast } from './dom';
+import { MAX_FUNCTIONS, PALETTE, addFunction, commit, removeFunction, setActive, state, type Dash, type FnState, type Mode } from '../state';
+import { $, FI, ICONS, fillRange, h, setHTML, toast } from './dom';
 
 interface Row {
   el: HTMLLIElement;
@@ -25,10 +26,11 @@ interface Row {
 const rows = new Map<number, Row>();
 const list = () => $<HTMLOListElement>('function-list');
 
-const PREFIX = { graph: 'y =', complex: 'f(z) =', set: '' };
+const PREFIX = { graph: 'y =', complex: 'f(z) =' };
+/** The second row on suggests what else Wykresy draws: sets in x and y, and on the complex plane. */
 const PLACEHOLDER = {
-  graph: ['np. x^2 − 2', 'np. sin(x)'],
-  complex: ['np. z^2 + 1', 'np. exp(z)'], set: ['np. |z − 1| <= 2', 'np. t + 2i'],
+  graph: ['np. x^2 − 2', 'np. sin(x), y > x^2, |z − 1| <= 2'],
+  complex: ['np. z^2 + 1', 'np. exp(z)'],
 };
 
 export function addAndFocus(after?: FnState): void {
@@ -36,6 +38,52 @@ export function addAndFocus(after?: FnState): void {
   if (!f) { toast(`Możesz porównywać do ${MAX_FUNCTIONS} funkcji naraz.`); return; }
   syncList();
   rows.get(f.id)?.input.focus();
+}
+
+/**
+ * The row in the calculator's notation: parameters replaced by their slider values (a·sin(b·x) with a = 2, b = 3
+ * → (2) sin((3) x)), decimal commas as points, the "y =" prefix dropped. The calculator works without parameters.
+ */
+function calculatorText(expression: string, params: Params, keep: string[]): string {
+  return tokenize(expression.replace(/^\s*(?:y|[a-z]\s*\(\s*x\s*\))\s*=/i, ''))
+    .map(t => /^\d+,\d+$/.test(t) ? t.replace(',', '.') : /^[a-z]$/.test(t) && ![...keep, 'e', 'i'].includes(t) && Object.hasOwn(params, t) ? `(${params[t]})` : t)
+    .join(' ');
+}
+/** Each side in the calculator's notation, the comparisons between them kept. */
+const sidesText = (text: string, params: Params, keep: string[]) =>
+  text.split(RELATION).map((part, k) => (k % 2 ? ` ${part} ` : calculatorText(part.trim(), params, keep))).join('');
+
+/**
+ * What the calculator can do with a row, or null: study a graph y = f(x); draw a curve or region in x and y with
+ * its points (x² + y² = 25, y > x²); find the zeros of f(z); solve an equation in z (z² = −1).
+ */
+export function calculatorQuery(f: FnState, mode: Mode, params: Params): { label: string; title: string; query: string } | null {
+  const text = f.expression.trim();
+  if (!text) return null;
+  try {
+    if (mode === 'complex') {
+      return { label: 'Miejsca zerowe w kalkulatorze', title: 'Dokładne rozwiązania f(z) = 0, także zespolone, z wykresem na płaszczyźnie', query: `${calculatorText(text.replace(/^\s*(?:w|f\s*\(\s*z\s*\))\s*=/i, ''), params, ['z'])} = 0` };
+    }
+    const kind = rowKind(text);
+    if (kind.kind === 'graph') {
+      return { label: 'Zbadaj w kalkulatorze', title: 'Pełne badanie przebiegu zmienności: dziedzina, granice, asymptoty, monotoniczność, ekstrema, wypukłość — dokładnie', query: `badanie funkcji ${calculatorText(text, params, ['x'])}` };
+    }
+    if (kind.xy) {
+      const equation = !/<|>|≤|≥|≠/.test(text);
+      return {
+        label: equation ? 'Rozwiąż w kalkulatorze' : 'Obszar w kalkulatorze',
+        title: equation ? 'Krzywa z dokładnymi rozwiązaniami równania' : 'Obszar spełniający nierówność, z brzegiem',
+        query: sidesText(kind.text, params, ['x', 'y']),
+      };
+    }
+    // a set in z: only an equation (z² = −1); not inequalities, |z|, Re, Im, nor numbers with unknowns (t + 2i)
+    const parts = kind.text.split(RELATION).map(t => t.trim());
+    if (parts.length !== 3 || parts[1] !== '=' || /\||\b(?:re|im|arg|conj)\b/i.test(kind.text)) return null;
+    if (!/z/i.test(parts[0]) || !/z/i.test(kind.text.replace(/^\s*z\s*=/i, ''))) return null;
+    return { label: 'Rozwiąż w kalkulatorze', title: 'Dokładne rozwiązania równania, także zespolone', query: `${calculatorText(parts[0], params, ['z'])} = ${calculatorText(parts[2], params, ['z'])}` };
+  } catch {
+    return null;
+  }
 }
 
 function remove(f: FnState): void {
@@ -169,7 +217,9 @@ function buildSettings(f: FnState, row: Row): void {
 
   const duplicate = h('button', { type: 'button', class: 'text-button', html: `${ICONS.copy}<span>Duplikuj</span>` });
   const del = h('button', { type: 'button', class: 'text-button danger', html: `${ICONS.trash}<span>Usuń</span>` });
-  row.settings.append(domain, colors, line, h('div', { class: 'setting-actions' }, duplicate, del));
+  // The calculator studies the function exactly: zeros, extrema, asymptotes, monotonicity, with its own plots.
+  const study = h('button', { type: 'button', class: 'text-button', title: 'Pełne badanie przebiegu zmienności w kalkulatorze', html: `${FI.search}<span>Zbadaj w kalkulatorze</span>` });
+  row.settings.append(domain, colors, line, h('div', { class: 'setting-actions' }, study, duplicate, del));
 
   // Empty = unbounded. While a value is unfinished ("pi/", "2*") the graph keeps the last valid interval.
   const read = (input: HTMLInputElement, empty: number): number | string => {
@@ -206,14 +256,21 @@ function buildSettings(f: FnState, row: Row): void {
     if (!copy) toast(`Możesz porównywać do ${MAX_FUNCTIONS} funkcji naraz.`);
   });
   del.addEventListener('click', () => remove(f));
+  study.addEventListener('click', () => {
+    const q = calculatorQuery(f, state.mode, state.params);
+    if (!q) return;
+    row.settings.hidePopover();
+    location.hash = `#kalkulator?q=${encodeURIComponent(q.query)}`;
+  });
 
   row.sync = () => {
     const mode = state.mode, c = compiled(f, mode, state.params);
     const unknowns = c.set?.kind === 'parametric' ? c.set.unknowns : null;
-    domain.hidden = mode === 'complex' || (mode === 'set' && !unknowns?.length);
+    // a graph has a domain in x; a number with unknowns (t + 2i) a range of them; a condition neither
+    domain.hidden = mode === 'complex' || (!!c.set && !unknowns?.length);
     line.hidden = mode === 'complex'; // the plane is coloured, no line is drawn
-    domainTitle.textContent = mode === 'set' ? `Zakres ${unknowns?.join(', ') ?? ''}` : 'Dziedzina';
-    preview.value = domainText(f, mode === 'set' ? unknowns?.join(', ') ?? 't' : 'x');
+    domainTitle.textContent = c.set ? `Zakres ${unknowns?.join(', ') ?? ''}` : 'Dziedzina';
+    preview.value = domainText(f, c.set ? unknowns?.join(', ') ?? 't' : 'x');
     // Don't overwrite what's being typed (e.g. "-" or "1e").
     if (document.activeElement !== from && !domainError.textContent) from.value = endText(f.from);
     if (document.activeElement !== to && !domainError.textContent) to.value = endText(f.to);
@@ -228,6 +285,11 @@ function buildSettings(f: FnState, row: Row): void {
     width.value = String(Math.min(6, f.width)); fillRange(width);
     if (document.activeElement !== widthValue) widthValue.value = String(Number(f.width.toFixed(2)));
     duplicate.disabled = state.functions.length >= MAX_FUNCTIONS;
+    // only a plain y = f(x): the calculator studies functions without parameters
+    // the calculator's own view of this row: exact study, zeros of f(z), an equation solved
+    const q = c.ok ? calculatorQuery(f, mode, state.params) : null;
+    study.hidden = !q;
+    if (q) { study.querySelector('span')!.textContent = q.label; study.title = q.title; }
   };
 }
 
@@ -239,8 +301,10 @@ function syncRow(f: FnState): void {
   row.el.classList.toggle('active', f.id === state.activeId);
   row.el.classList.toggle('invalid', !!c.error);
   row.el.classList.toggle('hidden-fn', !f.visible);
-  row.prefix.textContent = PREFIX[mode];
-  row.prefix.hidden = !PREFIX[mode];
+  // "y =" only in front of a graph: a set (y > x², |z| ≤ 1) is written in full
+  const prefix = c.set ? '' : PREFIX[mode];
+  row.prefix.textContent = prefix;
+  row.prefix.hidden = !prefix;
   row.input.placeholder = PLACEHOLDER[mode][index === 1 ? 0 : 1];
   row.input.setAttribute('aria-label', `Funkcja ${index}`);
   row.input.setAttribute('aria-invalid', String(!!c.error));
@@ -252,13 +316,13 @@ function syncRow(f: FnState): void {
   // Typeset formula when finished; the raw text while editing, empty or invalid.
   let math = '';
   if (c.ok && !row.editing) {
-    try { math = mode === 'set' ? relationMathML(f.expression) : expressionMathML(f.expression); } catch { math = ''; }
+    try { math = c.set ? relationMathML(f.expression) : expressionMathML(f.expression); } catch { math = ''; }
   }
   row.el.classList.toggle('typeset', !!math);
   setHTML(row.math, math);
   const unknowns = c.set?.kind === 'parametric' ? c.set.unknowns : null;
   const bounded = Number.isFinite(f.from) || Number.isFinite(f.to);
-  row.domain.textContent = !bounded || mode === 'complex' || (mode === 'set' && !unknowns?.length) ? '' : domainText(f, unknowns?.join(', ') ?? 'x');
+  row.domain.textContent = !bounded || mode === 'complex' || (!!c.set && !unknowns?.length) ? '' : domainText(f, unknowns?.join(', ') ?? 'x');
   row.more.setAttribute('aria-label', `Ustawienia funkcji ${index}`);
   row.el.querySelector('.fn-remove')!.setAttribute('aria-label', `Usuń funkcję ${index}`);
   row.settings.setAttribute('aria-label', `Ustawienia funkcji ${index}`);
