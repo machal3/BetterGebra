@@ -13,7 +13,7 @@ export interface Compiled {
   ok: boolean;
   /** Letters that get a slider. */
   parameters: string[];
-  /** y = f(x), restricted to the row's domain. Graph and trig modes. */
+  /** y = f(x), restricted to the row's domain. Graph mode. */
   fn: RealFunction | null;
   /** f(z). Complex mode. */
   cfn: ComplexFunction | null;

@@ -25,9 +25,9 @@ interface Row {
 const rows = new Map<number, Row>();
 const list = () => $<HTMLOListElement>('function-list');
 
-const PREFIX = { graph: 'y =', trig: 'y =', complex: 'f(z) =', set: '' };
+const PREFIX = { graph: 'y =', complex: 'f(z) =', set: '' };
 const PLACEHOLDER = {
-  graph: ['np. x^2 − 2', 'np. sin(x)'], trig: ['np. sin(x)', 'np. 2cos(x/2)'],
+  graph: ['np. x^2 − 2', 'np. sin(x)'],
   complex: ['np. z^2 + 1', 'np. exp(z)'], set: ['np. |z − 1| <= 2', 'np. t + 2i'],
 };
 

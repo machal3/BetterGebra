@@ -1,6 +1,6 @@
 import { exact } from './math';
 import type { Complex } from './math';
-import type { FnState } from './state';
+import type { AxisUnit, FnState } from './state';
 
 /** Polish number formatting: 2,5 not 2.5; tiny values read as 0. */
 export const format = (n: number, digits = 5) =>
@@ -50,3 +50,7 @@ export function piLabel(x: number): string {
   const n = Math.round(k * d), a = Math.abs(n);
   return `${n < 0 ? '−' : ''}${a === 1 ? '' : a}π${d > 1 ? `/${d}` : ''}`;
 }
+
+/** An axis value in the chosen unit: 1,5 · π/2 · 90°. */
+export const unitLabel = (unit: AxisUnit, v: number, digits?: number) =>
+  unit === 'pi' ? piLabel(v) : unit === 'deg' ? `${format(v * 180 / Math.PI, digits)}°` : format(v, digits);

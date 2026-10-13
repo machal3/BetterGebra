@@ -246,7 +246,7 @@ math { font-family: var(--math); }
 input::placeholder { color: var(--fg4); opacity: 1; }
 .geo-coords input:disabled { color: var(--fg-disabled); background-color: transparent; border-color: var(--stroke-disabled); cursor: not-allowed; }
 /* Fluent Select */
-#geo-label {
+#geo-label, #x-unit, #y-unit {
   -webkit-appearance: none; appearance: none; padding-right: 28px; cursor: pointer;
   background-image: var(--select-chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
 }
@@ -576,6 +576,7 @@ body[data-panel="geometry"] :is(#graphs-body, #stage) { display: none; }
 .view-panel:popover-open { animation: pop-in var(--d-normal) var(--ease-decelerate); }
 .popover-title { margin: 0 0 8px; font: var(--subtitle2); }
 .view-panel .subhead { margin-top: 12px; }
+.unit-row { margin-top: 8px; }
 .range-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 8px; align-items: center; }
 .range-grid label { font: var(--body1); color: var(--fg2); }
 .view-panel .error { margin-top: 8px; }

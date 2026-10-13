@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { MathError, compile, constant, compileComplex, exactPoint, exactValue, parameterNames, relationMathML, roots, toMathML, extrema } from '../src/math';
+import { unitLabel } from '../src/format';
 
 test('bad input fails with a readable MathError, never anything else', () => {
   for (const s of ['', '   ', 'x'.repeat(301), 'x+', '2**', 'sin(', '|', '()', '1..2', 'max(1,2)']) {
@@ -69,3 +70,11 @@ test('exact values at endpoints of arcsin, arccos and square roots', () => {
   expect(exactValue('sqrt(x)', {}, 0)).toBe('0');
 });
 
+
+test('axis labels: numbers, multiples of π, degrees', () => {
+  expect(unitLabel('num', 1.5)).toBe('1,5');
+  expect(unitLabel('pi', Math.PI / 2)).toBe('π/2');
+  expect(unitLabel('pi', -2 * Math.PI)).toBe('−2π');
+  expect(unitLabel('deg', Math.PI / 6)).toBe('30°');
+  expect(unitLabel('deg', -Math.PI)).toBe('-180°');
+});

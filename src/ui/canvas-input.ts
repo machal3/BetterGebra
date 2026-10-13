@@ -25,7 +25,7 @@ export function zoom(fx: number, fy = fx, x?: number, y?: number): void {
   if (next) setView(next);
 }
 
-export const resetView = () => setView({ ...(state.mode === 'trig' ? TRIG_VIEW : DEFAULT_VIEW) });
+export const resetView = () => setView({ ...(state.xUnit !== 'num' ? TRIG_VIEW : DEFAULT_VIEW) });
 
 /** Keeps the x range and fits y to the visible graphs (percentiles, so asymptote spikes don't flatten everything). */
 export function fitY(): void {
@@ -35,7 +35,7 @@ export function fitY(): void {
     if (!fn) continue;
     for (let i = 0; i <= 400; i++) { const y = fn(min + (max - min) * i / 400); if (Number.isFinite(y)) ys.push(y); }
   }
-  if (!ys.length) { toast(state.mode === 'graph' || state.mode === 'trig' ? 'Brak wartości funkcji w tym zakresie.' : 'Dopasowanie działa dla wykresów y = f(x).'); return; }
+  if (!ys.length) { toast(state.mode === 'graph' ? 'Brak wartości funkcji w tym zakresie.' : 'Dopasowanie działa dla wykresów y = f(x).'); return; }
   ys.sort((a, b) => a - b);
   let low = ys[Math.floor(ys.length * 0.03)], high = ys[Math.min(ys.length - 1, Math.floor(ys.length * 0.97))];
   // Percentiles drop spikes but would clip a steep end (e^x on [0; 20]): keep true extremes that are near.

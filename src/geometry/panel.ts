@@ -563,7 +563,7 @@ function draw(): void {
   const theme = readTheme(), ink = c('text'), free = c('accent'), bound = c('muted'), poly = c('geo-polygon'), arc = c('geo-angle');
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
-  const options = { grid, axes, trig: false, plane: false, minorGrid: true, halo: false };
+  const options = { grid, axes, xUnit: 'num' as const, yUnit: 'num' as const, plane: false, minorGrid: true, halo: false };
   drawGrid(ctx, v, theme, options);
   drawAxes(ctx, v, theme, options);
   ctx.lineJoin = ctx.lineCap = 'round';

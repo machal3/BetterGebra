@@ -1,7 +1,8 @@
 import { endpoint, holes } from '../math';
 import type { Dot, RealFunction } from '../math';
-import { format, piLabel } from '../format';
-import { Viewport, minorOf, tick, xSteps } from './viewport';
+import { format, unitLabel } from '../format';
+import type { AxisUnit } from '../state';
+import { Viewport, axisSteps } from './viewport';
 
 export interface Theme { bg: string; gridMinor: string; gridMajor: string; axis: string; label: string }
 
@@ -14,19 +15,19 @@ export function readTheme(): Theme {
 export const LABEL = '12px "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
 export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Georgia, serif';
 
-export interface AxesOptions { grid: boolean; axes: boolean; trig: boolean; plane: boolean; minorGrid: boolean; halo: boolean }
+export interface AxesOptions { grid: boolean; axes: boolean; xUnit: AxisUnit; yUnit: AxisUnit; plane: boolean; minorGrid: boolean; halo: boolean }
 
 export function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, theme: Theme, o: AxesOptions): void {
   if (!o.grid) return;
-  const { major, minor } = xSteps(vp, o.trig), ymajor = tick(vp.yscale);
+  const xs = axisSteps(vp.scale, o.xUnit), ys = axisSteps(vp.yscale, o.yUnit);
   const lines = (sx: number, sy: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
     for (let x = Math.ceil(vp.min / sx) * sx; x <= vp.max; x += sx) { const p = Math.round(vp.px(x)) + 0.5; ctx.moveTo(p, 0); ctx.lineTo(p, vp.height); }
     for (let y = Math.ceil(vp.bottom / sy) * sy; y <= vp.top; y += sy) { const p = Math.round(vp.py(y)) + 0.5; ctx.moveTo(0, p); ctx.lineTo(vp.width, p); }
     ctx.stroke();
   };
-  if (o.minorGrid) lines(minor, minorOf(ymajor), theme.gridMinor);
-  lines(major, ymajor, theme.gridMajor);
+  if (o.minorGrid) lines(xs.minor, ys.minor, theme.gridMinor);
+  lines(xs.major, ys.major, theme.gridMajor);
 }
 
 /** Axes with labels. When an axis is out of view its labels stay pinned to the nearest edge. */
@@ -37,9 +38,11 @@ export function drawAxes(ctx: CanvasRenderingContext2D, vp: Viewport, theme: The
   ctx.moveTo(x0, 0); ctx.lineTo(x0, height); ctx.moveTo(0, y0); ctx.lineTo(width, y0);
   ctx.stroke();
 
-  const step = xSteps(vp, o.trig).major, ystep = tick(vp.yscale);
-  const xLabel = o.trig ? piLabel : (v: number) => format(v);
-  const yLabel = o.plane ? (v: number) => ({ '1': 'i', '-1': '−i' } as Record<string, string>)[String(Math.round(v * 1e12) / 1e12)] ?? `${format(v)}i` : (v: number) => format(v);
+  const step = axisSteps(vp.scale, o.xUnit).major, ystep = axisSteps(vp.yscale, o.yUnit).major;
+  const xLabel = (v: number) => unitLabel(o.xUnit, v);
+  const yLabel = !o.plane ? (v: number) => unitLabel(o.yUnit, v)
+    : o.yUnit === 'num' ? (v: number) => ({ '1': 'i', '-1': '−i' } as Record<string, string>)[String(Math.round(v * 1e12) / 1e12)] ?? `${format(v)}i`
+    : (v: number) => `${unitLabel(o.yUnit, v)}i`;
   ctx.font = LABEL; ctx.fillStyle = theme.label;
   // Over the colours of the complex plane labels get a halo in the background colour.
   ctx.strokeStyle = theme.bg; ctx.lineWidth = 3; ctx.lineJoin = 'round';

@@ -44,10 +44,6 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg>
           <span>Wykresy</span>
         </a>
-        <a class="rail-item" href="#wykresy" data-mode="trig" title="Trygonometria — oś x w wielokrotnościach π">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12c1.6-5 3.2-7.5 4.75-7.5S10.4 7 12 12s3.2 7.5 4.75 7.5S19.9 17 21.5 12"/></svg>
-          <span>Trygonometria</span>
-        </a>
         <a class="rail-item" href="#wykresy" data-mode="complex" title="Zespolone — kolorowanie wartości f(z)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17"/><circle cx="16" cy="8" r="1.7" class="fill"/></svg>
           <span>Zespolone</span>
@@ -165,6 +161,13 @@
         <label class="switch"><span>Siatka</span><input type="checkbox" id="grid-toggle" role="switch"></label>
         <label class="switch"><span>Osie</span><input type="checkbox" id="axes-toggle" role="switch"></label>
         <label class="switch"><span>Przyciąganie kursora</span><input type="checkbox" id="snap-toggle" role="switch"></label>
+        <h4 class="subhead">Etykiety osi</h4>
+        <label class="geo-style-row"><span>Oś x</span>
+          <select id="x-unit"><option value="num">Liczby</option><option value="pi">Wielokrotności π</option><option value="deg">Stopnie</option></select>
+        </label>
+        <label class="geo-style-row unit-row"><span>Oś y</span>
+          <select id="y-unit"><option value="num">Liczby</option><option value="pi">Wielokrotności π</option><option value="deg">Stopnie</option></select>
+        </label>
         <h4 class="subhead">Zakres</h4>
         <div class="range-grid">
           <label for="x-min">x od</label><input id="x-min" type="number" step="any" inputmode="decimal">

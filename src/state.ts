@@ -2,7 +2,9 @@
  * The single source of truth. UI handlers mutate `state` and call `commit(topics)`; listeners subscribed to those
  * topics run once per microtask, however many commits happened. Nothing else keeps its own copy of this data.
  */
-export type Mode = 'graph' | 'trig' | 'complex' | 'set';
+export type Mode = 'graph' | 'complex' | 'set';
+/** Axis labels: plain numbers, multiples of π, or radians shown in degrees. */
+export type AxisUnit = 'num' | 'pi' | 'deg';
 export type Dash = '' | '8 6' | '1 5';
 export type Theme = 'light' | 'dark';
 
@@ -33,6 +35,8 @@ export interface State {
   grid: boolean;
   axes: boolean;
   snap: boolean;
+  xUnit: AxisUnit;
+  yUnit: AxisUnit;
   analysisOpen: boolean;
   /** null = follow the system. */
   theme: Theme | null;
@@ -55,6 +59,8 @@ export const state: State = {
   grid: true,
   axes: true,
   snap: true,
+  xUnit: 'num',
+  yUnit: 'num',
   analysisOpen: false,
   theme: null,
 };
@@ -129,6 +135,7 @@ interface Saved {
   view: View;
   mode: Mode;
   toggles: boolean[];
+  units: AxisUnit[];
   analysisOpen: boolean;
   theme: Theme | null;
 }
@@ -148,6 +155,7 @@ export function save(): void {
     view: state.view,
     mode: state.mode,
     toggles: toggleNames.map(k => state[k]),
+    units: [state.xUnit, state.yUnit],
     analysisOpen: state.analysisOpen,
     theme: state.theme,
   };
@@ -164,8 +172,10 @@ export function restore(): boolean {
   try { data = JSON.parse(localStorage.getItem(STORE) ?? localStorage.getItem(LEGACY) ?? 'null'); } catch { /* corrupt: start fresh */ }
   const fns = data?.functions ?? data?.graphs;
   if (!data || !Array.isArray(fns) || !fns.length) return false;
-  const modes: Mode[] = ['graph', 'trig', 'complex', 'set'];
-  state.mode = modes.includes(data.mode as Mode) ? data.mode as Mode : ({ '': 'graph', trig: 'trig', complex: 'complex', set: 'set' } as Record<string, Mode>)[String(data.mode)] ?? 'graph';
+  const modes: Mode[] = ['graph', 'complex', 'set'], units: AxisUnit[] = ['num', 'pi', 'deg'];
+  state.mode = modes.includes(data.mode as Mode) ? data.mode as Mode : 'graph';
+  // The former trigonometry mode is now the graph mode with π on the x axis.
+  [state.xUnit, state.yUnit] = [0, 1].map(i => units.includes(data!.units?.[i] as AxisUnit) ? data!.units![i] : i === 0 && String(data!.mode) === 'trig' ? 'pi' : 'num');
   toggleNames.forEach((k, i) => { state[k] = data!.toggles?.[i] ?? true; });
   for (const [k, v] of Object.entries(data.params ?? data.parameters ?? {})) if (/^[a-z]$/.test(k) && Number.isFinite(v)) state.params[k] = v;
   state.view = validView(data.view) ?? { ...DEFAULT_VIEW };

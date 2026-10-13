@@ -1,4 +1,4 @@
-import type { View } from '../state';
+import type { AxisUnit, View } from '../state';
 
 /** World ↔ screen (CSS px) for a view on a canvas of the given size. Immutable: a new one per frame. */
 export class Viewport {
@@ -46,7 +46,7 @@ export function tick(pxPerUnit: number): number {
   const raw = 70 / pxPerUnit, magnitude = 10 ** Math.floor(Math.log10(raw));
   return [1, 2, 5, 10].map(v => v * magnitude).find(v => v >= raw)!;
 }
-/** Trigonometric x ticks: π/12 … π/2, then π, 2π, 5π…; below π/20 back to decimal multiples of π. */
+/** Trigonometric ticks: π/12 … π/2, then π, 2π, 5π…; below π/20 back to decimal multiples of π. */
 export function piTick(pxPerUnit: number): number {
   const raw = 70 / pxPerUnit / Math.PI;
   return Math.PI * ([1 / 12, 1 / 6, 1 / 4, 1 / 3, 1 / 2].find(v => v >= raw && raw > 0.05) ?? tick(pxPerUnit * Math.PI));
@@ -54,7 +54,8 @@ export function piTick(pxPerUnit: number): number {
 /** Minor lines on round values: 1 → 0,2; 2 → 0,5 (not 0,4, so 1 is a line); 5 → 1. */
 export const minorOf = (major: number) => major / (Math.round(major / 10 ** Math.floor(Math.log10(major))) === 2 ? 4 : 5);
 
-export function xSteps(vp: Viewport, trig: boolean): { major: number; minor: number } {
-  const major = trig ? piTick(vp.scale) : tick(vp.scale);
-  return { major, minor: trig ? major / 2 : minorOf(major) };
+/** Grid steps along one axis: round decimals for numbers, fractions of π for π and degrees. */
+export function axisSteps(pxPerUnit: number, unit: AxisUnit): { major: number; minor: number } {
+  const major = unit === 'num' ? tick(pxPerUnit) : piTick(pxPerUnit);
+  return { major, minor: unit === 'num' ? minorOf(major) : major / 2 };
 }

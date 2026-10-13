@@ -6,7 +6,7 @@ import { initGeometry, redrawGeometry } from './geometry/panel';
 import { forget } from './model';
 import { Scene } from './render/scene';
 import { fits } from './render/viewport';
-import { TRIG_VIEW, addFunction, commit, on, restore, save, state, type Mode } from './state';
+import { addFunction, commit, on, restore, save, state, type AxisUnit, type Mode } from './state';
 import { initAnalysisPanel, renderAnalysis, syncPanelVisibility } from './ui/analysis-panel';
 import { fitY, initCanvasInput, setView, settle } from './ui/canvas-input';
 import { $, initTooltips, toast } from './ui/dom';
@@ -61,7 +61,7 @@ $('theme-button').addEventListener('click', () => {
 // --- Modes ---
 // The navigation rail holds the four graph modes and the geometry panel; the current one gets aria-current.
 const navItems = [...document.querySelectorAll<HTMLAnchorElement>('#modes a')];
-const TITLES: Record<Mode, string> = { graph: 'Wykresy', trig: 'Trygonometria', complex: 'Zespolone', set: 'Zbiory' };
+const TITLES: Record<Mode, string> = { graph: 'Wykresy', complex: 'Zespolone', set: 'Zbiory' };
 function syncModes(): void {
   const panel = document.body.dataset.panel;
   for (const a of navItems) {
@@ -76,9 +76,8 @@ $('modes').addEventListener('click', e => {
   // The link itself switches to the graphs panel through the hash.
   if (!mode || mode === state.mode) return;
   state.mode = mode;
-  // Trigonometry shows two periods; the complex plane needs equal axes.
-  if (mode === 'trig') state.view = { ...TRIG_VIEW };
-  else if (mode === 'complex' || mode === 'set') state.view = { ...state.view, ratio: 1 };
+  // The complex plane needs equal axes.
+  if (mode === 'complex' || mode === 'set') state.view = { ...state.view, ratio: 1 };
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     $('plot').animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
   }
@@ -112,7 +111,14 @@ for (const input of rangeInputs) input.addEventListener('change', () => {
   $('range-error').textContent = ok ? '' : 'Podaj rosnące zakresy: x o szerokości od 0,0001 do 10 000 000 (w granicach ±10⁹), y o wysokości od 0,0001 do 10¹² (w granicach ±10¹⁵).';
   if (ok) setView({ min: x0, max: x1, cy: (y0 + y1) / 2, ratio });
 });
-const syncToggles = () => { for (const [key, input] of Object.entries(toggles)) input.checked = state[key as keyof typeof toggles]; };
+const units = { xUnit: $<HTMLSelectElement>('x-unit'), yUnit: $<HTMLSelectElement>('y-unit') };
+for (const [key, select] of Object.entries(units) as [keyof typeof units, HTMLSelectElement][]) {
+  select.addEventListener('change', () => { state[key] = select.value as AxisUnit; commit('toggles'); });
+}
+const syncToggles = () => {
+  for (const [key, input] of Object.entries(toggles)) input.checked = state[key as keyof typeof toggles];
+  for (const [key, select] of Object.entries(units)) select.value = state[key as keyof typeof units];
+};
 
 // --- Export ---
 $('export').addEventListener('click', async () => {
