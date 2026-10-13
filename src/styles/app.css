@@ -325,10 +325,11 @@ input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-
 
 /* Navigation rail (Fluent app bar) */
 .rail {
-  display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 0; padding: 12px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; padding: 0 0 12px;
   background: var(--rail-bg);
 }
-.rail-logo { display: grid; place-items: center; width: 48px; height: 40px; border-radius: var(--r-medium); }
+/* Same height as the pane header, so the logo sits on the title's line. */
+.rail-logo.logo { flex: none; justify-content: center; width: 100%; height: 56px; }
 .rail-logo svg { width: 28px; height: 28px; }
 .rail-items { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rail-item {
@@ -351,7 +352,7 @@ input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-
 .rail-item[aria-current="page"]::before { height: 20px; }
 
 /* Pane header */
-.pane-head { display: flex; align-items: center; gap: 4px; min-height: 56px; padding: 12px 12px 8px 16px; }
+.pane-head { display: flex; align-items: center; gap: 4px; min-height: 56px; padding: 8px 12px 8px 16px; }
 .pane-title { flex: 1; min-width: 0; margin: 0; font: var(--subtitle1); color: var(--fg1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pane-home { display: none; }
 .pane-actions { display: flex; gap: 4px; }
