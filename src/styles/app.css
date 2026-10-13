@@ -472,8 +472,8 @@ body[data-panel="geometry"] :is(#graphs-body, #stage) { display: none; }
 .brackets label + label, .dashes label + label, .geo-seg button + button { border-left: 1px solid var(--stroke1); }
 .brackets input, .dashes input { position: absolute; opacity: 0; pointer-events: none; }
 .brackets label:hover, .dashes label:hover, .geo-seg button:hover { background: var(--n-bg1-hover); color: var(--fg1); }
-/* Checked toggle buttons (Fluent ToggleButton, secondary): neutral selected background */
-.brackets label:has(input:checked), .dashes label:has(input:checked), .geo-seg button[aria-pressed="true"] { background: var(--n-bg1-selected); color: var(--fg1); }
+/* Checked toggle buttons: neutral selected background with brand foreground (Fluent subtle ToggleButton, checked) */
+.brackets label:has(input:checked), .dashes label:has(input:checked), .geo-seg button[aria-pressed="true"] { background: var(--n-bg1-selected); color: var(--brand-fg1); font-weight: 600; }
 .brackets label:has(input:disabled) { cursor: not-allowed; color: var(--fg-disabled); }
 .brackets label:has(input:focus-visible), .dashes label:has(input:focus-visible) { outline: 2px solid var(--focus-outer); outline-offset: -2px; }
 /* Fluent SwatchPicker */
@@ -701,9 +701,12 @@ body[data-panel="geometry"] :is(#graphs-body, #stage) { display: none; }
 .geo-tool span { min-width: 0; }
 .geo-tool:hover { background: var(--n-bg1-hover); border-color: var(--stroke1-hover); }
 .geo-tool:active { background: var(--n-bg1-pressed); }
-/* Checked ToggleButton: neutral selected background, regular stroke and text */
-.geo-tool[aria-pressed="true"] { background: var(--n-bg1-selected); border-color: var(--stroke1); color: var(--fg1); }
-.geo-tool[aria-pressed="true"]:hover { background: var(--n-bg1-hover); border-color: var(--stroke1-hover); }
+/* Selected tool, as a selected Fluent Nav item: neutral selected background, brand indicator, brand icon, semibold label. */
+.geo-tool { position: relative; }
+.geo-tool[aria-pressed="true"] { background: var(--n-bg1-selected); border-color: var(--stroke1-pressed); color: var(--fg1); font-weight: 600; }
+.geo-tool[aria-pressed="true"]:hover { background: var(--n-bg1-hover); }
+.geo-tool[aria-pressed="true"] svg { color: var(--brand-fg1); }
+.geo-tool[aria-pressed="true"]::before { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: var(--r-circular); background: var(--compound-brand); }
 .geo-star {
   position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
   border: 0; border-radius: var(--r-small); background: none; color: var(--fg3); opacity: 0;
@@ -757,7 +760,9 @@ body[data-panel="geometry"] :is(#graphs-body, #stage) { display: none; }
 .geo-item[data-kind="point"]:not([data-free="true"]) { --c: var(--fg3); }
 .geo-item[data-kind="polygon"] { --c: var(--geo-polygon); }
 .geo-item[data-kind="angle"] { --c: var(--geo-angle); }
+.geo-item { position: relative; }
 .geo-item.selected { background: var(--n-bg1-selected); }
+.geo-item.selected::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: var(--r-circular); background: var(--compound-brand); }
 .geo-eye { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r-medium); background: transparent; display: grid; place-items: center; }
 .geo-eye:hover { background: var(--subtle-hover); }
 .geo-eye::after { content: ""; width: 12px; height: 12px; border-radius: var(--r-circular); background: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
