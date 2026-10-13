@@ -90,7 +90,7 @@ export function addFunction(expression = '', settings: Partial<Omit<FnState, 'id
   const color = PALETTE.find(c => !state.functions.some(g => g.color === c)) ?? PALETTE[state.functions.length % PALETTE.length];
   const f: FnState = {
     id: nextId++, expression, color, visible: true,
-    from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2.25, dash: '',
+    from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2, dash: '',
     ...Object.fromEntries(Object.entries(settings).filter(([, v]) => v !== undefined)),
   };
   if (!(f.from < f.to)) { f.from = -Infinity; f.to = Infinity; }
@@ -178,7 +178,7 @@ export function restore(): boolean {
       visible: g.visible !== false,
       from: num(g.from, -Infinity), to: num(g.to, Infinity),
       fromOpen: !!g.fromOpen, toOpen: !!g.toOpen,
-      width: Math.min(20, Math.max(0.25, num(g.width, 2.25))),
+      width: Math.min(20, Math.max(0.25, num(g.width, 2))),
       dash: (['', '8 6', '1 5'] as Dash[]).includes(g.dash) ? g.dash : '',
     });
   }

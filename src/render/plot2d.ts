@@ -10,7 +10,8 @@ export function readTheme(): Theme {
   return { bg: v('plot-bg'), gridMinor: v('grid-minor'), gridMajor: v('grid-major'), axis: v('axis'), label: v('plot-label') };
 }
 
-export const MONO = '11px Consolas, "Cascadia Mono", "Courier New", monospace';
+// Labels use the Fluent type ramp (Caption 1, Segoe UI); names keep the math italic.
+export const LABEL = '12px "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
 export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Georgia, serif';
 
 export interface AxesOptions { grid: boolean; axes: boolean; trig: boolean; plane: boolean; minorGrid: boolean; halo: boolean }
@@ -32,14 +33,14 @@ export function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, theme: The
 export function drawAxes(ctx: CanvasRenderingContext2D, vp: Viewport, theme: Theme, o: AxesOptions): void {
   if (!o.axes) return;
   const { width, height } = vp, x0 = Math.round(vp.px(0)) + 0.5, y0 = Math.round(vp.py(0)) + 0.5;
-  ctx.strokeStyle = theme.axis; ctx.lineWidth = 1.25; ctx.beginPath();
+  ctx.strokeStyle = theme.axis; ctx.lineWidth = 1; ctx.beginPath();
   ctx.moveTo(x0, 0); ctx.lineTo(x0, height); ctx.moveTo(0, y0); ctx.lineTo(width, y0);
   ctx.stroke();
 
   const step = xSteps(vp, o.trig).major, ystep = tick(vp.yscale);
   const xLabel = o.trig ? piLabel : (v: number) => format(v);
   const yLabel = o.plane ? (v: number) => ({ '1': 'i', '-1': '−i' } as Record<string, string>)[String(Math.round(v * 1e12) / 1e12)] ?? `${format(v)}i` : (v: number) => format(v);
-  ctx.font = MONO; ctx.fillStyle = theme.label;
+  ctx.font = LABEL; ctx.fillStyle = theme.label;
   // Over the colours of the complex plane labels get a halo in the background colour.
   ctx.strokeStyle = theme.bg; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   const text = (s: string, x: number, y: number) => { if (o.halo) ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };

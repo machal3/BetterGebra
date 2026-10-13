@@ -92,7 +92,7 @@ export class Scene {
     } else if (!complex) {
       for (const { f, c } of shown) {
         ctx.beginPath();
-        ctx.lineWidth = f.width + (f === active ? 0.5 : 0);
+        ctx.lineWidth = f.width + (f === active ? 1 : 0);
         ctx.strokeStyle = f.color;
         ctx.setLineDash(dashPattern(f.dash, f.width));
         for (const e of traceCurve(ctx, vp, c.fn!)) ends.push({ ...e, color: f.color, fn: c.fn!, expr: f.expression });
@@ -121,7 +121,7 @@ export class Scene {
     if (hit.dot) {
       h.beginPath(); h.arc(hx, hy, 5, 0, Math.PI * 2);
       h.fillStyle = hit.color; h.fill();
-      h.lineWidth = 2.5; h.strokeStyle = this.theme.bg; h.stroke();
+      h.lineWidth = 2; h.strokeStyle = this.theme.bg; h.stroke();
     }
     tip.hidden = false;
     tip.innerHTML = hit.html;

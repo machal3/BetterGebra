@@ -4,7 +4,7 @@
  */
 import { format } from '../format';
 import { constant } from '../math';
-import { MONO, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
+import { LABEL, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
 import { Viewport, minorOf, panned, tick, zoomed } from '../render/viewport';
 import type { View } from '../state';
 import { $, FI, ICONS, h, icon, toast } from '../ui/dom';
@@ -579,12 +579,11 @@ function draw(): void {
     const st = (o.def === 'edge' ? byId.get(o.of[2])?.style : o.style) ?? {};
     const auto = o.def === 'edge' || s.kind === 'polygon' || s.kind === 'sector' ? poly : s.kind === 'angle' ? arc : s.kind === 'point' ? (o.def === 'free' || o.def === 'on' ? free : bound) : ink;
     const color = st.color === 'ink' ? ink : st.color ?? auto;
-    const hot = marked.has(o.id), text = isGhost ? '' : caption(o, s, st.label, id => names.get(id) ?? '?'), font = text === o.name ? SERIF : MONO;
+    const hot = marked.has(o.id), text = isGhost ? '' : caption(o, s, st.label, id => names.get(id) ?? '?'), font = text === o.name ? SERIF : LABEL;
     ctx.globalAlpha = isGhost ? 0.55 : o.hidden ? 0.3 : 1;
     ctx.setLineDash([]);
     if (s.kind === 'point') {
-      const X = v.px(s.x), Y = v.py(s.y), r = st.size ?? (o.def === 'free' ? 4.5 : 3.8);
-      if (hot) { ctx.beginPath(); ctx.arc(X, Y, r + 5, 0, 2 * Math.PI); paint('fill', color, 0.22); }
+      const X = v.px(s.x), Y = v.py(s.y), r = st.size ?? defaultSize(o);
       ctx.beginPath();
       if (st.shape === 'cross') {
         const k = r * 0.85;
@@ -593,17 +592,19 @@ function draw(): void {
       } else {
         ctx.arc(X, Y, r, 0, 2 * Math.PI);
         ctx.fillStyle = st.shape === 'ring' ? theme.bg : color; ctx.fill();
-        ctx.lineWidth = st.shape === 'ring' ? 2 : 1.2; ctx.strokeStyle = st.shape === 'ring' ? color : theme.bg; ctx.stroke();
+        ctx.lineWidth = st.shape === 'ring' ? 2 : 1.5; ctx.strokeStyle = st.shape === 'ring' ? color : theme.bg; ctx.stroke();
       }
+      // Selection: a 2px ring set off by a gap, like a selected Fluent swatch, instead of a glow.
+      if (hot) { ctx.beginPath(); ctx.arc(X, Y, r + 3.5, 0, 2 * Math.PI); ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke(); }
       if (text) label(text, X + r + 3, Y - r - 4, color, theme.bg, font);
       continue;
     }
     if (s.kind === 'measure') {
-      if (text) label(text, v.px(s.x), v.py(s.y) - 10, hot ? free : color, theme.bg, MONO, 'center');
+      if (text) label(text, v.px(s.x), v.py(s.y) - 10, hot ? free : color, theme.bg, LABEL, 'center');
       continue;
     }
-    const w = st.width ?? (s.kind === 'angle' ? 1.5 : s.kind === 'polygon' || o.def === 'edge' ? 2 : 1.8);
-    const dash = () => ctx.setLineDash(st.dash === 'dashed' ? [w * 3 + 3, w * 2 + 3] : st.dash === 'dotted' ? [0.1, w * 2 + 2] : []);
+    const w = st.width ?? DEFAULT_WIDTH;
+    const dash = () => ctx.setLineDash(st.dash === 'dashed' ? [w * 3, w * 3] : st.dash === 'dotted' ? [0.01, w * 3] : []); // dash and gap scale with the stroke
     ctx.beginPath();
     if (s.kind === 'polygon') s.pts.forEach((p, i) => i ? ctx.lineTo(v.px(p.x), v.py(p.y)) : ctx.moveTo(v.px(p.x), v.py(p.y)));
     else if (s.kind === 'circle') ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, 0, 2 * Math.PI);
@@ -643,7 +644,7 @@ function draw(): void {
     const X = v.px(at.x), Y = v.py(at.y), attached = at.draft?.def !== 'free' || gridPoint(X, Y) !== null;
     ctx.beginPath(); ctx.arc(X, Y, 6, 0, 2 * Math.PI);
     if (attached) paint('fill', free, 0.35);
-    ctx.lineWidth = 1.5; ctx.strokeStyle = free; ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = free; ctx.stroke();
   }
 }
 
@@ -682,7 +683,7 @@ function anchor(v: Viewport, s: Shape): [number, number] {
   }
 }
 
-function arrowhead(x1: number, y1: number, x2: number, y2: number, color: string, w = 1.8): void {
+function arrowhead(x1: number, y1: number, x2: number, y2: number, color: string, w = DEFAULT_WIDTH): void {
   const a = Math.atan2(y2 - y1, x2 - x1), k = 9 + 1.6 * w;
   ctx.beginPath();
   ctx.moveTo(x2, y2);
@@ -810,8 +811,9 @@ const PALETTE: [string, string][] = [
 ];
 const STYLE_OPEN = 'bettergebra.geometry.style';
 const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
-const defaultWidth = (o: GeoObject) => o.kind === 'angle' ? 1.5 : o.kind === 'polygon' ? 2 : 1.8;
-const defaultSize = (o: GeoObject) => o.def === 'free' ? 4.5 : 3.8;
+// Defaults on the Fluent stroke scale: lines take the thick (2px) stroke.
+const DEFAULT_WIDTH = 2;
+const defaultSize = (o: GeoObject) => o.def === 'free' || o.def === 'on' ? 5 : 4;
 const decimal = (v: number) => String(v).replace('.', ',');
 
 /** The object the style card edits: the selected one, a polygon's side standing for its polygon. */
@@ -845,7 +847,7 @@ function syncStyle(o: GeoObject): void {
   $('geo-width-row').hidden = measure;
   $('geo-width-label').textContent = point ? 'Rozmiar' : 'Grubość';
   [width.min, width.max] = point ? ['2', '10'] : ['1', '8'];
-  width.value = String(point ? st.size ?? defaultSize(o) : st.width ?? defaultWidth(o));
+  width.value = String(point ? st.size ?? defaultSize(o) : st.width ?? DEFAULT_WIDTH);
   $('geo-width-out').textContent = decimal(+width.value);
   $('geo-dash-row').hidden = point || measure;
   $('geo-shape-row').hidden = !point;
