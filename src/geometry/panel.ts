@@ -7,7 +7,7 @@ import { constant } from '../math';
 import { MONO, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
 import { Viewport, minorOf, panned, tick, zoomed } from '../render/viewport';
 import type { View } from '../state';
-import { $, ICONS, h, icon, toast } from '../ui/dom';
+import { $, FI, ICONS, h, icon, toast } from '../ui/dom';
 import { REFERENCE, angle as angleValue, definition, parseInput, type Parsed } from './commands';
 import {
   compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, nextName, pointOn, primed, project, topoSort,
@@ -140,8 +140,8 @@ const filled = (d: string) => `<path d="${d}" class="soft"/><path d="${d}"/>`;
 const thin = 'stroke-width="0.9"', dash = 'stroke-dasharray="2 2.4"';
 const TRIANGLE = '<path d="M12 4 3.5 19.5h17z"/>', WEDGE = 'M4 19h7A7 7 0 0 0 8.52 13.65z';
 const ICON: Record<ToolId, string> = {
-  move: icon(filled('M6.5 3.5v14l3.4-3.2 2.5 5.8 2.4-1-2.5-5.7h4.9z')),
-  hide: icon(`<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>${acc('<path d="M4 20 20 4"/>')}`),
+  move: FI.cursor,
+  hide: FI.eyeOff,
   delete: ICONS.trash,
 
   point: icon(`<circle cx="12" cy="12" r="6.5" class="soft acc"/>${made(12, 12, 2.8)}`),
@@ -210,7 +210,7 @@ const GROUPS: { name: string; tools: GroupEntry[] }[] = [
 // --- State ---
 const STORE = 'bettergebra.geometry', TAB_STORE = 'bettergebra.geometry.tab';
 const FAV_STORE = 'bettergebra.geometry.favourites', FAVOURITES = 'Ulubione';
-const STAR = icon('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>');
+const STAR = FI.star.replace('class="fi"', 'class="fi off"') + FI.starFilled.replace('class="fi"', 'class="fi on"');
 const HOME: View = { min: -10, max: 10, cy: 0, ratio: 1 };
 let objects: GeoObject[] = [];
 let shapes = new Map<number, Shape | null>();
@@ -805,8 +805,8 @@ function initCoords(): void {
 
 // --- Style of the selected object ---
 const PALETTE: [string, string][] = [
-  ['ink', 'Atramentowy'], ['#e5484d', 'Czerwony'], ['#f2811d', 'Pomarańczowy'], ['#d4a106', 'Żółty'], ['#30a46c', 'Zielony'],
-  ['#12a594', 'Morski'], ['#0d74ce', 'Niebieski'], ['#6e56cf', 'Fioletowy'], ['#d6409f', 'Różowy'], ['#8d8d86', 'Szary'],
+  ['ink', 'Atramentowy'], ['#d13438', 'Czerwony'], ['#ca5010', 'Pomarańczowy'], ['#eaa300', 'Żółty'], ['#107c10', 'Zielony'],
+  ['#038387', 'Morski'], ['#0f6cbd', 'Niebieski'], ['#8764b8', 'Fioletowy'], ['#c239b3', 'Różowy'], ['#7a7574', 'Szary'],
 ];
 const STYLE_OPEN = 'bettergebra.geometry.style';
 const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
@@ -868,7 +868,7 @@ function initStyle(): void {
     b.addEventListener('click', () => restyle({ color: c || undefined }));
     colors.append(b);
   }
-  const pick = h('input', { id: 'geo-color', type: 'color', class: 'geo-swatch-custom', value: '#0d74ce', 'aria-label': 'Własny kolor', title: 'Własny kolor' });
+  const pick = h('input', { id: 'geo-color', type: 'color', class: 'geo-swatch-custom', value: '#0f6cbd', 'aria-label': 'Własny kolor', title: 'Własny kolor' });
   pick.addEventListener('input', () => restyle({ color: pick.value }, true));
   colors.append(pick);
 

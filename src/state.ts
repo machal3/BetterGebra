@@ -41,7 +41,8 @@ export interface State {
 export type Topic = 'list' | 'expr' | 'style' | 'params' | 'view' | 'mode' | 'toggles' | 'active' | 'theme' | 'panel';
 
 export const MAX_FUNCTIONS = 8;
-export const PALETTE = ['#2f5fd0', '#d4421e', '#1f8a5b', '#c98a0b', '#7a4cc2', '#0f8a9a', '#c43a7a', '#6f8a1a'];
+// Fluent 2 data-visualisation palette.
+export const PALETTE = ['#637cef', '#e3008c', '#2aa0a4', '#9373c0', '#13a10e', '#3a96dd', '#ca5010', '#57811b'];
 export const DEFAULT_VIEW: View = { min: -10, max: 10, cy: 0, ratio: 1 };
 export const TRIG_VIEW: View = { min: -2 * Math.PI, max: 2 * Math.PI, cy: 0, ratio: 1 };
 

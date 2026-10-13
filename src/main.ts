@@ -9,7 +9,7 @@ import { fits } from './render/viewport';
 import { TRIG_VIEW, addFunction, commit, on, restore, save, state, type Mode } from './state';
 import { initAnalysisPanel, renderAnalysis, syncPanelVisibility } from './ui/analysis-panel';
 import { fitY, initCanvasInput, setView, settle } from './ui/canvas-input';
-import { $, toast } from './ui/dom';
+import { $, initTooltips, toast } from './ui/dom';
 import { initFunctionList, syncList } from './ui/function-list';
 import { initParameters, syncParameters } from './ui/parameters';
 
@@ -59,10 +59,22 @@ $('theme-button').addEventListener('click', () => {
 });
 
 // --- Modes ---
-const modeInputs = [...document.querySelectorAll<HTMLInputElement>('#modes input')];
-const syncModes = () => { for (const r of modeInputs) r.checked = r.value === state.mode; document.body.dataset.mode = state.mode; };
-$('modes').addEventListener('change', e => {
-  const mode = (e.target as HTMLInputElement).value as Mode;
+// The navigation rail holds the four graph modes and the geometry panel; the current one gets aria-current.
+const navItems = [...document.querySelectorAll<HTMLAnchorElement>('#modes a')];
+const TITLES: Record<Mode, string> = { graph: 'Wykresy', trig: 'Trygonometria', complex: 'Zespolone', set: 'Zbiory' };
+function syncModes(): void {
+  const panel = document.body.dataset.panel;
+  for (const a of navItems) {
+    const current = panel === 'graphs' ? a.dataset.mode === state.mode : a.dataset.panel === panel;
+    if (current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
+  document.body.dataset.mode = state.mode;
+  $('pane-title').textContent = panel === 'geometry' ? 'Geometria' : TITLES[state.mode];
+}
+$('modes').addEventListener('click', e => {
+  const mode = (e.target as Element).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
+  // The link itself switches to the graphs panel through the hash.
+  if (!mode || mode === state.mode) return;
   state.mode = mode;
   // Trigonometry shows two periods; the complex plane needs equal axes.
   if (mode === 'trig') state.view = { ...TRIG_VIEW };
@@ -76,6 +88,7 @@ $('modes').addEventListener('change', e => {
 // --- Panels: home | graphs | geometry (the hash keeps the choice across reloads) ---
 function syncPanel(): void {
   document.body.dataset.panel = ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[location.hash] ?? 'home';
+  syncModes();
 }
 addEventListener('hashchange', syncPanel);
 
@@ -145,6 +158,7 @@ initParameters(settle);
 initAnalysisPanel();
 initCanvasInput(scene);
 initGeometry();
+initTooltips();
 syncPanel();
 syncModes();
 syncToggles();
