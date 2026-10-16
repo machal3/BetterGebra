@@ -64,6 +64,12 @@ test('calculus', () => {
   expect(card('całka 1/(1+x^2) od 0 do inf', 'Całka oznaczona')).toBe('π/2');
   expect(card('całka e^(-x^2) od -inf do inf', 'Całka oznaczona')).toBe('√π');
   expect(card('integrate(1/x^2, x, -1, 1)', 'Całka oznaczona')).toBe('Całka jest rozbieżna do +∞.');
+  // biquadratics irreducible over ℚ split over ℝ into quadratics with surd coefficients
+  expect(card('integrate(1/(x^4+1), x)', 'Całka nieoznaczona')).toBe('(2√2·arctg(√2·x − 1) + 2√2·arctg(√2·x + 1) + √2·ln(x^2 + √2·x + 1) − √2·ln(x^2 − √2·x + 1))/8 + C');
+  expect(card('integrate(x^2/(x^4+1), x)', 'Całka nieoznaczona')).toBe('(2√2·arctg(√2·x − 1) + 2√2·arctg(√2·x + 1) − √2·ln(x^2 + √2·x + 1) + √2·ln(x^2 − √2·x + 1))/8 + C');
+  expect(card('integrate(1/(x^4+2), x)', 'Całka nieoznaczona')).toBe('(2·2^(3/4)·arctg(2^(1/4)·x − 1) + 2·2^(3/4)·arctg(2^(1/4)·x + 1) + 2^(3/4)·ln(x^2 + 2^(3/4)·x + √2) − 2^(3/4)·ln(x^2 − 2^(3/4)·x + √2))/16 + C');
+  expect(card('integrate(1/(x^4+3x^2+1), x)', 'Całka nieoznaczona')).toBe('2√5·arctg(2x/√(6 − 2√5))/(5√(6 − 2√5)) − 2√5·arctg(2x/√(6 + 2√5))/(5√(6 + 2√5)) + C');
+  expect(card('integrate(1/(x^4+1), x, 0, 1)', 'Postać dziesiętna')).toBe('0.8669729873399110375739952');
   expect(card('sum(1/k^2, k, 1, inf)', 'Suma')).toBe('π^2/6');
   expect(card('sum(k^3, k, 1, n)', 'Suma')).toMatch(/n\^2·\(n \+ 1\)\^2\/4|\(n\^4 \+ 2n\^3 \+ n\^2\)\/4/);
   expect(card('szereg sin x', 'Szereg Taylora w x = 0')).toBe('x − x^3/6 + x^5/120 + O(x^7)');

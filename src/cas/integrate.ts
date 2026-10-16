@@ -154,11 +154,11 @@ function polynomial(f: Expr, x: string): Expr | null {
   return add(...c.map((k, i) => mul(k, pow(X, num(i + 1)), num(1, i + 1))));
 }
 
-/** Partial fractions over ℚ with linear and quadratic factors of the denominator. */
-export function partialFractions(Np: P, Dp: P): { poly: P; terms: { factor: bigint[]; power: number; num: P }[]; content: Q } | null {
+/** Partial fractions over ℚ; every irreducible factor of the denominator has degree ≤ maxDegree. */
+export function partialFractions(Np: P, Dp: P, maxDegree = 2): { poly: P; terms: { factor: bigint[]; power: number; num: P }[]; content: Q } | null {
   const [quot, rem] = pdivmod(Np, Dp);
   const fac = factorPoly(Dp);
-  if (!fac.complete || fac.factors.some(([g]) => g.length > 3)) return null;
+  if (!fac.complete || fac.factors.some(([g]) => g.length > maxDegree + 1)) return null;
   const terms: { factor: bigint[]; power: number; num: P }[] = [];
   if (!rem.length) return { poly: quot, terms, content: fac.content };
   // unknowns: for each factor g^m and j = 1..m, a numerator of degree < deg g
@@ -197,7 +197,7 @@ function rational(f: Expr, x: string): Expr | null {
   if (freeOf(d, x)) return null;
   const Np = polyOf(n, x, 200), Dp = polyOf(d, x, 200);
   if (!Np || !Dp) return null;
-  const pf = partialFractions(Np, Dp);
+  const pf = partialFractions(Np, Dp, 4);
   if (!pf) return null;
   const X = sym(x);
   const out: Expr[] = [polynomial(polyToExpr(pf.poly, X), x) ?? ZERO];
@@ -208,9 +208,48 @@ function rational(f: Expr, x: string): Expr | null {
       const p = g[1], A = num(t.num[0]), L = polyToExpr(fromInts(t.factor), X);
       if (t.power === 1) out.push(mul(A, num(qdiv(q(1), p)), fn('ln', fn('abs', L))));
       else out.push(mul(A, num(qdiv(q(-1), qmul(p, q(t.power - 1)))), pow(L, num(1 - t.power))));
-    } else out.push(quadraticTerm(g as [Q, Q, Q], t.num, t.power, X));
+    } else if (g.length === 3) out.push(quadraticTerm(g as [Q, Q, Q], t.num, t.power, X));
+    else {
+      const F = t.power === 1 && g.length === 5 ? biquadraticTerm(g, t.num, X) : null;
+      if (!F) return null;
+      out.push(F);
+    }
   }
   return add(...out);
+}
+
+/** ∫ (Ax + B)/(x² + bx + c) dx with 4c − b² > 0; the coefficients may be surds. */
+function quadraticSurd(A: Expr, B: Expr, b: Expr, c: Expr, X: Expr): Expr {
+  const R = sqrt(sub(mul(num(4), c), pow(b, TWO)));
+  // Ax + B = (A/2)(2x + b) + (B − Ab/2)
+  return add(mul(HALF, A, fn('ln', add(pow(X, TWO), mul(b, X), c))),
+    mul(TWO, sub(B, mul(HALF, A, b)), pow(R, MINUS_ONE), fn('atan', div(add(mul(TWO, X), b), R))));
+}
+
+/**
+ * ∫ N/(x⁴ + px² + q) dx, deg N ≤ 3, for a biquadratic irreducible over ℚ and without real roots: it splits
+ * over ℝ into two quadratics with surd coefficients.
+ */
+function biquadraticTerm(g: Q[], numer: Q[], X: Expr): Expr | null {
+  const [g0, g1, g2, g3, g4] = g;
+  if (g1.n || g3.n) return null;
+  const p = qdiv(g2, g4), qq = qdiv(g0, g4);
+  const [n0, n1, n2, n3] = [0, 1, 2, 3].map(i => num(qdiv(numer[i] ?? Q0, g4)));
+  if (qsign(qq) <= 0) return null;
+  const disc = qsub(qmul(p, p), qmul(q(4), qq)); // ≠ 0, else reducible over ℚ
+  if (qsign(disc) < 0) {
+    // (x² + sx + r)(x² − sx + r), r = √q, s = √(2r − p); 4r − s² = 2r + p > 0 since p² < 4q
+    const r = sqrt(num(qq)), s = sqrt(sub(mul(TWO, r), num(p)));
+    const alpha = div(sub(div(n0, r), n2), s), beta = div(sub(mul(r, n3), n1), s);
+    const A = mul(HALF, add(n3, alpha)), C = mul(HALF, sub(n3, alpha));
+    const B = mul(HALF, add(div(n0, r), beta)), D = mul(HALF, sub(div(n0, r), beta));
+    return add(quadraticSurd(A, B, s, r, X), quadraticSurd(C, D, neg(s), r, X));
+  }
+  if (qsign(p) <= 0) return null; // real roots
+  // (x² + u)(x² + v), u, v = (p ∓ √(p² − 4q))/2 > 0
+  const w = sqrt(num(disc)), u = mul(HALF, sub(num(p), w)), v = mul(HALF, add(num(p), w));
+  const A = div(sub(n1, mul(u, n3)), w), B = div(sub(n0, mul(u, n2)), w);
+  return add(quadraticSurd(A, B, ZERO, u, X), quadraticSurd(sub(n3, A), sub(n2, B), ZERO, v, X));
 }
 
 /** ∫ (Bx + C)/(ax² + bx + c)^j dx for an irreducible quadratic with a > 0. */
