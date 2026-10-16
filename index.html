@@ -223,28 +223,33 @@
 
     <main id="calc" class="calc" aria-label="Kalkulator">
       <div class="calc-column">
-        <form id="calc-form" class="calc-form" role="search" aria-label="Obliczenie">
+        <div id="calc-empty" class="calc-empty calc-hero">
+          <span class="calc-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg></span>
+          <h2>Kalkulator symboliczny</h2>
+          <p>Wyniki dokładne — ułamki, pierwiastki, π — a cyfry dziesiętne tylko te, które są pewne. Wpisz wyrażenie, równanie albo polecenie po polsku lub angielsku.</p>
+        </div>
+        <form id="calc-form" class="calc-composer" role="search" aria-label="Obliczenie">
           <div class="calc-field">
             <input id="calc-input" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="go" aria-label="Wyrażenie, równanie lub polecenie" placeholder="np. całka x^2 sin x dx, x^3 − 2 = 0, rozłóż 2^64 + 1">
-            <button class="calc-go" type="submit" aria-label="Oblicz" title="Oblicz  Enter"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7a.5.5 0 0 0 0 1h13a.5.5 0 0 0 0-1zm0 5a.5.5 0 0 0 0 1h13a.5.5 0 0 0 0-1z"/></svg></button>
+            <button class="calc-go" type="submit" aria-label="Oblicz" title="Oblicz  Enter"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
           </div>
-          <div id="calc-keys" class="calc-keys" role="toolbar" aria-label="Wstaw symbol"></div>
-          <div class="calc-under">
-            <div id="calc-preview" class="calc-preview" aria-live="off"></div>
-            <label class="calc-digits">Cyfry
+          <div id="calc-preview" class="calc-preview" aria-live="off"></div>
+          <div class="calc-bar">
+            <div id="calc-keys" class="calc-keys" role="toolbar" aria-label="Wstaw symbol"></div>
+            <label class="calc-digits"><span>Cyfry</span>
               <select id="calc-digits"><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
             </label>
           </div>
+          <div class="calc-progress" aria-hidden="true"></div>
         </form>
         <div id="calc-status" class="calc-status" role="status" hidden>
           <span class="calc-spinner" aria-hidden="true"></span><span>Obliczanie…</span>
-          <button id="calc-stop" class="text-button" type="button">Przerwij</button>
+          <button id="calc-stop" class="calc-stop" type="button">Przerwij</button>
         </div>
-        <div id="calc-empty" class="calc-empty">
-          <h2>Kalkulator symboliczny</h2>
-          <p>Wyniki dokładne — ułamki, pierwiastki, π — a cyfry dziesiętne tylko te, które są pewne. Wpisz wyrażenie, równanie albo polecenie po polsku lub angielsku.</p>
-          <div id="calc-empty-examples" class="calc-empty-examples"></div>
-        </div>
+        <section id="calc-suggest" class="calc-suggest" aria-label="Przykłady">
+          <div id="calc-empty-tabs" class="calc-tabs" role="tablist" aria-label="Rodzaj przykładów"></div>
+          <div id="calc-empty-examples" class="calc-tiles" role="tabpanel"></div>
+        </section>
         <div id="calc-results" class="calc-results" aria-live="polite"></div>
       </div>
     </main>

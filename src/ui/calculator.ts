@@ -36,10 +36,12 @@ export const EXAMPLES: [string, [string, string][]][] = [
   ['Statystyka', [['{2, 4, 4, 4, 5, 5, 7, 9}', 'statystyki'], ['median(3, 1, 4, 1, 5, 9, 2, 6)', 'mediana']]],
 ];
 
-const KEYS: [string, string, string][] = [
-  ['√', 'sqrt()', 'pierwiastek'], ['^', '^', 'potęga'], ['π', 'π', 'pi'], ['e', 'e', 'liczba e'], ['i', 'i', 'jednostka urojona'], ['∞', '∞', 'nieskończoność'],
-  ['|x|', '||', 'wartość bezwzględna'], ['n!', '!', 'silnia'], ['≤', '<=', 'mniejsze lub równe'], ['≥', '>=', 'większe lub równe'], ['→', '->', 'dąży do (granica)'],
-  ['d/dx', 'pochodna ', 'pochodna'], ['∫', 'całka ', 'całka'], ['lim', 'granica ', 'granica'], ['Σ', 'sum(, k, 1, n)', 'suma'], ['[ ]', '[[, ], [, ]]', 'macierz'],
+/** Symbol keys in groups; a divider goes between groups. */
+const KEYS: [string, string, string][][] = [
+  [['√', 'sqrt()', 'pierwiastek'], ['^', '^', 'potęga'], ['|x|', '||', 'wartość bezwzględna'], ['n!', '!', 'silnia']],
+  [['π', 'π', 'pi'], ['e', 'e', 'liczba e'], ['i', 'i', 'jednostka urojona'], ['∞', '∞', 'nieskończoność']],
+  [['≤', '<=', 'mniejsze lub równe'], ['≥', '>=', 'większe lub równe'], ['→', '->', 'dąży do (granica)']],
+  [['d/dx', 'pochodna ', 'pochodna'], ['∫', 'całka ', 'całka'], ['lim', 'granica ', 'granica'], ['Σ', 'sum(, k, 1, n)', 'suma'], ['[ ]', '[[, ], [, ]]', 'macierz']],
 ];
 
 let client: CasClient | null = null;
@@ -68,22 +70,47 @@ export function initCalculator(): void {
   });
 
   const keys = $('calc-keys');
-  for (const [label, insert, title] of KEYS) {
-    const b = h('button', { type: 'button', class: 'calc-key', title, 'aria-label': title }, label);
-    b.addEventListener('click', () => insertAtCursor(input, insert));
-    keys.append(b);
-  }
+  KEYS.forEach((group, g) => {
+    if (g) keys.append(h('span', { class: 'calc-key-sep', 'aria-hidden': 'true' }));
+    for (const [label, insert, title] of group) {
+      const b = h('button', { type: 'button', class: 'calc-key', title, 'aria-label': title }, label);
+      b.addEventListener('click', () => insertAtCursor(input, insert));
+      keys.append(b);
+    }
+  });
 
-  const examples = $('calc-examples'), empty = $('calc-empty-examples');
-  for (const [group, items] of EXAMPLES) {
-    const chips = (cls: string) => h('div', { class: 'calc-chips' }, ...items.map(([q, label]) => {
-      const b = h('button', { type: 'button', class: cls, title: label }, q);
-      b.addEventListener('click', () => { input.value = q; preview(); compute(q); });
-      return b;
-    }));
-    examples.append(h('h3', { class: 'calc-group' }, group), chips('calc-chip'));
-    if (group !== 'Statystyka') empty.append(h('div', { class: 'calc-empty-group' }, h('h3', {}, group), chips('calc-chip')));
-  }
+  const run = (q: string) => { input.value = q; preview(); compute(q); };
+  const example = (cls: string, q: string, label: string) => {
+    const b = h('button', { type: 'button', class: cls, title: q }, h('span', { class: 'ex-label' }, label), h('span', { class: 'ex-query' }, q));
+    b.addEventListener('click', () => run(q));
+    return b;
+  };
+  // Side pane: one collapsible group per topic
+  $('calc-examples').append(...EXAMPLES.map(([group, items]) => h('details', { class: 'calc-acc' },
+    h('summary', {}, h('span', {}, group), h('span', { class: 'count' }, String(items.length))),
+    h('div', { class: 'calc-ex-list' }, ...items.map(([q, label]) => example('calc-ex', q, label))))));
+
+  // Empty state: topics as tabs, the chosen topic's examples as tiles
+  const tabs = $('calc-empty-tabs'), tiles = $('calc-empty-examples');
+  const pick = (i: number, focus = false) => {
+    [...tabs.children].forEach((t, k) => { t.setAttribute('aria-selected', String(k === i)); (t as HTMLElement).tabIndex = k === i ? 0 : -1; });
+    if (focus) (tabs.children[i] as HTMLElement).focus();
+    tiles.setAttribute('aria-labelledby', tabs.children[i].id);
+    tiles.replaceChildren(...EXAMPLES[i][1].map(([q, label]) => example('calc-tile', q, label)));
+  };
+  EXAMPLES.forEach(([group], i) => {
+    const t = h('button', { type: 'button', role: 'tab', id: `calc-tab-${i}`, 'aria-controls': 'calc-empty-examples' }, group);
+    t.addEventListener('click', () => pick(i));
+    tabs.append(t);
+  });
+  tabs.addEventListener('keydown', e => {
+    const at = [...tabs.children].findIndex(t => t.getAttribute('aria-selected') === 'true'), n = EXAMPLES.length;
+    const to = e.key === 'ArrowRight' ? (at + 1) % n : e.key === 'ArrowLeft' ? (at + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (to < 0) return;
+    e.preventDefault();
+    pick(to, true);
+  });
+  pick(0);
 
   $('calc-clear-history').addEventListener('click', () => { saved.history = []; persist(); renderHistory(); });
   $('calc-stop').addEventListener('click', () => client?.abort());
@@ -138,7 +165,7 @@ async function compute(query: string): Promise<void> {
   const status = $('calc-status'), results = $('calc-results');
   status.hidden = false;
   results.classList.add('busy');
-  $('calc-empty').hidden = true;
+  $('calc-empty').hidden = $('calc-suggest').hidden = true;
   const r = await client.run(q, { digits: saved.digits, ans });
   if (client.busy) return; // a newer question took over
   status.hidden = true;
@@ -151,11 +178,19 @@ function render(r: Result): void {
   const results = $('calc-results');
   const cards: HTMLElement[] = [];
   if (r.input) {
-    const body = h('div', { class: 'pod-row' }, h('div', { class: 'pod-math', html: r.input.ml }));
-    cards.push(card('Wejście', [body], r.interpreted ? `Rozumiem jako: ${r.interpreted}` : undefined));
+    // the question as understood: a heading over the results, not a card of its own
+    const head = h('header', { class: 'calc-query' }, h('span', { class: 'calc-query-label' }, 'Wejście'), h('div', { class: 'pod-math', html: r.input.ml }));
+    if (r.interpreted) head.append(h('p', { class: 'calc-query-note' }, `Rozumiem jako: ${r.interpreted}`));
+    cards.push(head);
   }
   if (r.error) cards.push(h('section', { class: 'pod pod-error', role: 'alert' }, h('p', {}, r.error)));
-  for (const p of r.pods) cards.push(podCard(p));
+  r.pods.forEach((p, i) => {
+    const c = podCard(p);
+    // the first card is the answer; plots and cards without rows take the full width
+    if (i === 0 && !r.error) c.classList.add('pod-primary');
+    if (p.plot || !p.rows.length) c.classList.add('pod-wide');
+    cards.push(c);
+  });
   results.replaceChildren(...cards);
   results.scrollTop = 0;
   $('calc').scrollTo({ top: 0 });
@@ -185,7 +220,7 @@ function podCard(p: Pod): HTMLElement {
   let extra: HTMLElement | undefined;
   if (p.more) {
     const more = p.more;
-    const b = h('button', { type: 'button', class: 'text-button pod-more' }, more.label);
+    const b = h('button', { type: 'button', class: 'pod-more' }, more.label);
     b.addEventListener('click', () => { $<HTMLInputElement>('calc-input').value = more.query; preview(); compute(more.query); });
     extra = b;
   }
