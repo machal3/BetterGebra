@@ -112,3 +112,11 @@ test('hand-off to the graph panel: the right mode, rows the panel reads', async 
   expect(plot('sin(x) = 1/2').xUnit).toBe('pi');
   expect(plot('x^3 - 3x').xUnit).toBeUndefined();
 });
+
+test('float underflow is not a zero: x^200 has one, at 0', () => {
+  const plot = run('x^200').pods.find(p => p.plot)!.plot as Plot;
+  expect(plot.marks.filter(m => m.kind === 'zero').map(m => m.x)).toEqual([0]);
+  const pods = run('analyze(x^200)').pods;
+  expect(pods.find(p => p.title === 'Ekstrema lokalne')!.rows[0].text).toBe('minimum lokalne: x = 0, f = 0');
+  expect(run('solve(x^200 - x^199 = 0)').pods[0].rows.map(r => r.text)).toEqual(['x = 0', 'x = 1']);
+});

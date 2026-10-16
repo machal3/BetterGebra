@@ -6,6 +6,7 @@
 import { compileComplex } from '../math/complex';
 import { compileRow } from '../model';
 import { compile } from '../math/real';
+import { zeroRuns } from '../math/analysis';
 import { type Expr, ZERO, isZero, sub, subst, sym, variables } from './expr';
 import { compileDouble, type RealFn } from './fast';
 import { toText } from './format';
@@ -201,8 +202,10 @@ export function features(f: RealFn, lo: number, hi: number, kinds: MarkKind[], s
   // no jump within the step from i to i + 1
   const smooth = (i: number) => ok(ys[i]) && ok(ys[i + 1]) && Math.abs(ys[i + 1] - ys[i]) < gap;
   if (want.has('zero')) {
+    // samples that are exactly 0: one zero per run, and none from float underflow (x²⁰⁰ near 0)
+    for (const x of zeroRuns(xs, ys)) out.push({ x, kind: 'zero' });
     for (let i = 0; i <= N; i++) {
-      if (ys[i] === 0) { out.push({ x: xs[i], kind: 'zero' }); continue; }
+      if (ys[i] === 0) continue;
       if (i === N || !smooth(i) || ys[i] * ys[i + 1] >= 0) continue;
       let l = xs[i], r = xs[i + 1], fl = ys[i];
       for (let k = 0; k < 64; k++) {

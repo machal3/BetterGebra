@@ -50,11 +50,22 @@ export function solveEquation(f: Expr, x: string): SolveResult {
   let sols: Sol[] | null = null, note: string | undefined, numericRange: [number, number] | undefined;
   // polynomial in x
   // ponytail: exact and numeric roots up to degree 60 (~1 s); above, the root refinement alone runs past the time limit
-  const coeffs = coeffsOf(N, x, 60);
+  let coeffs = coeffsOf(N, x, 60), zeroMult = 0;
+  if (!coeffs) {
+    // x²⁰⁰, x¹⁹⁹·(x − 1): the power of x comes out as the root 0, what is left may be of low degree
+    const all = coeffsOf(N, x, 10000);
+    const k = all?.findIndex(c => !isZero(c)) ?? -1;
+    if (all && k > 0 && all.every(isNum) && all.length - 1 - k <= 60) { zeroMult = k; coeffs = all.slice(k); }
+  }
   if (coeffs) {
     if (coeffs.every(isNum)) {
       const p = coeffs.map(c => (c as { v: Q }).v);
       sols = solvePoly(p).map(r => ({ exact: r.exact, approx: r.approx, mult: r.mult, family: false }));
+      if (zeroMult) {
+        // in order: after the negative real roots, before the positive ones and the complex ones
+        const at = sols.findIndex(r => !!r.approx && (!isRealC(r.approx) || bfToNumber(r.approx.re) > 0));
+        sols.splice(at < 0 ? sols.length : at, 0, { exact: ZERO, approx: { re: BZERO, im: BZERO }, mult: zeroMult, family: false });
+      }
     } else {
       sols = symbolicPoly(coeffs);
       // "no solutions" would be a false answer: it is only that this method doesn't reach them

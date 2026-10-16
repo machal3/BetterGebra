@@ -78,3 +78,10 @@ test('axis labels: numbers, multiples of π, degrees', () => {
   expect(unitLabel('deg', Math.PI / 6)).toBe('30°');
   expect(unitLabel('deg', -Math.PI)).toBe('-180°');
 });
+
+test('roots: an underflow plateau is one root in its middle, a run of true zeros its start', async () => {
+  const { roots } = await import('../src/math');
+  expect(roots(x => x ** 200, -10, 10)).toEqual([0]);
+  expect(roots(x => (x - 3) ** 100, -10, 10).map(r => Math.round(r * 1e9) / 1e9)).toEqual([3]);
+  expect(roots(Math.floor, -0.5, 0.75)).toEqual([0]);
+});

@@ -24,6 +24,32 @@ function goldenMin(g: (x: number) => number, a: number, b: number, scale: number
   return (a + b) / 2;
 }
 
+/** Below this a value is mostly the tail of a float underflow, not a size: x²⁰⁰ at 0,03 is 1e−305. */
+const UNDERFLOW = 1e-200;
+
+/**
+ * One root per run of samples that are exactly 0: where it starts (⌊x⌋ on [0; 1) is 0 throughout), or its middle
+ * when the values around it are tiny. Then the zeros are underflow (x²⁰⁰ is 0 in doubles for |x| < 0,024) and only
+ * the middle is a root; a run at an edge of the range can't be placed and gives none.
+ */
+export function zeroRuns(xs: number[], ys: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < ys.length; i++) {
+    if (ys[i] !== 0) continue;
+    let j = i;
+    while (j + 1 < ys.length && ys[j + 1] === 0) j++;
+    const around = [ys[i - 1], ys[j + 1]].filter(y => y !== undefined && Number.isFinite(y));
+    const underflow = j > i && around.length > 0 && around.every(y => Math.abs(y) < UNDERFLOW);
+    if (!underflow) out.push(xs[i]);
+    else if (i > 0 && j < ys.length - 1) {
+      const mid = (xs[i] + xs[j]) / 2, step = xs[1] - xs[0];
+      out.push(Math.abs(mid) < 1e-9 * step ? 0 : mid);
+    }
+    i = j;
+  }
+  return out;
+}
+
 export function roots(fn: RealFunction, min: number, max: number): number[] {
   const N = 4000, step = (max - min) / N, found: number[] = [], abs = Math.abs;
   const add = (x: number) => {
@@ -31,10 +57,10 @@ export function roots(fn: RealFunction, min: number, max: number): number[] {
     if (!found.some(r => abs(r - x) < step / 2)) found.push(x);
   };
   const ys = Array.from({ length: N + 1 }, (_, i) => fn(min + i * step));
+  for (const x of zeroRuns(ys.map((_, i) => min + i * step), ys)) add(x);
   for (let i = 0; i <= N && found.length < 50; i++) {
     const x = min + i * step, y = ys[i], prev = ys[i - 1], next = ys[i + 1];
-    // A run of zeros (floor x on [0; 1)) reports only its start.
-    if (y === 0) { if (prev !== 0) add(x); continue; }
+    if (y === 0) continue;
     if (i && prev !== 0 && finite(prev) && finite(y) && Math.sign(prev) !== Math.sign(y)) {
       let a = x - step, b = x, fa = prev;
       for (let m = (a + b) / 2; m > a && m < b; m = (a + b) / 2) {

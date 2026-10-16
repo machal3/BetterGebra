@@ -4,7 +4,7 @@
  * (Polish or English, with or without parentheses) their own cards. Everything here runs in the worker.
  */
 import './functions';
-import { bfToNumber } from './bigfloat';
+import { bfSign, bfToNumber } from './bigfloat';
 import { diff, diffN, limit, Lim, taylor } from './calculus';
 import { Env, Value, evaluate, ex, scalar, setInverse, dims, matMul } from './evaluate';
 import { Expr, I, INF, ONE, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isFn } from './expr';
@@ -1479,7 +1479,13 @@ function analyzeCommand(args: Node[], env: Env, onlyExtrema = false): Out {
       if (!inDom(v)) continue;
       const h = 1e-6 * Math.max(1, Math.abs(v));
       const g = compileDouble(d1, x);
-      const l = g(v - h), r = g(v + h);
+      let l = g(v - h), r = g(v + h);
+      // f′ of x⁶⁰ at ±10⁻⁶ is 0 in doubles (underflow): then its exact sign there
+      if (s.exact && (!l || !r || !Number.isFinite(l) || !Number.isFinite(r))) {
+        const sign = (t: Expr) => safe(() => bfSign(evalC(subst(d1, x, t), 200).re)) ?? 0;
+        const H = num(q(1n, 1000000n));
+        l = sign(sub(s.exact, H)); r = sign(add(s.exact, H));
+      }
       let kind = '';
       if (l > 0 && r < 0) kind = 'maksimum lokalne'; else if (l < 0 && r > 0) kind = 'minimum lokalne'; else continue;
       const at = s.exact ?? null;
