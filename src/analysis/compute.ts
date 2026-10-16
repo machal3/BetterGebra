@@ -22,6 +22,7 @@ export interface Mark { x: number; y: number; text: string; color?: string }
 export interface AnalysisResult {
   gen: number;
   activeId: number;
+  mode: Mode;
   /** Value texts at x = 0 and x = 1 (not for sets). */
   values: [string, string] | null;
   roots: string;
@@ -41,7 +42,7 @@ export function analyse(req: AnalysisRequest): AnalysisResult {
   const rows: Row[] = req.functions.map(f => ({ f, c: compileRow(f, req.mode, params) }));
   const active = rows.find(r => r.f.id === req.activeId);
   const shown = rows.filter(r => r.f.visible && r.c.ok);
-  const result: AnalysisResult = { gen: req.gen, activeId: req.activeId, values: null, roots: '—', intersections: null, marks: [], snaps: [], setPoints: {} };
+  const result: AnalysisResult = { gen: req.gen, activeId: req.activeId, mode: req.mode, values: null, roots: '—', intersections: null, marks: [], snaps: [], setPoints: {} };
   if (req.mode === 'complex') return active?.c.ok ? analyseComplex(req, active, shown, result) : result;
   // Wykresy: the sets' solutions are needed for drawing whichever row is active; the graph analysis for a graph
   analyseSets(req, rows, active, result);

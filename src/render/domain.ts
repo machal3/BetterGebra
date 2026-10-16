@@ -157,10 +157,17 @@ class GLPainter {
     this.gl = this.canvas.getContext('webgl2', { premultipliedAlpha: false, antialias: false });
     const gl = this.gl;
     if (!gl) return;
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    this.initBuffer();
     this.canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.programs.clear(); });
+    // A restored context has lost every buffer too, not only the programs.
+    this.canvas.addEventListener('webglcontextrestored', () => this.initBuffer());
+  }
+
+  /** One triangle covering the canvas. */
+  private initBuffer(): void {
+    const gl = this.gl!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   }
 
   get available() { return !!this.gl && !this.gl.isContextLost(); }

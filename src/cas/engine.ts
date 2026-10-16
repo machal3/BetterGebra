@@ -416,9 +416,9 @@ function solutionRows(sols: Sol[], x: string): Row[] {
       const e = s.exact;
       const fam = s.family;
       const shown = fam ? familyOrder(e) : toML(e);
-      const famML = fam ? `${mo(',')}<mspace width="0.4em"/>${mi('k')}${mo('∈')}<mi mathvariant="normal">ℤ</mi>${s.excludeK0 ? `${mo('∖')}${mo('{')}<mn>0</mn>${mo('}')}` : ''}` : '';
+      const famML = fam ? `${mo(',')}<mspace width="0.4em"/>${mi('k')}${mo('∈')}<mi mathvariant="normal">ℤ</mi>${s.excludeK?.length ? `${mo('∖')}${mo('{')}${s.excludeK.map(k => k < 0n ? `${mo('−')}<mn>${-k}</mn>` : `<mn>${k}</mn>`).join(mo(','))}${mo('}')}` : ''}` : '';
       const note = [s.mult > 1 ? `pierwiastek ${s.mult}-krotny` : '', !fam && !isNum(e) && isConstant(e) ? shortApprox(e) : ''].filter(Boolean).join(', ');
-      return { ml: M(`${lhs}${mo('=')}${shown}${famML}`), text: `${x} = ${toText(e)}${fam ? `, k ∈ ℤ${s.excludeK0 ? ' ∖ {0}' : ''}` : ''}`, note: note || undefined };
+      return { ml: M(`${lhs}${mo('=')}${shown}${famML}`), text: `${x} = ${toText(e)}${fam ? `, k ∈ ℤ${s.excludeK?.length ? ` ∖ {${s.excludeK.map(k => String(k).replace('-', '−')).join(', ')}}` : ''}` : ''}`, note: note || undefined };
     }
     const z = s.approx!;
     const d = complexDecimal(z, 20);
@@ -1311,9 +1311,17 @@ function sumCommand(name: 'sum' | 'product', args: Node[], env: Env): Out {
     const ratio = ratioHint(e, k);
     if (ratio !== null && ratio < 0.95) {
       const f = compileDouble(e, k);
-      let s = 0, j = Number(a.v.n);
-      for (let it = 0; it < 100000; it++, j++) { const t = f(j); if (!Number.isFinite(t)) break; s += t; if (Math.abs(t) < 1e-17 * Math.max(1, Math.abs(s))) break; }
-      return { pods: [{ title: 'Suma', rows: [{ ml: M(`${head}${mo('≈')}<mn>${String(Number(s.toPrecision(14))).replace('.', ',')}</mn>`), text: String(s) }], note: 'Nie znalazłem postaci zamkniętej; wartość numeryczna (wyrazy maleją jak ciąg geometryczny, więc reszta jest pomijalna).' }, ...seq(s)] };
+      let s = 0, c = 0, j = Number(a.v.n);
+      for (let it = 0; it < 100000; it++, j++) {
+        const t = f(j);
+        if (!Number.isFinite(t)) break;
+        const y = s + t;
+        c += Math.abs(s) >= Math.abs(t) ? (s - y) + t : (t - y) + s;
+        s = y;
+        if (Math.abs(t) < 1e-17 * Math.max(1, Math.abs(s + c))) break;
+      }
+      const total = s + c;
+      return { pods: [{ title: 'Suma', rows: [{ ml: M(`${head}${mo('≈')}<mn>${String(Number(total.toPrecision(14))).replace('.', ',')}</mn>`), text: String(total) }], note: 'Nie znalazłem postaci zamkniętej; wartość numeryczna (wyrazy maleją jak ciąg geometryczny, więc reszta jest pomijalna).' }, ...seq(total)] };
     }
   }
   return { pods: [{ title: 'Suma', rows: [textRow('Nie znalazłem postaci zamkniętej tej sumy.')], note: r.note }] };

@@ -7,7 +7,7 @@
  */
 import {
   E, Expr, MINUS_ONE, ONE, PI, TWO, ZERO, add, children, div, expand, fn, freeOf, isConstant, isFn, isInt, isNum, isSym, isZero, mul, neg, num,
-  numDen, pow, same, sqrt, sub, subst, sym, together, key,
+  numDen, pow, same, sqrt, sub, subst, sym, together, key, variables,
 } from './expr';
 import { compileDouble } from './fast';
 import { approx, evalC, C } from './numeric';
@@ -25,8 +25,8 @@ export interface Sol {
   mult: number;
   /** Contains the integer parameter k (a family of solutions). */
   family: boolean;
-  /** The family member k = 0 is not a solution (x = kπ, k ≠ 0 for sin x / x = 0). */
-  excludeK0?: boolean;
+  /** Family members that are not solutions (x = kπ, k ≠ 0 for sin x / x = 0). */
+  excludeK?: bigint[];
 }
 export type SolveResult =
   | { kind: 'list'; sols: Sol[]; note?: string; numericRange?: [number, number] }
@@ -49,20 +49,26 @@ export function solveEquation(f: Expr, x: string): SolveResult {
   const [N, D] = numDen(t);
   let sols: Sol[] | null = null, note: string | undefined, numericRange: [number, number] | undefined;
   // polynomial in x
-  const coeffs = coeffsOf(N, x, 200);
+  // ponytail: exact and numeric roots up to degree 60 (~1 s); above, the root refinement alone runs past the time limit
+  const coeffs = coeffsOf(N, x, 60);
   if (coeffs) {
     if (coeffs.every(isNum)) {
       const p = coeffs.map(c => (c as { v: Q }).v);
       sols = solvePoly(p).map(r => ({ exact: r.exact, approx: r.approx, mult: r.mult, family: false }));
     } else {
       sols = symbolicPoly(coeffs);
-      if (!sols) return { kind: 'none', note: 'Wielomian stopnia powyżej 2 z parametrami: nie umiem go rozwiązać.' };
-      if (coeffs.length === 2) note = `Przy założeniu, że ${textOf(coeffs[1])} ≠ 0.`;
-      if (coeffs.length === 3) note = `Przy założeniu, że ${textOf(coeffs[2])} ≠ 0.`;
+      // "no solutions" would be a false answer: it is only that this method doesn't reach them
+      if (!sols) return fail('Wielomian stopnia powyżej 2 z parametrami: nie umiem go rozwiązać.');
+      const lead = coeffs[coeffs.length - 1];
+      if ((coeffs.length === 2 || coeffs.length === 3) && !isNum(lead)) note = `Przy założeniu, że ${textOf(lead)} ≠ 0.`;
     }
   } else {
     sols = transcendental(N, x);
     if (!sols) {
+      // with parameters there is nothing to evaluate numerically: finding nothing wouldn't mean there is nothing
+      if (variables(N).some(v => v !== x)) {
+        fail('Nie umiem rozwiązać tego równania dokładnie, a z parametrami nie da się go rozwiązać numerycznie.');
+      }
       const r = numericReal(N, x, -50, 50);
       sols = r;
       numericRange = [-50, 50];
@@ -91,16 +97,32 @@ const closeC = (a: C, b: C) => {
   return dr + di < 1e-12 * m;
 };
 
-/** The solution makes the original f vanish (with k = 0 and 1 for families) and doesn't zero the denominator. */
+/**
+ * The solution makes the original f vanish and doesn't zero the denominator. A family is tested at k = −6…6: when
+ * only odd (even) k work it becomes x(2k + 1) (x(2k)); one or two members that fail (sin x / x = 0 at k = 0,
+ * sin x / (x − π) = 0 at k = 1) are left out of it; more failures reject it.
+ */
 function checkSolution(f: Expr, x: string, s: Sol, D: Expr): boolean {
-  const values: Expr[] = [];
-  if (s.exact) {
-    if (s.family) {
-      values.push(subst(s.exact, 'k', ONE), subst(s.exact, 'k', TWO), subst(s.exact, 'k', MINUS_ONE));
-      // k = 0 alone may fail (sin x / x = 0): keep the family, without that member
-      if (!checkSolution(f, x, { ...s, exact: subst(s.exact, 'k', ZERO), family: false }, D)) s.excludeK0 = true;
-    } else values.push(s.exact);
+  if (s.exact && s.family) {
+    const failing = (e: Expr, ks: number[]) =>
+      ks.filter(k => !checkSolution(f, x, { ...s, exact: subst(e, 'k', num(k)), family: false }, D));
+    const ks = Array.from({ length: 13 }, (_, j) => j - 6);
+    let e = s.exact, bad = failing(e, ks);
+    const odd = (k: number) => Math.abs(k) % 2 === 1;
+    if (bad.length > 2) {
+      if (ks.filter(odd).every(k => !bad.includes(k))) e = subst(e, 'k', add(mul(TWO, K), ONE));
+      else if (ks.filter(k => !odd(k) && k !== 0).every(k => !bad.includes(k))) e = subst(e, 'k', mul(TWO, K));
+      else return false;
+      bad = failing(e, ks.filter(k => Math.abs(k) <= 3));
+      if (bad.length > 2) return false;
+    }
+    s.exact = e;
+    s.approx = approxOf(e);
+    if (bad.length) s.excludeK = bad.map(BigInt);
+    return true;
   }
+  const values: Expr[] = [];
+  if (s.exact) values.push(s.exact);
   if (!values.length && s.approx) return checkNumeric(f, x, s.approx, D);
   for (const v of values) {
     if (!isConstant(v)) continue; // symbolic parameters: can't test here
@@ -170,7 +192,7 @@ function transcendental(N: Expr, x: string): Sol[] | null {
   // 3. a single kernel (eˣ, sin x, ln x …): a polynomial in it
   const viaKernel = kernelSubstitution(N, x);
   if (viaKernel) return viaKernel;
-  // 4. trigonometric: rewrite multiple angles, then sin² ↔ cos² (and split products again)
+  // 4. trigonometric: rewrite multiple angles, then sin² ↔ cos² (and split products again), or a·sin(u) + b·cos(u) + d = 0
   if (hasTrig(N)) {
     const te = expand(trigExpand(N));
     const tf = factorWithKernels(te, x);
@@ -179,12 +201,43 @@ function transcendental(N: Expr, x: string): Sol[] | null {
       const r = kernelSubstitution(expand(replaceEven(te, from, to)), x);
       if (r) return r;
     }
+    const linTrig = solveLinearTrig(te, x);
+    if (linTrig) return linTrig;
   }
   // 5. products of powers on both sides: take logarithms
   const logs = logBothSides(N, x);
   if (logs) return logs;
   // 6. one square root: A + B√u = 0 ⇒ A² − B²u = 0, candidates checked against the original
   return radical(N, x);
+}
+
+/** Solve a·sin(u) + b·cos(u) + d = 0 where a, b, d are free of x and u is linear in x. */
+function solveLinearTrig(e: Expr, x: string): Sol[] | null {
+  const args = new Map<string, Expr>();
+  const visit = (n: Expr) => {
+    if (freeOf(n, x)) return;
+    if (isFn(n, 'sin') || isFn(n, 'cos')) { args.set(key(n.a[0]), n.a[0]); return; }
+    children(n).forEach(visit);
+  };
+  visit(e);
+  if (args.size !== 1) return null;
+  const [u] = args.values();
+  const S = sym('ŝ'), C_ = sym('ĉ');
+  const M = replaceAll(replaceAll(e, fn('sin', u), S), fn('cos', u), C_);
+  if (!freeOf(M, x)) return null;
+  const cs = coeffsOf(M, 'ŝ', 1);
+  if (!cs || cs.length !== 2 || !freeOf(cs[1], 'ĉ')) return null;
+  const cc = coeffsOf(cs[0], 'ĉ', 1);
+  if (!cc || cc.length !== 2) return null;
+  const a = cs[1], b = cc[1], d = cc[0];
+  // a·sin(u) + b·cos(u) = R·sin(u + φ) = -d where R = √(a² + b²)
+  const R2 = expand(add(pow(a, TWO), pow(b, TWO)));
+  if (isZero(R2)) return null;
+  const R = sqrt(R2);
+  // When d = 0: tan(u) = -b/a
+  if (isZero(d)) return isolate(fn('tan', u), neg(div(b, a)), x);
+  const phi = isConstant(a) && constSign(a) === -1 ? add(fn('atan', div(b, a)), PI) : fn('atan', div(b, a));
+  return isolate(fn('sin', add(u, phi)), div(neg(d), R), x);
 }
 
 /** Factors with every function call / exponential treated as a separate unknown: 2 sin x cos x − cos x = cos x (2 sin x − 1). */
@@ -235,7 +288,7 @@ function replaceEven(e: Expr, from: 'sin' | 'cos', to: 'sin' | 'cos'): Expr {
     return mul(pow(sub(ONE, pow(fn(to, e.b.a[0]), TWO)), num(n / 2n)), pow(e.b, num(n % 2n)));
   }
   if (e.k === 'n' || e.k === 's') return e;
-  return e.k === '+' ? add(...e.t.map(t => replaceEven(t, from, to))) : e.k === '*' ? mul(...e.t.map(t => replaceEven(t, from, to))) : e;
+  return e.k === '+' ? add(...e.t.map(t => replaceEven(t, from, to))) : e.k === '*' ? mul(...e.t.map(t => replaceEven(t, from, to))) : e.k === '^' ? pow(replaceEven(e.b, from, to), e.e) : e;
 }
 
 /** Solve g(x) = c with x occurring once in g. */
@@ -265,7 +318,18 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
         const r = pow(c, num(q(1n, N_)));
         return [...(isolate(g.b, neg(r), x) ?? []), ...(isolate(g.b, r, x) ?? [])];
       }
-      // h^(p/q) = c → h = c^(q/p) (checked afterwards)
+      if (isNum(n)) {
+        const p = n.v.n, q_ = n.v.d;
+        if (p < 0n) return isolate(pow(g.b, num(q(-p, q_))), pow(c, MINUS_ONE), x);
+        const s = constSign(c);
+        if (q_ % 2n === 0n && s === -1) return [];
+        if (p % 2n === 0n && s === -1) return [];
+        if (s === 0) return isolate(g.b, ZERO, x);
+        const r = s !== null && s < 0 ? neg(pow(neg(c), num(q(q_, p)))) : pow(c, num(q(q_, p)));
+        if (p % 2n === 0n) return [...(isolate(g.b, neg(r), x) ?? []), ...(isolate(g.b, r, x) ?? [])];
+        return isolate(g.b, r, x);
+      }
+      // h^n = c → h = c^(1/n) (checked afterwards)
       return isolate(g.b, pow(c, pow(n, MINUS_ONE)), x);
     }
     if (freeOf(g.b, x)) {
@@ -303,7 +367,7 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
       case 'cosh': if (!between(1, Infinity)) return []; return both([neg(fn('acosh', c)), fn('acosh', c)]);
       case 'tanh': return between(-1, 1) ? both([fn('atanh', c)]) : [];
       case 'abs': if (s === -1) return []; if (s === 0) return both([ZERO]); return both([neg(c), c]);
-      case 'sqrt': return both([pow(c, TWO)]);
+      case 'sqrt': if (s === -1) return []; return both([pow(c, TWO)]);
     }
   }
   return null;
@@ -313,10 +377,12 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
 function kernelSubstitution(N: Expr, x: string): Sol[] | null {
   // e^(a·x + b) with rational a: write as e^b·(e^(g·x))^(a/g)
   const exps: Q[] = [];
+  let allLinear = true;
   const visit = (e: Expr) => {
     if (e.k === '^' && !freeOf(e.e, x) && freeOf(e.b, x)) {
       const c = coeffsOf(e.e, x, 1);
       if (c && c.length === 2 && isNum(c[1])) exps.push((c[1] as { v: Q }).v);
+      else allLinear = false;
     }
     children(e).forEach(visit);
   };
@@ -325,7 +391,7 @@ function kernelSubstitution(N: Expr, x: string): Sol[] | null {
   const bases = new Set<string>();
   const collectBases = (e: Expr) => { if (e.k === '^' && !freeOf(e.e, x) && freeOf(e.b, x)) bases.add(key(e.b)); children(e).forEach(collectBases); };
   collectBases(N);
-  if (exps.length && bases.size === 1) {
+  if (allLinear && exps.length && bases.size === 1) {
     const g = exps.reduce((a, b) => qGcd(a, b));
     const baseExpr = (() => { let b: Expr | null = null; const f = (e: Expr) => { if (!b && e.k === '^' && !freeOf(e.e, x) && freeOf(e.b, x)) b = e.b; children(e).forEach(f); }; f(N); return b as unknown as Expr; })();
     const kernel = pow(baseExpr, mul(num(g), sym(x)));

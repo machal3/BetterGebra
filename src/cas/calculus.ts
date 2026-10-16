@@ -3,7 +3,7 @@
  * from the series' leading term when the expression has a Laurent expansion at the point; otherwise by
  * structural rules with l'Hôpital's rule; every answer is cross-checked numerically at 100 digits.
  */
-import { E, Expr, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren } from './expr';
+import { E, Expr, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren, isInt, HALF } from './expr';
 import { evalC, approx } from './numeric';
 import { CasError, Q, fail, q, qint, qsign } from './q';
 import { bfToNumber, top } from './bigfloat';
@@ -196,7 +196,9 @@ function seriesRaw(e: Expr, t: string, o: number): Ser {
       const a = series(e.a[0], t, o);
       // ln t, |t|, ⌊t⌋ … have no Laurent expansion at a zero / breakpoint of their argument
       if (e.n === 'ln' && a.v !== 0) nope();
-      if (['abs', 'sign', 'floor', 'ceil', 'round', 'frac'].includes(e.n) && (a.v !== 0 || !isConstant(a.c[0]))) nope();
+      if ((e.n === 'abs' || e.n === 'sign') && (a.v !== 0 || constSignOf(a.c[0]) === null)) nope();
+      if ((e.n === 'floor' || e.n === 'ceil' || e.n === 'frac') && (a.v !== 0 || !isConstant(a.c[0]) || isInt(a.c[0]) || !isInt(fn('floor', a.c[0])))) nope();
+      if (e.n === 'round' && (a.v !== 0 || !isConstant(a.c[0]) || isInt(add(a.c[0], HALF)) || !isInt(fn('round', a.c[0])))) nope();
       return sCompose(e.n, a, o);
     }
     case 'n': return sConst(e, o);
@@ -277,9 +279,28 @@ function assumePositive(e: Expr, t: string): Expr {
   if (e.k === 'n' || e.k === 's') return e;
   const m = mapChildren(e, c => assumePositive(c, t));
   if (m.k === '^' && m.b.k === '^' && isSym(m.b.b, t)) return pow(m.b.b, mul(m.b.e, m.e));
-  if (m.k === 'f' && (m.n === 'abs' || m.n === 'sign') && !freeOf(m.a[0], t)) {
-    const s = sideOf(m.a[0], t);
-    if (s) return m.n === 'abs' ? mul(num(s), m.a[0]) : num(s);
+  if (m.k === 'f' && m.a.length === 1 && !freeOf(m.a[0], t)) {
+    const u = m.a[0];
+    if (m.n === 'abs' || m.n === 'sign') {
+      const s = sideOf(u, t);
+      if (s) return m.n === 'abs' ? mul(num(s), u) : num(s);
+    }
+    if (m.n === 'floor' || m.n === 'ceil' || m.n === 'frac' || m.n === 'round') {
+      let c0: Expr | null = null;
+      try { c0 = subst(u, t, ZERO); } catch { c0 = null; }
+      if (c0 && freeOf(c0, t)) {
+        if ((m.n === 'floor' || m.n === 'ceil' || m.n === 'frac') && isInt(c0)) {
+          const s = sideOf(sub(u, c0), t);
+          if (s === 1) return m.n === 'floor' ? c0 : m.n === 'ceil' ? add(c0, ONE) : sub(u, c0);
+          if (s === -1) return m.n === 'floor' ? sub(c0, ONE) : m.n === 'ceil' ? c0 : add(sub(u, c0), ONE);
+        }
+        if (m.n === 'round' && isInt(add(c0, HALF))) {
+          const s = sideOf(sub(u, c0), t);
+          if (s === 1) return add(c0, HALF);
+          if (s === -1) return sub(c0, HALF);
+        }
+      }
+    }
   }
   return m;
 }
@@ -380,6 +401,25 @@ function structural(e: Expr, t: string, depth: number): Lim | null {
 
 function applyFn(name: string, inner: Lim, t: string, whole: Expr): Lim | null {
   if (inner.kind === 'fin') {
+    if (whole.k === 'f' && whole.a.length === 1) {
+      const u = whole.a[0];
+      if ((name === 'floor' || name === 'ceil' || name === 'frac') && isInt(inner.v)) {
+        const s = sideOf(sub(u, inner.v), t);
+        if (s === null) return null;
+        if (name === 'floor') return fin(s > 0 ? inner.v : sub(inner.v, ONE));
+        if (name === 'ceil') return fin(s > 0 ? add(inner.v, ONE) : inner.v);
+        return fin(s > 0 ? ZERO : ONE);
+      }
+      if (name === 'round' && isInt(add(inner.v, HALF))) {
+        const s = sideOf(sub(u, inner.v), t);
+        if (s === null) return null;
+        return fin(s > 0 ? add(inner.v, HALF) : sub(inner.v, HALF));
+      }
+      if (name === 'sign' && isZero(inner.v)) {
+        const s = sideOf(u, t);
+        return s === null ? null : fin(num(s));
+      }
+    }
     try {
       const v = name === 'exp' ? pow(E, inner.v) : fn(name, inner.v);
       if (isInf(v)) return { kind: 'inf', s: infSign(v) as 1 | -1 };

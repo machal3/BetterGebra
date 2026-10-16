@@ -42,12 +42,21 @@ export function addAndFocus(after?: FnState): void {
 
 /**
  * The row in the calculator's notation: parameters replaced by their slider values (a·sin(b·x) with a = 2, b = 3
- * → (2) sin((3) x)), decimal commas as points, the "y =" prefix dropped. The calculator works without parameters.
+ * → (2) sin 3 x), decimal commas as points, the "y =" prefix dropped. The calculator works without parameters.
  */
 function calculatorText(expression: string, params: Params, keep: string[]): string {
-  return tokenize(expression.replace(/^\s*(?:y|[a-z]\s*\(\s*x\s*\))\s*=/i, ''))
-    .map(t => /^\d+,\d+$/.test(t) ? t.replace(',', '.') : /^[a-z]$/.test(t) && ![...keep, 'e', 'i'].includes(t) && Object.hasOwn(params, t) ? `(${params[t]})` : t)
-    .join(' ');
+  const toks = tokenize(expression.replace(/^\s*(?:[wy]|[a-z]\s*\(\s*[xz]\s*\))\s*=(?![=<>])/i, ''));
+  return toks.map((t, i) => {
+    if (/^\d+,\d+(?:e[+-]?\d+)?$/i.test(t)) return t.replace(',', '.');
+    if (/^[a-z]$/.test(t) && ![...keep, 'e', 'i'].includes(t) && Object.hasOwn(params, t)) {
+      const v = params[t];
+      const prev = toks[i - 1];
+      // right after a function name, (3) would be read as its whole argument: sin ax → sin 3 x, not sin(3)·x
+      if (prev && /^[a-z]{2,}$/.test(prev)) return String(v);
+      return `(${v})`;
+    }
+    return t;
+  }).join(' ');
 }
 /** Each side in the calculator's notation, the comparisons between them kept. */
 const sidesText = (text: string, params: Params, keep: string[]) =>
@@ -62,7 +71,7 @@ export function calculatorQuery(f: FnState, mode: Mode, params: Params): { label
   if (!text) return null;
   try {
     if (mode === 'complex') {
-      return { label: 'Miejsca zerowe w kalkulatorze', title: 'Dokładne rozwiązania f(z) = 0, także zespolone, z wykresem na płaszczyźnie', query: `${calculatorText(text.replace(/^\s*(?:w|f\s*\(\s*z\s*\))\s*=/i, ''), params, ['z'])} = 0` };
+      return { label: 'Miejsca zerowe w kalkulatorze', title: 'Dokładne rozwiązania f(z) = 0, także zespolone, z wykresem na płaszczyźnie', query: `${calculatorText(text, params, ['z'])} = 0` };
     }
     const kind = rowKind(text);
     if (kind.kind === 'graph') {
@@ -78,8 +87,12 @@ export function calculatorQuery(f: FnState, mode: Mode, params: Params): { label
     }
     // a set in z: only an equation (z² = −1); not inequalities, |z|, Re, Im, nor numbers with unknowns (t + 2i)
     const parts = kind.text.split(RELATION).map(t => t.trim());
-    if (parts.length !== 3 || parts[1] !== '=' || /\||\b(?:re|im|arg|conj)\b/i.test(kind.text)) return null;
-    if (!/z/i.test(parts[0]) || !/z/i.test(kind.text.replace(/^\s*z\s*=/i, ''))) return null;
+    if (parts.length !== 3 || parts[1] !== '=' || text.includes('|')) return null;
+    const allToks = [...tokenize(parts[0]), ...tokenize(parts[2])];
+    if (allToks.some(t => ['re', 'im', 'arg', 'conj', 'abs'].includes(t))) return null;
+    if (!allToks.includes('z')) return null;
+    if (/^z$/i.test(parts[0]) && !tokenize(parts[2]).includes('z')) return null;
+    if (/^z$/i.test(parts[2]) && !tokenize(parts[0]).includes('z')) return null;
     return { label: 'Rozwiąż w kalkulatorze', title: 'Dokładne rozwiązania równania, także zespolone', query: `${calculatorText(parts[0], params, ['z'])} = ${calculatorText(parts[2], params, ['z'])}` };
   } catch {
     return null;
@@ -239,6 +252,14 @@ function buildSettings(f: FnState, row: Row): void {
   const tidy = (input: HTMLInputElement, v: number) => { if (!domainError.textContent) input.value = endText(v); };
   from.addEventListener('blur', () => tidy(from, f.from));
   to.addEventListener('blur', () => tidy(to, f.to));
+  // A wrong interval left behind when the settings closed is dropped on reopening: they show the real one.
+  row.settings.addEventListener('beforetoggle', e => {
+    if ((e as ToggleEvent).newState !== 'open' || !domainError.textContent) return;
+    domainError.textContent = '';
+    for (const input of [from, to]) input.setAttribute('aria-invalid', 'false');
+    from.value = endText(f.from);
+    to.value = endText(f.to);
+  });
   from.addEventListener('input', readEnds);
   to.addEventListener('input', readEnds);
   fromEnds.addEventListener('change', e => { f.fromOpen = (e.target as HTMLInputElement).value === 'open'; commit('style'); });

@@ -11,8 +11,12 @@ export function sugar(raw: string): string {
   if (/^\s*-?\d+,\d+\s*$/.test(s)) s = s.replace(',', '.'); // a lone Polish decimal
   s = s.replace(/^(oblicz|policz|ile wynosi|ile to|compute|evaluate|calculate|wylicz)\s*:?\s+/i, '');
   const W = '([a-zα-ω])';
+  const normSide = (str: string) => str
+    // 0+, 0^+, 0^(+), 0⁺; a bare ")" after the sign closes the call, it isn't part of (+)
+    .replace(/->\s*([^,;)\s]+?)\s*(\^?(?:\(\+\)|\+)|⁺)\s*(?=$|[,;)\s])/g, '->$1, 1')
+    .replace(/->\s*([^,;)\s]+?)\s*(\^?(?:\(-\)|-)|⁻)\s*(?=$|[,;)\s])/g, '->$1, -1');
   // x->0+ / x->0- : one-sided limits as a third argument
-  s = s.replace(/->\s*([^,;)\s]+?)\s*(\^?\(?\+\)?|⁺)\s*(?=$|[,;)\s])/g, '->$1, 1').replace(/->\s*([^,;)\s]+?)\s*(\^?\(?-\)?|⁻)\s*(?=$|[,;)\s])/g, '->$1, -1');
+  s = normSide(s);
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [new RegExp(`^d\\^?(\\d)?\\s*/\\s*d${W}\\^?\\d?\\s*(.+)$`, 'i'), m => `diff(${m[3]}, ${m[2]}${m[1] ? `, ${m[1]}` : ''})`],
     [new RegExp(`^(?:pochodna|derivative|rozniczkuj|differentiate)\\s+(?:rzedu\\s+(\\d+)\\s+)?(?:z |of |funkcji )?(.+?)(?:\\s+(?:po|wzgledem|wrt|with respect to|by)\\s+${W})?$`, 'i'), m => `diff(${m[2]}${m[3] ? `, ${m[3]}` : ''}${m[1] ? `${m[3] ? '' : ', x'}, ${m[1]}` : ''})`],
@@ -39,7 +43,7 @@ export function sugar(raw: string): string {
   ];
   for (const [re, f] of rules) {
     const m = s.match(re);
-    if (m) return f(m);
+    if (m) return normSide(f(m));
   }
   return s;
 }

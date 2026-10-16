@@ -4,7 +4,7 @@ import type { AxisUnit, FnState } from './state';
 
 /** Polish number formatting: 2,5 not 2.5; tiny values read as 0. */
 export const format = (n: number, digits = 5) =>
-  Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumFractionDigits: digits, useGrouping: Math.abs(n) >= 1e4 });
+  Math.abs(n) < 1e-8 ? '0' : Number(n.toPrecision(digits)).toLocaleString('pl-PL', { maximumSignificantDigits: digits, useGrouping: Math.abs(n) >= 1e4 });
 
 /** Values without ≈ are proven in exact arithmetic. Otherwise: ≈ a recognisable form or 8 digits. */
 export const approx = (n: number) => `≈ ${exact(n) ?? format(n, 8)}`;
@@ -45,6 +45,7 @@ export function domainText(f: Pick<FnState, 'from' | 'to' | 'fromOpen' | 'toOpen
 
 /** 1.5707… → π/2, 6.2831… → 2π; denominators up to 12. */
 export function piLabel(x: number): string {
+  if (Math.abs(x) < 1e-8) return '0';
   const k = x / Math.PI, d = [1, 2, 3, 4, 6, 12].find(d => Math.abs(k * d - Math.round(k * d)) < 1e-6);
   if (!d) return `${format(k)}π`;
   const n = Math.round(k * d), a = Math.abs(n);

@@ -47,8 +47,14 @@ export class CasClient {
     return new Promise(resolve => {
       const worker = this.spawn();
       if (!worker) {
-        // no module workers: run on the main thread
-        import('./engine').then(m => resolve(m.run(input, options)));
+        // no module workers: run on the main thread. Pending all the same, so a newer question supersedes this one.
+        this.pending = { id, resolve, timer: 0 };
+        import('./engine').then(m => {
+          if (this.pending?.id !== id) return;
+          let result: Result;
+          try { result = m.run(input, options); } catch { result = { input: null, pods: [], error: 'Obliczenia przerwał nieoczekiwany błąd.' }; }
+          if (this.pending?.id === id) this.finish(result, false);
+        });
         return;
       }
       const timer = window.setTimeout(() => this.finish({ input: null, pods: [], error: `Przekroczono limit czasu (${TIME_LIMIT / 1000} s). Spróbuj prostszego zapytania albo mniejszej liczby cyfr.` }, true), TIME_LIMIT);

@@ -83,3 +83,16 @@ test('bad input is a readable error, never a crash', () => {
     expect(r.error, q).not.toMatch(/wewnętrzny/);
   }
 });
+
+test('fixes from the audit stay fixed', () => {
+  expect(card('atan2(1, 1)', 'Wynik')).toBe('π/4');
+  expect(card('granica 1/x gdy x dąży do 0+', 'Granica')).toBe('+∞');
+  expect(card('limit(frac(x), x->1, -1)', 'Granica')).toBe('1');
+  expect(card('solve(sin(x) / (x - pi) = 0)', 'Rozwiązania')).toBe('x = kπ, k ∈ ℤ ∖ {1}');
+  expect(card('solve(sin(x) / (1 - cos(x)) = 0)', 'Rozwiązania')).toBe('x = π·(2k + 1), k ∈ ℤ');
+  expect(card('integrate(sec(x)^3, x)', 'Całka nieoznaczona')).toContain('ln(|sec(x) + tg(x)|)/2');
+  expect(card('integrate((x^2 + x + 1)^30, x)', 'Całka nieoznaczona')).toMatch(/^x\^61\/61 \+ /);
+  // finding nothing numerically with a parameter in the way is not "no solutions"
+  expect(run('solve(e^(a*x) + e^x = 2, x)').error).toMatch(/parametrami/);
+  expect(run('foo').error).toMatch(/Nie rozpoznaję „foo”/);
+});

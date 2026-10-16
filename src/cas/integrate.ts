@@ -5,14 +5,14 @@
  * at several points; one that fails the check is discarded, never shown.
  */
 import { diff, limit, Lim } from './calculus';
-import { E, Expr, HALF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isFn, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isInt, isInf, children, key } from './expr';
+import { E, Expr, HALF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isFn, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isInt, isInf, children, key, mapChildren } from './expr';
 import { compileDouble } from './fast';
-import { approx } from './numeric';
+import { approx, csub, evalC } from './numeric';
 import { P, coeffsOf, factorPoly, fromInts, pdivmod, pmul, polyOf, polyToExpr, ppow, solvePoly } from './poly';
 import { solveQ } from './matrix';
 import { cancel, trigLinearize } from './simplify';
 import { CasError, Q, Q0, fail, q, qdiv, qmul, qneg, qsign, qsub, qToNumber } from './q';
-import { bfToNumber } from './bigfloat';
+import { bfToNumber, top } from './bigfloat';
 
 const U = 'ū'; // substitution variable, can't clash with input
 
@@ -41,7 +41,20 @@ export function verify(F: Expr, f: Expr, x: string): boolean {
   for (const t of [0.3711, 1.2398, -0.7123, 2.913, -1.618, 0.0517, 4.31, -3.17, 0.83, 7.7]) {
     const a = g(t), b = h(t);
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
-    if (Math.abs(a - b) > 1e-7 * Math.max(1, Math.abs(b))) return false;
+    // doubles lose everything to cancellation in a long expanded polynomial: then decide at 400 bits
+    if (Math.abs(a - b) > 1e-7 * Math.max(1, Math.abs(b))) return verifyPrecise(dF, f, x, Object.keys(params));
+    good++;
+  }
+  return good >= 3;
+}
+function verifyPrecise(dF: Expr, f: Expr, x: string, others: string[]): boolean {
+  const at = (e: Expr, t: Expr) => others.reduce((r, v, k) => subst(r, v, num(q(BigInt(137 + 61 * k), 100n))), subst(e, x, t));
+  let good = 0;
+  for (const t of [q(3711n, 10000n), q(-7123n, 10000n), q(2913n, 1000n), q(-317n, 100n), q(77n, 10n)]) {
+    let a, b;
+    try { a = evalC(at(dF, num(t)), 400); b = evalC(at(f, num(t)), 400); } catch { continue; }
+    const d = csub(a, b, 400);
+    if (Math.max(top(d.re), top(d.im)) > Math.max(top(b.re), top(b.im), 0) - 200) return false;
     good++;
   }
   return good >= 3;
@@ -95,6 +108,19 @@ function table(f: Expr, x: string): Expr | null {
       if (isSym(f.b, 'e')) return div(f, a);
       return div(f, mul(a, fn('ln', f.b)));
     }
+    // 1/cos(u), 1/sin(u), 1/cosh(u), 1/sinh(u)
+    if (isNum(f.e) && f.e.v.n === -1n && f.e.v.d === 1n && f.b.k === 'f' && f.b.a.length === 1) {
+      const l = linear(f.b.a[0], x);
+      if (l) {
+        const u = f.b.a[0], [a] = l;
+        switch (f.b.n) {
+          case 'cos': return div(fn('ln', fn('abs', add(fn('sec', u), fn('tan', u)))), a);
+          case 'sin': return neg(div(fn('ln', fn('abs', add(fn('csc', u), fn('cot', u)))), a));
+          case 'cosh': return div(mul(TWO, fn('atan', pow(E, u))), a);
+          case 'sinh': return div(fn('ln', fn('abs', fn('tanh', mul(HALF, u)))), a);
+        }
+      }
+    }
     // 1/cos²u, 1/sin²u, 1/cosh²u, 1/sinh²u
     if (isNum(f.e) && f.e.v.n === -2n && f.e.v.d === 1n && f.b.k === 'f' && f.b.a.length === 1) {
       const l = linear(f.b.a[0], x);
@@ -106,6 +132,16 @@ function table(f: Expr, x: string): Expr | null {
           case 'cosh': return div(fn('tanh', u), a);
           case 'sinh': return neg(div(fn('coth', u), a));
         }
+      }
+    }
+    // 1/cosⁿu, 1/sinⁿu for n ≥ 3, by reduction to n − 2:
+    // ∫cos⁻ⁿu = sin u·cos¹⁻ⁿu/((n − 1)a) + (n − 2)/(n − 1)·∫cos²⁻ⁿu, and the same with −cos u for sin
+    if (isInt(f.e) && f.e.v.n <= -3n && f.e.v.n >= -40n && f.b.k === 'f' && (f.b.n === 'cos' || f.b.n === 'sin') && f.b.a.length === 1) {
+      const l = linear(f.b.a[0], x);
+      const lower = l && table(pow(f.b, num(f.e.v.n + 2n)), x);
+      if (l && lower) {
+        const u = f.b.a[0], [a] = l, n = -f.e.v.n, other = f.b.n === 'cos' ? fn('sin', u) : neg(fn('cos', u));
+        return add(div(mul(other, pow(f.b, num(1n - n))), mul(num(n - 1n), a)), mul(num(q(n - 2n, n - 1n)), lower));
       }
     }
     return null;
@@ -396,7 +432,7 @@ function rewrites(f: Expr, x: string, depth: number): Expr | null {
 }
 function toSinCos(e: Expr): Expr {
   if (e.k === 'n' || e.k === 's') return e;
-  const m = e.k === '+' ? add(...e.t.map(toSinCos)) : e.k === '*' ? mul(...e.t.map(toSinCos)) : e.k === '^' ? pow(toSinCos(e.b), e.e) : e;
+  const m = mapChildren(e, toSinCos);
   if (isFn(m, 'sec')) return pow(fn('cos', m.a[0]), MINUS_ONE);
   if (isFn(m, 'csc')) return pow(fn('sin', m.a[0]), MINUS_ONE);
   if (isFn(m, 'cot')) return div(fn('cos', m.a[0]), fn('sin', m.a[0]));
@@ -408,7 +444,7 @@ function replaceTanSquared(e: Expr): Expr {
     return expand(mul(pow(fn('tan', u), num(n - 2n)), sub(pow(fn('cos', u), num(-2)), ONE)));
   }
   if (e.k === 'n' || e.k === 's') return e;
-  return e.k === '+' ? add(...e.t.map(replaceTanSquared)) : e.k === '*' ? mul(...e.t.map(replaceTanSquared)) : e;
+  return mapChildren(e, replaceTanSquared);
 }
 
 // --- Definite integrals ---
@@ -566,9 +602,19 @@ export function quad(f: (t: number) => number, a: number, b: number): { value: n
   type Seg = { a: number; b: number; v: number; e: number };
   const first = gk15(safe, lo, hi);
   const segs: Seg[] = [{ a: lo, b: hi, v: first[0], e: first[1] }];
+  const sumSegs = (): [number, number, number] => {
+    let total = 0, c = 0, err = 0, worst = 0;
+    segs.forEach((s, k) => {
+      const y = total + s.v;
+      c += Math.abs(total) >= Math.abs(s.v) ? (total - y) + s.v : (s.v - y) + total;
+      total = y;
+      err += s.e;
+      if (s.e > segs[worst].e) worst = k;
+    });
+    return [total + c, err, worst];
+  };
   for (let it = 0; it < 3000; it++) {
-    let total = 0, err = 0, worst = 0;
-    segs.forEach((s, k) => { total += s.v; err += s.e; if (s.e > segs[worst].e) worst = k; });
+    const [total, err, worst] = sumSegs();
     if (!Number.isFinite(total) || !Number.isFinite(err)) return null;
     if (err <= Math.max(1e-14, 1e-12 * Math.abs(total))) return { value: total, error: err };
     const s = segs[worst], m = (s.a + s.b) / 2;
@@ -576,8 +622,7 @@ export function quad(f: (t: number) => number, a: number, b: number): { value: n
     const l = gk15(safe, s.a, m), r = gk15(safe, m, s.b);
     segs.splice(worst, 1, { a: s.a, b: m, v: l[0], e: l[1] }, { a: m, b: s.b, v: r[0], e: r[1] });
   }
-  let total = 0, err = 0;
-  for (const s of segs) { total += s.v; err += s.e; }
+  const [total, err] = sumSegs();
   return err < 1e-6 * Math.max(1, Math.abs(total)) ? { value: total, error: err } : null;
 }
 

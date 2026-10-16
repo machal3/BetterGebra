@@ -25,7 +25,7 @@ export const FUNCTIONS: Record<string, [number, number]> = {
   sqrt: [1, 1], cbrt: [1, 1], root: [2, 2], exp: [1, 1], ln: [1, 1], log: [1, 2], log2: [1, 1], log10: [1, 1],
   abs: [1, 1], sign: [1, 1], floor: [1, 1], ceil: [1, 1], round: [1, 1], frac: [1, 1],
   gamma: [1, 1], factorial: [1, 1], binomial: [2, 2], zeta: [1, 1], erf: [1, 1], erfc: [1, 1],
-  re: [1, 1], im: [1, 1], conj: [1, 1], arg: [1, 1], max: [1, Infinity], min: [1, Infinity], mod: [2, 2],
+  re: [1, 1], im: [1, 1], conj: [1, 1], arg: [1, 1], atan2: [2, 2], max: [1, Infinity], min: [1, Infinity], mod: [2, 2],
 };
 
 /** Commands: canonical name → [min args, max args]. Their arguments may be equations, lists, variable names. */
@@ -48,8 +48,8 @@ export const COMMANDS: Record<string, [number, number]> = {
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
 export const ALIAS: Record<string, string> = {
   tg: 'tan', ctg: 'cot', cotg: 'cot', cosec: 'csc', arcsin: 'asin', arccos: 'acos', arctan: 'atan', arctg: 'atan', arccot: 'acot', arcctg: 'acot',
-  arcsec: 'asec', arccsc: 'acsc', arsinh: 'asinh', arcsinh: 'asinh', arcosh: 'acosh', arccosh: 'acosh', artanh: 'atanh', arctanh: 'atanh',
-  arcoth: 'acoth', arccoth: 'acoth', tgh: 'tanh', ctgh: 'coth', cth: 'coth', arctgh: 'atanh',
+  atantwo: 'atan2', arcsec: 'asec', arccsc: 'acsc', arccosec: 'acsc', arsinh: 'asinh', arcsinh: 'asinh', arcosh: 'acosh', arccosh: 'acosh', artanh: 'atanh', arctanh: 'atanh',
+  arcoth: 'acoth', arccoth: 'acoth', artgh: 'atanh', arctgh: 'atanh', arctgh2: 'acoth', tgh: 'tanh', ctgh: 'coth', cth: 'coth',
   sgn: 'sign', lg: 'log10', ld: 'log2', nroot: 'root', entier: 'floor', calosc: 'floor', silnia: 'factorial', fact: 'factorial',
   binom: 'binomial', newton: 'binomial', choose: 'binomial', nck: 'binomial', abs: 'abs', modul: 'abs', sprzezenie: 'conj', conjugate: 'conj',
   uprosc: 'simplify', upraszczaj: 'simplify', simplify: 'simplify', rozwin: 'expand', wymnoz: 'expand', expand: 'expand',
@@ -102,6 +102,7 @@ export function normalize(input: string): string {
     .replace(/\bN\s*\[/g, 'approx[').replace(/\bN\s*\(/g, 'approx(')
     .toLowerCase()
     .replace(/[ąćęłńóśźż]/g, c => PL[c])
+    .replace(/\b(?:atan|arctan|arctg)2(?=\s*\()/g, 'atantwo') // a digit would split the word: atan 2·(…)
     .replace(/\\(?:cdot|times)/g, '*').replace(/\\div/g, '/').replace(/\\(?:left|right)|\\[,;:! ]/g, '').replace(/\\(?=[a-z])/g, '')
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, s => `^(${[...s].map(c => SUPERSCRIPT[c]).join('')})`)
     .replace(/π/g, ' pi ').replace(/τ/g, ' tau ').replace(/[φϕ]/g, ' phi ').replace(/∞/g, ' inf ')
@@ -128,8 +129,13 @@ export function tokenize(source: string): string[] {
   return raw.flatMap(token => {
     if (!/^[a-z]+$/.test(token)) return [token];
     const out: string[] = [];
+    // Three or more letters with no known word in them (foo, quux) are a typo, not a product of variables.
+    if (token.length >= 3 && !WORDS.some(w => w.length > 1 && w !== 'oo' && token.includes(w))) {
+      fail(`Nie rozpoznaję „${token}”. Iloczyn zmiennych zapisz ze znakiem mnożenia, np. ${[...token].join('*')}.`);
+    }
     for (let i = 0; i < token.length;) {
-      const word = WORDS.find(w => token.startsWith(w, i)) ?? token[i];
+      // oo is ∞ only on its own: foo is f·o·o, not f·∞
+      const word = WORDS.find(w => token.startsWith(w, i) && (w !== 'oo' || token === 'oo')) ?? token[i];
       out.push(word);
       i += word.length;
     }
@@ -189,7 +195,7 @@ export function parse(input: string): Node {
       list.push(relation());
       while (peek() === ',' || peek() === ';') { take(); list.push(relation()); }
     } else {
-      if (!startsAtom(peek())) fail(`Uzupełnij argument: ${word}(x).`);
+      if (!startsAtom(peek()) && peek() !== '-') fail(`Uzupełnij argument: ${word}(x).`);
       // sin 2x → sin(2x); it stops at the next function, so 2 sin x cos x is a product.
       let a = unary();
       while (simple(peek())) a = { t: 'op', o: '*', a, b: power0() };
@@ -200,6 +206,8 @@ export function parse(input: string): Node {
       const count = min === max ? `${min}` : max === Infinity ? `co najmniej ${min}` : `od ${min} do ${max}`;
       fail(`${word} przyjmuje ${count} ${min === 1 && max === 1 ? 'argument' : 'argumenty'}.`);
     }
+    // atan2(y, x) is the argument of x + yi (variables are real)
+    if (fname === 'atan2') return { t: 'call', n: 'arg', args: [{ t: 'op', o: '+', a: list[1], b: { t: 'op', o: '*', a: list[0], b: { t: 'id', n: 'i' } } }] };
     const node: Node = { t: 'call', n: fname, args: list };
     return power ? { t: 'op', o: '^', a: node, b: power } : node;
   }
@@ -242,7 +250,7 @@ export function parse(input: string): Node {
       return { t: 'call', n: 'abs', args: [e] };
     }
     if (isNumber(t)) return { t: 'num', v: t };
-    if (t === 'frac') { const a = atomOrArgs(), b = atomOrArgs(); return { t: 'op', o: '/', a, b }; }
+    if (t === 'frac' && peek() === '{') { const a = atomOrArgs(), b = atomOrArgs(); return { t: 'op', o: '/', a, b }; }
     if (Object.hasOwn(CONSTANT_WORDS, t)) return { t: 'id', n: CONSTANT_WORDS[t] };
     if (known(t)) return call(t);
     if (isWord(t) && t.length === 1) return { t: 'id', n: t };

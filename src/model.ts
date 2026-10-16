@@ -1,6 +1,5 @@
 /** Turns a function row into what the renderer and the analysis need. Pure apart from registering new parameters. */
 import { MathError, RELATION, buildComplex, compile, compileComplex, parameterNames, parse, relationSymbol } from './math';
-import { tokenize } from './math/parser';
 import type { Complex, ComplexFunction, Node, Params, RealFunction } from './math';
 import type { FnState, Mode } from './state';
 
@@ -29,11 +28,15 @@ const EMPTY: Compiled = { error: '', ok: false, parameters: [], fn: null, cfn: n
 
 /** "y =" or "f(x) =" in front of a graph y = f(x); not a comparison like y >= x. */
 const GRAPH_PREFIX = /^\s*(?:y|[a-z]\s*\(\s*x\s*\))\s*=(?![=<>])/i;
+const COMPLEX_PREFIX = /^\s*(?:[wy]|[a-z]\s*\(\s*[xz]\s*\))\s*=(?![=<>])/i;
 /** Whether some side mentions z or i (a half-typed side is judged by its letters). */
 const usesZ = (text: string) => text.split(RELATION).some((part, k) => {
   if (k % 2 || !part.trim()) return false;
   try { const n = parameterNames(part); return n.includes('i') || n.includes('z'); } catch { return /(?<![a-z])[zi](?![a-z])/i.test(part); }
 });
+const usesY = (text: string) => {
+  try { return parameterNames(text).includes('y'); } catch { return /(?<![a-z])y(?![a-z])/i.test(text); }
+};
 
 /**
  * What a row of the Wykresy panel is. A graph: y = f(x), f(x) = …, or an expression in x (other letters get
@@ -42,17 +45,21 @@ const usesZ = (text: string) => text.split(RELATION).some((part, k) => {
  */
 export function rowKind(expression: string): { kind: 'graph' } | { kind: 'set'; text: string; xy: boolean } {
   const body = expression.replace(GRAPH_PREFIX, '');
-  if (body !== expression && !RELATION.test(body)) return usesZ(body) ? { kind: 'set', text: body, xy: false } : { kind: 'graph' };
+  if (body !== expression && !RELATION.test(body) && !usesY(body)) return usesZ(body) ? { kind: 'set', text: body, xy: false } : { kind: 'graph' };
   if (RELATION.test(expression)) return { kind: 'set', text: expression, xy: !usesZ(expression) };
   return usesZ(expression) ? { kind: 'set', text: expression, xy: false } : { kind: 'graph' };
 }
 
-/** A condition in x and y as one on z = x + yi: x → Re z, y → Im z, side by side, comparisons kept. */
-function xyToZ(text: string): string {
-  return text.split(RELATION).map((part, k) => {
-    if (k % 2 || !part.trim()) return part;
-    return tokenize(part).map(t => (t === 'x' ? 're(z)' : t === 'y' ? 'im(z)' : t)).join(' ');
-  }).join(' ');
+/** Map an AST in (x, y) to one on z = x + yi: x → Re z, y → Im z. */
+function xyNode(n: Node): Node {
+  switch (n.t) {
+    case 'x': return { t: 'call', n: 're', args: [{ t: 'param', n: 'z' }] };
+    case 'param': return n.n === 'y' ? { t: 'call', n: 'im', args: [{ t: 'param', n: 'z' }] } : n;
+    case 'num': case 'const': return n;
+    case 'neg': case '!': case '°': return { ...n, a: xyNode(n.a) };
+    case 'call': return { ...n, args: n.args.map(xyNode) };
+    default: return { ...n, a: xyNode(n.a), b: xyNode(n.b) };
+  }
 }
 
 const mentions = (n: Node, t: Node['t']): boolean => n.t === t || Object.values(n).some(v =>
@@ -74,16 +81,18 @@ export function compileRow(f: FnState, mode: Mode, params: Params): Compiled {
     if (mode === 'graph') {
       // Wykresy holds graphs and sets alike: each row says which it is
       const kind = rowKind(expression);
-      if (kind.kind === 'set') return { ...compileSet(kind.xy ? xyToZ(kind.text) : kind.text, params), xy: kind.xy };
+      if (kind.kind === 'set') return { ...compileSet(kind.text, params, kind.xy), xy: kind.xy };
     }
-    const names = parameterNames(expression);
     if (mode === 'complex') {
+      const clean = expression.replace(COMPLEX_PREFIX, '');
+      const names = parameterNames(clean);
       const parameters = names.filter(n => n !== 'i' && n !== 'z');
       register(params, parameters);
       // Without i, z is just the variable: tan(z) is tan(x) on the real axis, so its values there can be proven.
-      const real = names.includes('i') ? null : expression.replace(/z/gi, 'x');
-      return { ...EMPTY, ok: true, parameters, cfn: compileComplex(expression, params), real };
+      const real = names.includes('i') ? null : clean.replace(/z/gi, 'x');
+      return { ...EMPTY, ok: true, parameters, cfn: compileComplex(clean, params), real };
     }
+    const names = parameterNames(expression);
     register(params, names);
     return { ...EMPTY, ok: true, parameters: names, fn: restrict(f, compile(expression, params)), real: expression };
   } catch (e) {
@@ -95,9 +104,9 @@ export function compileRow(f: FnState, mode: Mode, params: Params): Compiled {
  * A set of complex numbers: a condition on z (|z − 1| ≤ 2, 1 < Re z < 3, z² = −1), or a number with real unknowns
  * (t + 2i, z = a + a²i, a + bi) showing everywhere it can land. Other letters in a condition get sliders.
  */
-function compileSet(expression: string, params: Params): Compiled {
+function compileSet(expression: string, params: Params, xy = false): Compiled {
   let parts = expression.split(RELATION).map(s => s.trim());
-  if (parts.length === 3 && /^z$/i.test(parts[0]) && parts[1] === '=' && !parameterNames(parts[2]).includes('z')) parts = [parts[2]];
+  if (!xy && parts.length === 3 && /^z$/i.test(parts[0]) && parts[1] === '=' && !parameterNames(parts[2]).includes('z')) parts = [parts[2]];
   const sides = parts.filter((_, k) => k % 2 === 0);
   if (sides.some(p => !p)) throw new MathError('Uzupełnij obie strony warunku, np. |z − 1| ≤ 2.');
   if (parts.length === 1) {
@@ -113,11 +122,15 @@ function compileSet(expression: string, params: Params): Compiled {
     };
     return { ...EMPTY, ok: true, set: { kind: 'parametric', unknowns, at } };
   }
-  const parameters = [...new Set(sides.flatMap(parameterNames))].filter(n => n !== 'i' && n !== 'z');
+  const parameters = [...new Set(sides.flatMap(parameterNames))].filter(n => n !== 'i' && n !== 'z' && (!xy || n !== 'y'));
   register(params, parameters);
   return {
     ...EMPTY, ok: true, parameters,
-    set: { kind: 'condition', sides: sides.map(s => compileComplex(s, params)), ops: parts.filter((_, k) => k % 2).map(relationSymbol) },
+    set: {
+      kind: 'condition',
+      sides: sides.map(s => xy ? buildComplex(xyNode(parse(s)), params) : compileComplex(s, params)),
+      ops: parts.filter((_, k) => k % 2).map(relationSymbol),
+    },
   };
 }
 

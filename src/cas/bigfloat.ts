@@ -35,10 +35,39 @@ export const top = (a: BF) => a.m ? bitLength(a.m) + a.e : -Infinity;
 export function bfAdd(a: BF, b: BF, p: number): BF {
   if (!a.m) return norm(b.m, b.e, p);
   if (!b.m) return norm(a.m, a.e, p);
-  // A term more than p + 2 bits below the other only affects rounding; keep two guard bits of it.
-  if (top(a) - top(b) > p + 2) return norm(a.m * 4n + BigInt(bfSign(b)), a.e - 2, p);
-  if (top(b) - top(a) > p + 2) return norm(b.m * 4n + BigInt(bfSign(a)), b.e - 2, p);
+  // A term more than p + 4 bits below the other only affects rounding; keep guard bits below the p-th bit of the larger term.
+  if (top(a) - top(b) > p + 4) {
+    const shift = Math.max(2, p + 4 - bitLength(a.m));
+    return norm((a.m << BigInt(shift)) + BigInt(bfSign(b)), a.e - shift, p);
+  }
+  if (top(b) - top(a) > p + 4) {
+    const shift = Math.max(2, p + 4 - bitLength(b.m));
+    return norm((b.m << BigInt(shift)) + BigInt(bfSign(a)), b.e - shift, p);
+  }
   return a.e >= b.e ? norm((a.m << BigInt(a.e - b.e)) + b.m, b.e, p) : norm(a.m + (b.m << BigInt(b.e - a.e)), a.e, p);
+}
+export function bfSum(xs: BF[], p: number): BF {
+  const nz = xs.filter(x => x.m !== 0n);
+  if (!nz.length) return BZERO;
+  if (nz.length === 1) return norm(nz[0].m, nz[0].e, p);
+  let minE = nz[0].e, maxTop = top(nz[0]);
+  for (let i = 1; i < nz.length; i++) {
+    if (nz[i].e < minE) minE = nz[i].e;
+    const t = top(nz[i]);
+    if (t > maxTop) maxTop = t;
+  }
+  // When the exponent span is moderate, sum all mantissas exactly in one BigInt addition before rounding once.
+  if (maxTop - minE <= p + 256) {
+    let total = 0n;
+    for (const x of nz) total += x.e > minE ? x.m << BigInt(x.e - minE) : x.m;
+    return norm(total, minE, p);
+  }
+  // Otherwise sort by magnitude descending so large cancelling terms annihilate before small terms are added.
+  const sorted = [...nz].sort((a, b) => top(b) - top(a));
+  const wp = p + 32;
+  let acc = sorted[0];
+  for (let i = 1; i < sorted.length; i++) acc = bfAdd(acc, sorted[i], wp);
+  return norm(acc.m, acc.e, p);
 }
 export const bfSub = (a: BF, b: BF, p: number) => bfAdd(a, bfNeg(b), p);
 export const bfMul = (a: BF, b: BF, p: number) => norm(a.m * b.m, a.e + b.e, p);

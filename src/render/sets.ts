@@ -94,28 +94,36 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
   const real = ([a, b]: Complex) => Math.abs(b) <= 1e-9 * (1 + Math.abs(a)); // complex numbers aren't ordered: < needs real sides
   // m: smallest inequality margin (Infinity without inequalities); c: the same, but signed for ≠ between reals
   // (|z| ≠ 3 is 0 on the circle and > 0 on both sides, so its edge can only be traced from |z| − 3);
-  // strict: whether that one is < > ≠; eq: left − right of the first equation.
+  // strict: whether that one is < > ≠; eq: left − right of the first equation; rest: how far the other equations
+  // of a chain (x = y = 1) are from holding.
   const judgeZ = (z: Complex) => {
     const v = sides.map(g => g(z));
-    let m = Infinity, c = Infinity, strict = false, eq = null as Complex | null;
+    let m = Infinity, c = Infinity, strict = false, eq = null as Complex | null, rest = 0;
     ops.forEach((op, o) => {
       const a = v[o], b = v[o + 1];
-      if (op === '=') { eq ??= [a[0] - b[0], a[1] - b[1]]; return; }
+      if (op === '=') {
+        if (eq) rest = Math.max(rest, Math.hypot(a[0] - b[0], a[1] - b[1]));
+        else eq = [a[0] - b[0], a[1] - b[1]];
+        return;
+      }
       const d = op === '≠' ? Math.hypot(a[0] - b[0], a[1] - b[1]) : !real(a) || !real(b) ? NaN : op === '<' || op === '≤' ? b[0] - a[0] : a[0] - b[0];
       if (Number.isNaN(d) || Number.isNaN(m)) m = c = NaN;
       else if (d < m) { m = d; c = op === '≠' && real(a) && real(b) ? a[0] - b[0] : d; strict = op === '<' || op === '>' || op === '≠'; }
     });
-    return { m, c, strict, eq };
+    return { m, c, strict, eq, rest };
   };
   const judge = (x: number, y: number) => judgeZ([vp.fromX(x), vp.fromY(y)]);
-  const margin = new Float64Array(n), edge = new Float64Array(n), eqRe = new Float64Array(n), eqIm = new Float64Array(n);
+  const margin = new Float64Array(n), edge = new Float64Array(n), eqRe = new Float64Array(n), eqIm = new Float64Array(n), rest = new Float64Array(n);
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
     const k = j * w + i, r = judge(i * s, j * s);
-    margin[k] = r.m; edge[k] = r.c;
+    margin[k] = r.m; edge[k] = r.c; rest[k] = r.rest;
     if (r.eq) [eqRe[k], eqIm[k]] = r.eq; else eqRe[k] = eqIm[k] = NaN;
   }
   const top = (a: Float64Array) => { let m = 0; for (const v of a) if (Number.isFinite(v) && Math.abs(v) > m) m = Math.abs(v); return m; };
   const equation = ops.includes('='), re = top(eqRe), im = top(eqIm), all = equation && re === 0 && im === 0 && eqRe.some(Number.isFinite); // z = z
+  // An equation chained with more (x = y = 1, 0 ≤ x = y): its curve only where the rest holds too.
+  const chained = equation && ops.some((op, k) => op !== '=' || k !== ops.indexOf('=')), restTol = 1e-6 * top(rest);
+  const holds = (r: ReturnType<typeof judgeZ>) => r.rest <= restTol && (r.m === Infinity || r.m >= -1e-9);
 
   // Fill, one pixel per node, centred on it.
   const off = document.createElement('canvas');
@@ -123,7 +131,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
   const c = off.getContext('2d')!, img = c.createImageData(w, h), d = img.data, [r, g, b] = rgb(f.color);
   let inside = 0, valid = 0;
   for (let k = 0; k < n; k++) {
-    const yes = all ? Number.isFinite(eqRe[k]) : !equation && margin[k] > 0;
+    const yes = all ? Number.isFinite(eqRe[k]) && rest[k] <= restTol && margin[k] > 0 : !equation && margin[k] > 0;
     if (yes) { d[4 * k] = r; d[4 * k + 1] = g; d[4 * k + 2] = b; d[4 * k + 3] = 70; inside++; }
     if (all ? Number.isFinite(eqRe[k]) : Number.isFinite(margin[k])) valid++;
   }
@@ -182,9 +190,13 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
     const part = im <= 1e-9 * re ? 0 : re <= 1e-9 * im ? 1 : -1, at = (k: 0 | 1) => (x: number, y: number) => judge(x, y).eq![k];
     if (part >= 0) lines = contour(part ? eqIm : eqRe, w, h, s, at(part as 0 | 1));
     else lines = [...bothZero(contour(eqRe, w, h, s, at(0)), at(1), 1e-6 * im), ...bothZero(contour(eqIm, w, h, s, at(1)), at(0), 1e-6 * re)];
-    const solutions = part < 0 ? points?.solutions ?? [] : [];
+    if (chained) lines = bothZero(lines, (x, y) => holds(judge(x, y)) ? 0 : 1, 0.5);
+    const solutions = (part < 0 ? points?.solutions ?? [] : []).filter(({ z }) => !chained || holds(judgeZ(z)));
     for (const { z } of solutions) dot(ctx, vp, z[0], z[1], 4.5, f.color, theme.bg);
-    if (!lines.length && !solutions.length) single = touching(Float64Array.from(eqRe, (v, k) => Math.hypot(v, eqIm[k])), false, z => judgeZ(z).eq!);
+    if (!lines.length && !solutions.length) {
+      const size = Float64Array.from(eqRe, (v, k) => margin[k] === Infinity || margin[k] >= -1e-9 ? Math.hypot(v, eqIm[k], rest[k]) : NaN);
+      single = touching(size, false, z => { const r = judgeZ(z); return [Math.hypot(...r.eq!), r.rest]; });
+    }
     else stroke(lines, () => false);
   } else if (!equation) {
     lines = contour(edge, w, h, s, (x, y) => judge(x, y).c);
@@ -278,7 +290,14 @@ export function drawParametric(ctx: CanvasRenderingContext2D, vp: Viewport, them
       for (const [edgeAt, open] of edges) {
         ctx.setLineDash(open ? STRICT_DASH(f.width) : []);
         ctx.beginPath();
-        for (let k = 0; k <= 400; k++) { const p = P(edgeAt(k)); if (ok(p)) ctx.lineTo(...p); }
+        // lift the pen across points where it is undefined (1/a + bi at a = 0)
+        let pen = false;
+        for (let k = 0; k <= 400; k++) {
+          const p = P(edgeAt(k));
+          if (!ok(p)) { pen = false; continue; }
+          if (pen) ctx.lineTo(...p); else ctx.moveTo(...p);
+          pen = true;
+        }
         ctx.stroke();
       }
     }

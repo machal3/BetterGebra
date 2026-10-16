@@ -207,10 +207,10 @@ export function divisors(n: bigint, cap = 100000): bigint[] {
   return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 /** Divisors of n if there are at most `cap`, else null (for searches that just give up). */
-export function divisorsCapped(n: bigint, cap: number): bigint[] | null {
+export function divisorsCapped(n: bigint, cap: number, effort = 200000): bigint[] | null {
   n = babs(n);
   if (!n) return null;
-  const f = factorInteger(n, 200000);
+  const f = factorInteger(n, effort);
   if (f.unfactored.length) return null;
   let count = 1;
   for (const [, e] of f.factors) count *= e + 1;

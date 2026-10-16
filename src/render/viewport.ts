@@ -37,8 +37,11 @@ export function zoomed(v: View, width: number, height: number, fx: number, fy = 
 }
 
 export function panned(v: View, width: number, dx: number, dy: number): View {
-  const s = width / (v.max - v.min), ys = s / v.ratio;
-  return { ...v, min: v.min + dx / s, max: v.max + dx / s, cy: v.cy + dy / ys };
+  const s = width / (v.max - v.min), ys = s / v.ratio, range = v.max - v.min;
+  const next = { ...v, min: v.min + dx / s, max: v.max + dx / s, cy: v.cy + dy / ys };
+  // So far out that float64 can't resolve the visible range any more: stay put.
+  const far = Math.max(Math.abs(next.min), Math.abs(next.max)), yrange = range * v.ratio * 0.5;
+  return range < 1e-10 * far || yrange < 1e-10 * Math.abs(next.cy) ? v : next;
 }
 
 /** A "nice" grid step (1, 2, 5 × 10ⁿ) about 70 px apart at `pxPerUnit`. */

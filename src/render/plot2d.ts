@@ -17,13 +17,29 @@ export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Geor
 
 export interface AxesOptions { grid: boolean; axes: boolean; xUnit: AxisUnit; yUnit: AxisUnit; plane: boolean; minorGrid: boolean; halo: boolean }
 
+/**
+ * Multiples of step in [from, to] (or [from, to) when open), counted rather than accumulated: far from 0 a tiny
+ * step no longer moves x += step, which would loop forever. Too many to draw → none.
+ */
+function multiples(from: number, to: number, step: number, open = false): number[] {
+  const first = Math.ceil(from / step), n = Math.floor(to / step) - first;
+  if (!(n >= 0) || n > 4000) return [];
+  const out: number[] = [];
+  for (let i = 0; i <= n; i++) { const v = (first + i) * step; if (v > to || (open && v >= to)) break; out.push(v); }
+  return out;
+}
+
+/** Significant digits that tell apart labels `step` apart around `size` (100,0001 next to 100,0002). */
+export const labelDigits = (size: number, step: number) =>
+  Math.min(15, Math.max(5, Math.ceil(Math.log10(Math.max(1, Math.abs(size)) / step)) + 2));
+
 export function drawGrid(ctx: CanvasRenderingContext2D, vp: Viewport, theme: Theme, o: AxesOptions): void {
   if (!o.grid) return;
   const xs = axisSteps(vp.scale, o.xUnit), ys = axisSteps(vp.yscale, o.yUnit);
   const lines = (sx: number, sy: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
-    for (let x = Math.ceil(vp.min / sx) * sx; x <= vp.max; x += sx) { const p = Math.round(vp.px(x)) + 0.5; ctx.moveTo(p, 0); ctx.lineTo(p, vp.height); }
-    for (let y = Math.ceil(vp.bottom / sy) * sy; y <= vp.top; y += sy) { const p = Math.round(vp.py(y)) + 0.5; ctx.moveTo(0, p); ctx.lineTo(vp.width, p); }
+    for (const x of multiples(vp.min, vp.max, sx)) { const p = Math.round(vp.px(x)) + 0.5; ctx.moveTo(p, 0); ctx.lineTo(p, vp.height); }
+    for (const y of multiples(vp.bottom, vp.top, sy)) { const p = Math.round(vp.py(y)) + 0.5; ctx.moveTo(0, p); ctx.lineTo(vp.width, p); }
     ctx.stroke();
   };
   if (o.minorGrid) lines(xs.minor, ys.minor, theme.gridMinor);
@@ -39,21 +55,22 @@ export function drawAxes(ctx: CanvasRenderingContext2D, vp: Viewport, theme: The
   ctx.stroke();
 
   const step = axisSteps(vp.scale, o.xUnit).major, ystep = axisSteps(vp.yscale, o.yUnit).major;
-  const xLabel = (v: number) => unitLabel(o.xUnit, v);
-  const yLabel = !o.plane ? (v: number) => unitLabel(o.yUnit, v)
-    : o.yUnit === 'num' ? (v: number) => ({ '1': 'i', '-1': '−i' } as Record<string, string>)[String(Math.round(v * 1e12) / 1e12)] ?? `${format(v)}i`
-    : (v: number) => `${unitLabel(o.yUnit, v)}i`;
+  const xd = labelDigits(Math.max(Math.abs(vp.min), Math.abs(vp.max)), step), yd = labelDigits(Math.max(Math.abs(vp.bottom), Math.abs(vp.top)), ystep);
+  const xLabel = (v: number) => unitLabel(o.xUnit, v, xd);
+  const yLabel = !o.plane ? (v: number) => unitLabel(o.yUnit, v, yd)
+    : o.yUnit === 'num' ? (v: number) => ({ '1': 'i', '-1': '−i' } as Record<string, string>)[String(Math.round(v * 1e12) / 1e12)] ?? `${format(v, yd)}i`
+    : (v: number) => `${unitLabel(o.yUnit, v, yd)}i`;
   ctx.font = LABEL; ctx.fillStyle = theme.label;
   // Over the colours of the complex plane labels get a halo in the background colour.
   ctx.strokeStyle = theme.bg; ctx.lineWidth = 3; ctx.lineJoin = 'round';
   const text = (s: string, x: number, y: number) => { if (o.halo) ctx.strokeText(s, x, y); ctx.fillText(s, x, y); };
   const ys: number[] = [];
-  for (let y = Math.ceil(vp.bottom / ystep) * ystep; y < vp.top; y += ystep) if (Math.abs(y) > ystep / 100) ys.push(y);
+  for (const y of multiples(vp.bottom, vp.top, ystep, true)) if (Math.abs(y) > ystep / 100) ys.push(y);
   // Long y labels push the pinned axis right instead of running off the canvas.
   const labelWidth = Math.max(0, ...ys.map(y => ctx.measureText(yLabel(y)).width));
   const axisY = Math.max(14, Math.min(height - 40, vp.py(0))), axisX = Math.max(labelWidth + 14, Math.min(width - 12, vp.px(0)));
   ctx.textAlign = 'center';
-  for (let x = Math.ceil(vp.min / step) * step; x < vp.max; x += step) {
+  for (const x of multiples(vp.min, vp.max, step, true)) {
     const p = vp.px(x);
     if (Math.abs(x) > step / 100 && p > 16 && p < width - 24) text(xLabel(x), p, axisY + 16);
   }
@@ -87,9 +104,11 @@ export function traceCurve(ctx: CanvasRenderingContext2D, vp: Viewport, fn: Real
     if (!ok(y0) && !ok(y1)) return point(p1, y1);
     const both = ok(y0) && ok(y1), delta = Math.abs(y1 - y0);
     const offscreen = both && ((y0 < 0 && y1 < 0) || (y0 > height && y1 > height));
-    if (depth && !offscreen) {
+    // Both ends off the same edge: still look at the middle of a whole step, a narrow spike or pole may come into view.
+    if (depth && (!offscreen || depth === 8)) {
       const pm = (p0 + p1) / 2, ym = Y(pm);
-      if (!both || delta > height || !ok(ym) || Math.abs(ym - (y0 + y1) / 2) > 0.5) {
+      const stillOff = offscreen && ok(ym) && ((ym < 0 && y0 < 0) || (ym > height && y0 > height));
+      if (!stillOff && (!both || delta > height || !ok(ym) || Math.abs(ym - (y0 + y1) / 2) > 0.5)) {
         segment(p0, y0, pm, ym, depth - 1, delta);
         segment(pm, ym, p1, y1, depth - 1, delta);
         return;

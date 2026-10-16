@@ -35,7 +35,8 @@ export function renderAnalysis(result: AnalysisResult | null, found: ReadonlyMap
   $('roots-label').textContent = set ? 'Zbiór' : 'Miejsca zerowe';
   document.querySelector('#analysis .analysis-foot')!.textContent = set ? 'w widocznej części płaszczyzny' : 'w widocznym zakresie';
 
-  const fresh = result && f && result.activeId === f.id ? result : null;
+  // only an answer about this row, as it is now and in this mode; until then the old one isn't shown
+  const fresh = result && f && c?.ok && result.activeId === f.id && result.mode === state.mode ? result : null;
   if (set) { setHTML($('roots'), stacked(f && c?.ok ? setText(f.id, c, fresh, found.get(f.id)) : '—')); return; }
   const values = fresh?.values;
   setHTML($('value-zero'), stacked(values?.[0] ?? '—'));

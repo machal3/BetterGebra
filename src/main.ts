@@ -2,6 +2,7 @@ import './styles/app.css';
 import { AnalysisClient } from './analysis/client';
 import type { AnalysisResult } from './analysis/compute';
 import { format } from './format';
+import { labelDigits } from './render/plot2d';
 import { initGeometry, redrawGeometry } from './geometry/panel';
 import { forget } from './model';
 import { Scene } from './render/scene';
@@ -93,6 +94,8 @@ function syncPanel(): void {
   // #kalkulator?q=… opens the calculator with that question (links to a result)
   document.body.dataset.panel = hash.startsWith('#kalkulator') ? 'calculator' : ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[hash] ?? 'home';
   syncModes();
+  // a function's settings live in the top layer, outside the panel: they would stay over the next one
+  if (document.body.dataset.panel !== 'graphs') document.querySelectorAll<HTMLElement>('[id^="fn-settings-"]:popover-open').forEach(p => p.hidePopover());
   if (document.body.dataset.panel === 'calculator') calculatorFromHash();
 }
 addEventListener('hashchange', syncPanel);
@@ -108,13 +111,16 @@ function syncRange(): void {
   const vp = scene.vp, short = (v: number) => String(Number(v.toPrecision(7)));
   if (!scene.width) return;
   [vp.min, vp.max, vp.bottom, vp.top].forEach((v, i) => { if (document.activeElement !== rangeInputs[i]) rangeInputs[i].value = short(v); });
-  $('range-caption').textContent = `x ∈ [${format(vp.min)}; ${format(vp.max)}]   y ∈ [${format(vp.bottom)}; ${format(vp.top)}]`;
+  const xd = labelDigits(Math.max(Math.abs(vp.min), Math.abs(vp.max)), (vp.max - vp.min) / 10), yd = labelDigits(Math.max(Math.abs(vp.bottom), Math.abs(vp.top)), (vp.top - vp.bottom) / 10);
+  $('range-caption').textContent = `x ∈ [${format(vp.min, xd)}; ${format(vp.max, xd)}]   y ∈ [${format(vp.bottom, yd)}; ${format(vp.top, yd)}]`;
 }
 for (const input of rangeInputs) input.addEventListener('change', () => {
   const [x0, x1, y0, y1] = rangeInputs.map(i => i.value === '' ? NaN : Number(i.value));
   const ratio = (y1 - y0) * scene.width / (scene.height * (x1 - x0));
-  const ok = x1 > x0 && y1 > y0 && fits(x1 - x0, ratio, scene.width, scene.height) && Math.max(Math.abs(x0), Math.abs(x1)) <= 1e9 && Math.max(Math.abs(y0), Math.abs(y1)) <= 1e15;
-  $('range-error').textContent = ok ? '' : 'Podaj rosnące zakresy: x o szerokości od 0,0001 do 10 000 000 (w granicach ±10⁹), y o wysokości od 0,0001 do 10¹² (w granicach ±10¹⁵).';
+  const ok = x1 > x0 && y1 > y0 && fits(x1 - x0, ratio, scene.width, scene.height) && Math.max(Math.abs(x0), Math.abs(x1)) <= 1e9 && Math.max(Math.abs(y0), Math.abs(y1)) <= 1e15
+    // float64 must still tell the grid lines apart that far from 0
+    && x1 - x0 >= 1e-10 * Math.max(Math.abs(x0), Math.abs(x1)) && y1 - y0 >= 1e-10 * Math.max(Math.abs(y0), Math.abs(y1));
+  $('range-error').textContent = ok ? '' : 'Podaj rosnące zakresy: x o szerokości od 0,0001 do 10 000 000 (w granicach ±10⁹), y o wysokości od 0,0001 do 10¹² (w granicach ±10¹⁵), nie węższe niż 10⁻¹⁰ swoich wartości.';
   if (ok) setView({ min: x0, max: x1, cy: (y0 + y1) / 2, ratio });
 });
 const units = { xUnit: $<HTMLSelectElement>('x-unit'), yUnit: $<HTMLSelectElement>('y-unit') };

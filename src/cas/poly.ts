@@ -48,7 +48,11 @@ export function pdivmod(a: P, b: P): [P, P] {
 }
 export const pmonic = (a: P): P => a.length ? pscale(a, qdiv(Q1, lc(a))) : a;
 export function pgcd(a: P, b: P): P {
-  while (b.length) [a, b] = [b, pdivmod(a, b)[1]];
+  // Remainders kept primitive (coprime integers): plain Euclid over ℚ lets the fractions grow without bound,
+  // seconds already at degree 60.
+  const prim = (p: P) => p.length ? fromInts(primitive(p)[1]) : p;
+  a = prim(a); b = prim(b);
+  while (b.length) [a, b] = [b, prim(pdivmod(a, b)[1])];
   return pmonic(a);
 }
 export const pderiv = (a: P): P => trim(a.slice(1).map((c, k) => qmul(c, q(k + 1))));
@@ -99,8 +103,24 @@ export function squarefree(p: P): [P, number][] {
 
 // --- Expressions ↔ polynomials ---
 
+/** An upper bound on e's degree in x without expanding; null when e isn't visibly a polynomial in x. */
+function degreeBound(e: Expr, x: string): number | null {
+  if (freeOf(e, x)) return 0;
+  if (isSym(e, x)) return 1;
+  if (e.k === '+' || e.k === '*') {
+    let d = 0;
+    for (const t of e.t) { const k = degreeBound(t, x); if (k === null) return null; d = e.k === '+' ? Math.max(d, k) : d + k; }
+    return d;
+  }
+  if (e.k === '^' && isNum(e.e) && e.e.v.d === 1n && e.e.v.n >= 0n) { const k = degreeBound(e.b, x); return k === null ? null : k * Number(e.e.v.n); }
+  return null;
+}
+
 /** Coefficients in x (free of x), lowest first, or null when e isn't a polynomial in x. */
 export function coeffsOf(e: Expr, x: string, maxDegree = 10000): Expr[] | null {
+  // (x² + x + 1)¹⁰⁰ asked for a quadratic: don't expand 5000 terms to find out. The slack leaves room for cancellation.
+  const bound = degreeBound(e, x);
+  if (bound !== null && bound > 4 * maxDegree + 64) return null;
   const ex = expand(e);
   const terms = ex.k === '+' ? ex.t : [ex];
   const out: Expr[][] = [];
@@ -165,7 +185,8 @@ export function rationalRoots(p: P): Q[] {
     tested.add(id);
     if (!evalInt(f, a, b)) roots.push(q(a, b));
   };
-  if (ps && qs && ps.length * qs.length <= 60000) {
+  // each candidate costs an evaluation of degree n in big integers: cap the work, not only the count
+  if (ps && qs && ps.length * qs.length * Math.max(n, 10) <= 600000) {
     for (const a of ps) for (const b of qs) { test(a, b); test(-a, b); }
   } else {
     // Too many candidates: take the real roots numerically and try the rationals close to them.
@@ -201,22 +222,31 @@ function divideInt(f: bigint[], g: bigint[]): bigint[] | null {
 }
 
 /** Kronecker: an irreducible factor of degree d of the primitive square-free f, or null. */
-function kroneckerFactor(f: bigint[], d: number, budget: { left: number }): bigint[] | null {
-  const pts: { x: bigint; v: bigint; divs: bigint[] }[] = [];
-  for (let x = 0; x <= 40 && pts.length < 3 * (d + 1); x = x > 0 ? -x : -x + 1) {
+type KPoint = { x: bigint; v: bigint; divs: bigint[] };
+/** Points 0, 1, −1, 2, … where f's value has few enough divisors: computed once per polynomial, factoring is the slow part. */
+function kroneckerPoints(f: bigint[], want: number): KPoint[] {
+  const pts: KPoint[] = [];
+  for (let x = 0; x <= 40 && pts.length < want; x = x > 0 ? -x : -x + 1) {
     const X = BigInt(x), v = evalInt(f, X, 1n);
     if (!v) continue;
-    const divs = divisorsCapped(v, 600);
+    // a value that doesn't factor quickly is skipped: there are other points to try
+    const divs = divisorsCapped(v, 600, 5000);
     if (divs) pts.push({ x: X, v, divs });
   }
+  return pts;
+}
+function kroneckerFactor(f: bigint[], d: number, budget: { left: number }, all: KPoint[]): bigint[] | null {
+  const pts = all.slice(0, 3 * (d + 1));
   if (pts.length < d + 1) return null;
   pts.sort((a, b) => a.divs.length - b.divs.length);
   const use = pts.slice(0, d + 1);
   const lcF = f[f.length - 1];
   const choice: bigint[] = Array(d + 1).fill(0n);
   let found: bigint[] | null = null;
+  // a trial interpolates and divides: its cost grows with the degree
+  const cost = Math.max(1, Math.floor(f.length / 6));
   const rec = (j: number): boolean => {
-    if (budget.left-- <= 0) return true;
+    if ((budget.left -= cost) < 0) return true;
     if (j === d + 1) {
       const g = interpolate(use.map(u => u.x), choice);
       if (!g || g.length !== d + 1 || !g[d] || lcF % g[d]) return false;
@@ -253,7 +283,7 @@ function interpolate(xs: bigint[], ys: bigint[]): bigint[] | null {
 export function factorPoly(p: P): PolyFactorization {
   const factors: [bigint[], number][] = [];
   let complete = true;
-  const budget = { left: 400000 };
+  const budget = { left: 40000 }; // trials, ~0,05–0,2 ms each: a few seconds at most, then "may not be complete"
   for (const [g, mult] of squarefree(p)) {
     let [, f] = primitive(g);
     for (const r of rationalRoots(fromInts(f))) {
@@ -268,11 +298,16 @@ export function factorPoly(p: P): PolyFactorization {
       if (h.length < 2) continue;
       const n = h.length - 1;
       let split = false;
-      for (let d = 2; d <= n / 2 && n >= 4; d++) {
-        const g2 = kroneckerFactor(h, d, budget);
+      // ponytail: above degree 12 only factors up to degree 4 are looked for (x² + 1 in x¹⁶ − 1): the full search
+      // takes ~0,2 ms per trial and seconds in all, and a split into two big factors is rare.
+      const top = n <= 12 ? n / 2 : Math.min(n / 2, 4);
+      const pts = n >= 4 ? kroneckerPoints(h, 3 * (Math.floor(top) + 1)) : [];
+      for (let d = 2; d <= top && pts.length; d++) {
+        const g2 = kroneckerFactor(h, d, budget, pts);
         if (budget.left <= 0) { complete = false; break; }
         if (g2) { stack.push(g2, divideInt(h, g2)!); split = true; break; }
       }
+      if (!split && n > 12) complete = false; // not every degree was tried
       if (!split) factors.push([h, mult]);
     }
   }
@@ -302,13 +337,17 @@ export function solvePoly(p: P): Root[] {
     // split what is left with Kronecker (quadratic factors give exact roots)
     const pieces: bigint[][] = [];
     const stack = [f];
-    const budget = { left: 200000 };
+    const budget = { left: 30000 };
     while (stack.length) {
       const h = stack.pop()!;
       const n = h.length - 1;
       let split = false;
-      for (let d = 2; d <= n / 2 && n >= 4; d++) {
-        const g2 = kroneckerFactor(h, d, budget);
+      // ponytail: above degree 12 only factors up to degree 4 are looked for (x² + 1 in x¹⁶ − 1): the full search
+      // takes ~0,2 ms per trial and seconds in all, and a split into two big factors is rare.
+      const top = n <= 12 ? n / 2 : Math.min(n / 2, 4);
+      const pts = n >= 4 ? kroneckerPoints(h, 3 * (Math.floor(top) + 1)) : [];
+      for (let d = 2; d <= top && pts.length; d++) {
+        const g2 = kroneckerFactor(h, d, budget, pts);
         if (g2) { stack.push(g2, divideInt(h, g2)!); split = true; break; }
         if (budget.left <= 0) break;
       }

@@ -55,7 +55,15 @@ export function compileDouble(e: Expr, x: string, params: Record<string, number>
     }
     case '+': {
       const fs = e.t.map(t => compileDouble(t, x, params));
-      return v => { let s = 0; for (const f of fs) s += f(v); return s; };
+      return v => {
+        let s = 0, c = 0;
+        for (const f of fs) {
+          const y = f(v), t = s + y;
+          if (Number.isFinite(t)) c += Math.abs(s) >= Math.abs(y) ? (s - t) + y : (y - t) + s;
+          s = t;
+        }
+        return Number.isFinite(s) ? s + c : s;
+      };
     }
     case '*': {
       const fs = e.t.map(t => compileDouble(t, x, params));
@@ -76,6 +84,7 @@ export function compileDouble(e: Expr, x: string, params: Record<string, number>
       const args = e.a.map(a => compileDouble(a, x, params));
       if (e.n === 'max' || e.n === 'min') { const m = Math[e.n]; return v => m(...args.map(f => f(v))); }
       if (e.n === 'mod') return v => { const a = args[0](v), b = args[1](v); return ((a % b) + b) % b; };
+      if (e.n === 'binomial') return v => { const n = args[0](v), k = args[1](v); return gamma(n + 1) / (gamma(k + 1) * gamma(n - k + 1)); };
       const f = F1[e.n];
       if (!f) return () => NaN;
       const [a] = args;

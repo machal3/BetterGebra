@@ -179,7 +179,7 @@ export function toText(e: Expr): string {
     case '*': {
       if (isNegative(e)) return `−${wrapText(neg(e), PREC.product)}`;
       const [n, d] = numDen(e);
-      if (!isOne(d)) return `${wrapText(n, PREC.product)}/${wrapText(d, PREC.power)}`;
+      if (!isOne(d)) return `${wrapText(n, PREC.product)}/${wrapText(d, PREC.unary)}`;
       const fs = displayFactors(e.t);
       let out = '';
       fs.forEach((f, j) => {
@@ -195,7 +195,7 @@ export function toText(e: Expr): string {
       return out;
     }
     case '^': {
-      if (isNegative(e.e) && !expBase(e)) return `1/${wrapText(pow(e.b, neg(e.e)), PREC.power)}`;
+      if (isNegative(e.e) && !expBase(e)) return `1/${wrapText(pow(e.b, neg(e.e)), PREC.unary)}`;
       if (e.e.k === 'n' && e.e.v.n === 1n && e.e.v.d === 2n) return `√${simpleArg(e.b) ? toText(e.b) : `(${toText(e.b)})`}`;
       if (e.e.k === 'n' && e.e.v.n === 1n && e.e.v.d === 3n) return `∛${simpleArg(e.b) ? toText(e.b) : `(${toText(e.b)})`}`;
       const exp = e.e.k === 'n' && e.e.v.d === 1n && e.e.v.n >= 0n || e.e.k === 's' ? toText(e.e) : `(${toText(e.e)})`;
@@ -209,7 +209,15 @@ export function toText(e: Expr): string {
   }
 }
 const simpleArg = (e: Expr) => (e.k === 'n' && e.v.d === 1n && e.v.n >= 0n) || e.k === 's';
+function precText(e: Expr): number {
+  if (e.k === '^') {
+    if (isNegative(e.e) && !expBase(e)) return PREC.product;
+    if (e.e.k === 'n' && e.e.v.n === 1n && (e.e.v.d === 2n || e.e.v.d === 3n)) return PREC.unary;
+    return PREC.power;
+  }
+  return prec(e);
+}
 function wrapText(e: Expr, need: number): string {
-  return prec(e) < need ? `(${toText(e)})` : toText(e);
+  return precText(e) < need ? `(${toText(e)})` : toText(e);
 }
 

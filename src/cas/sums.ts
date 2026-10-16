@@ -5,7 +5,7 @@
  */
 import { limit } from './calculus';
 import {
-  E, Expr, INF, MINUS_ONE, ONE, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isZero, mul, neg, num, numDen, pow, sub,
+  E, Expr, INF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isZero, mul, neg, num, numDen, pow, sub,
   subst, sym, together,
 } from './expr';
 import { coeffsOf, polyOf } from './poly';
@@ -83,16 +83,14 @@ function closedForm(f: Expr, k: string, a: Expr, n: Expr): Expr | null {
     }
     return lagrange(xs, ys, n);
   }
-  // geometric: f = r^k · (rest free of k) handled above; here pure c·r^(αk + β)
-  if (f.k === '^' && freeOf(f.b, k)) {
-    const e = coeffsOf(f.e, k, 1);
-    if (e && e.length === 2) {
-      const r = pow(f.b, e[1]); // f = b^β · r^k
-      const first = subst(f, k, a);
-      if (isZero(sub(r, ONE)) || isZero(expand(sub(r, ONE)))) return mul(first, add(sub(n, a), ONE));
-      // first · (r^(n−a+1) − 1)/(r − 1)
-      return div(mul(first, sub(pow(r, add(sub(n, a), ONE)), ONE)), sub(r, ONE));
-    }
+  // geometric: f = C · r^k (including products/quotients of exponential powers)
+  const g = geometric(f, k);
+  if (g) {
+    const { first, r } = g;
+    const fa = mul(first, pow(r, a));
+    if (isZero(sub(r, ONE)) || isZero(expand(sub(r, ONE)))) return mul(fa, add(sub(n, a), ONE));
+    // fa · (r^(n−a+1) − 1)/(r − 1)
+    return div(mul(fa, sub(pow(r, add(sub(n, a), ONE)), ONE)), sub(r, ONE));
   }
   // c^k / k!
   const [N, D] = numDen(f);
@@ -164,15 +162,29 @@ function geometric(f: Expr, k: string): { first: Expr; r: Expr } | null {
   const powers = factors.filter(t => !freeOf(t, k));
   if (!powers.length || !powers.every(t => t.k === '^' && freeOf(t.b, k))) return null;
   let r: Expr = ONE;
+  let first: Expr = mul(...factors.filter(t => freeOf(t, k)));
   for (const p of powers as (Expr & { b: Expr; e: Expr })[]) {
     const e = coeffsOf(p.e, k, 1);
     if (!e || e.length !== 2) return null;
     r = mul(r, pow(p.b, e[1]));
+    first = mul(first, pow(p.b, e[0]));
   }
-  // f(k) = first(k)·r^k with first free of k
-  const first = cancel(together(div(f, pow(r, sym(k)))));
-  if (!freeOf(first, k)) return null;
+  if (!freeOf(first, k) || !freeOf(r, k)) return null;
   return { first, r };
+}
+
+/** Extract (-1)^(α·k + β) factor from N, returning { coef, parity } where (-1)^(α·k + β) = (-1)^(k + parity) for integer k. */
+function splitAlternating(N: Expr, k: string): { coef: Expr; shift: bigint } | null {
+  const factors = N.k === '*' ? N.t : [N];
+  const alt = factors.filter(t => !freeOf(t, k));
+  if (alt.length !== 1) return null;
+  const p = alt[0];
+  if (p.k !== '^' || !isNum(p.b) || p.b.v.n !== -1n || p.b.v.d !== 1n) return null;
+  const e = coeffsOf(p.e, k, 1);
+  if (!e || e.length !== 2 || !isInt(e[0]) || !isInt(e[1])) return null;
+  if (e[1].v.n % 2n === 0n) return null;
+  const coef = mul(...factors.filter(t => t !== p));
+  return { coef, shift: e[0].v.n };
 }
 
 /** Σ_{k=a}^{∞} for the special forms with known values; null otherwise. */
@@ -189,6 +201,49 @@ export function infiniteSpecial(f: Expr, k: string, a: Expr): Expr | null {
         const head: Expr[] = [];
         for (let m = 1n; m < start; m++) head.push(pow(num(m), neg(s)));
         return mul(N, sub(fn('zeta', s), add(...head)));
+      }
+    }
+  }
+  // Alternating series: c·(-1)^(k + shift) / D(k)
+  const alt = splitAlternating(N, k);
+  if (alt) {
+    // 1. Alternating harmonic & Leibniz: D = p·k + d
+    const lin = coeffsOf(D, k, 1);
+    if (lin && lin.length === 2 && isInt(lin[1]) && isInt(lin[0])) {
+      const p = lin[1].v.n, d = lin[0].v.n;
+      // p = 1: Σ_{m=start}^∞ (-1)^(m-1)/m = ln(2) − Σ_{m=1}^{start-1} (-1)^(m-1)/m
+      if (p === 1n && a.v.n + d >= 1n) {
+        const start = a.v.n + d;
+        const signFactor = ((alt.shift - d + 1n) % 2n === 0n) ? ONE : MINUS_ONE;
+        const head: Expr[] = [];
+        for (let m = 1n; m < start; m++) head.push(mul(m % 2n === 1n ? ONE : MINUS_ONE, pow(num(m), MINUS_ONE)));
+        return mul(alt.coef, signFactor, sub(fn('ln', TWO), add(...head)));
+      }
+      // p = 2, d odd: Σ_{j=start}^∞ (-1)^j/(2j + 1) = π/4 − Σ_{j=0}^{start-1} (-1)^j/(2j + 1)
+      if (p === 2n && ((d % 2n) + 2n) % 2n === 1n) {
+        const jShift = (d - 1n) / 2n;
+        const start = a.v.n + jShift;
+        if (start >= 0n) {
+          const signFactor = ((alt.shift - jShift) % 2n === 0n) ? ONE : MINUS_ONE;
+          const head: Expr[] = [];
+          for (let j = 0n; j < start; j++) head.push(mul(j % 2n === 0n ? ONE : MINUS_ONE, pow(num(2n * j + 1n), MINUS_ONE)));
+          return mul(alt.coef, signFactor, sub(div(PI, num(4)), add(...head)));
+        }
+      }
+    }
+    // 2. Alternating zeta: c·(-1)^(k + shift) / (k + d)^s, s ≥ 2: (1 − 2^(1−s))·ζ(s)
+    if (D.k === '^' && isInt(D.e) && D.e.v.n >= 2n) {
+      const linB = coeffsOf(D.b, k, 1);
+      if (linB && linB.length === 2 && isInt(linB[1]) && linB[1].v.n === 1n && isInt(linB[0])) {
+        const d = linB[0].v.n, start = a.v.n + d;
+        if (start >= 1n) {
+          const s = D.e;
+          const signFactor = ((alt.shift - d + 1n) % 2n === 0n) ? ONE : MINUS_ONE;
+          const eta = mul(sub(ONE, pow(TWO, sub(ONE, s))), fn('zeta', s));
+          const head: Expr[] = [];
+          for (let m = 1n; m < start; m++) head.push(mul(m % 2n === 1n ? ONE : MINUS_ONE, pow(num(m), neg(s))));
+          return mul(alt.coef, signFactor, sub(eta, add(...head)));
+        }
       }
     }
   }

@@ -55,10 +55,13 @@ type CFn = (...zs: Complex[]) => Complex;
 const CFN: Record<string, CFn> = {
   sin, cos, tan: z => div(sin(z), cos(z)), cot: z => div(cos(z), sin(z)), sec: reciprocal(cos), csc: reciprocal(sin),
   asin, acos: z => sub([Math.PI / 2, 0], asin(z)), atan, acot: z => atan(div(ONE, z)),
+  asec: z => sub([Math.PI / 2, 0], asin(div(ONE, z))), acsc: z => asin(div(ONE, z)),
   sinh, cosh, tanh: z => div(sinh(z), cosh(z)), coth: z => div(cosh(z), sinh(z)),
+  sech: reciprocal(cosh), csch: reciprocal(sinh),
   asinh: z => log(add(z, sqrt(add(mul(z, z), ONE)))),
   acosh: z => log(add(z, mul(sqrt(add(z, ONE)), sqrt(sub(z, ONE))))),
   atanh: z => mul([0.5, 0], sub(log(add(ONE, z)), log(sub(ONE, z)))),
+  acoth: z => mul([0.5, 0], sub(log(add(ONE, div(ONE, z))), log(sub(ONE, div(ONE, z))))),
   sqrt, cbrt: z => z[1] === 0 ? [Math.cbrt(z[0]), 0] : pow(z, [1 / 3, 0]),
   root: (n, z) => z[1] === 0 && n[1] === 0 && Number.isFinite(nthRoot(n[0], z[0])) ? [nthRoot(n[0], z[0]), 0] : pow(z, div(ONE, n)),
   abs: z => [abs(z), 0],
@@ -66,9 +69,12 @@ const CFN: Record<string, CFn> = {
   ln: log, exp,
   log: (a, b) => b === undefined ? div(log(a), [Math.LN10, 0]) : div(log(b), log(a)),
   log2: z => div(log(z), [Math.LN2, 0]),
+  log10: z => div(log(z), [Math.LN10, 0]),
   gamma,
+  factorial: z => z[1] === 0 ? [factorial(z[0]), 0] : gamma(add(z, ONE)),
   // Gaussian rounding: Re and Im separately, floor(2,5 + 1,7i) = 2 + i; mod(a; b) = a − b·floor(a/b) with it.
   floor: z => [Math.floor(z[0]), Math.floor(z[1])], ceil: z => [Math.ceil(z[0]), Math.ceil(z[1])], round: z => [Math.round(z[0]), Math.round(z[1])],
+  frac: z => [z[0] - Math.floor(z[0]), z[1] - Math.floor(z[1])],
   mod: (a, b) => b[1] === 0 && a[1] === 0 ? [mod(a[0], b[0]), 0] : sub(a, mul(b, CFN.floor(div(a, b)))),
   re: z => [z[0], 0], im: z => [z[1], 0], arg: z => [z[0] || z[1] ? Math.atan2(z[1], z[0]) : NaN, 0], conj: z => [z[0], 0 - z[1]],
 };

@@ -18,6 +18,15 @@ export class Scene {
   height = 0;
   theme: Theme = readTheme();
   analysis: AnalysisResult | null = null;
+  /** The analysis, if it was made in this mode (each set's points are kept by row). */
+  private get modeAnalysis(): AnalysisResult | null {
+    return this.analysis?.mode === state.mode ? this.analysis : null;
+  }
+  /** The analysis, if it is about the active row as it is now: until the worker answers, an older one isn't shown. */
+  private get activeAnalysis(): AnalysisResult | null {
+    const f = activeFn(), a = this.modeAnalysis;
+    return a && f && a.activeId === f.id && compiled(f, state.mode, state.params).ok ? a : null;
+  }
   /** What each set's drawing found, for the analysis panel. */
   readonly found = new Map<number, SetFound>();
   /** Pointer in CSS px over the plot, or null when outside. */
@@ -89,7 +98,7 @@ export class Scene {
     if (!complex) {
       // sets first, so their fills lie under the graphs
       for (const { f, c } of sets) {
-        if (c.set?.kind === 'condition') this.found.set(f.id, paintCondition(ctx, vp, theme, f, c.set, this.analysis?.setPoints[f.id], this.moving || this.dragging));
+        if (c.set?.kind === 'condition') this.found.set(f.id, paintCondition(ctx, vp, theme, f, c.set, this.modeAnalysis?.setPoints[f.id], this.moving || this.dragging));
         else if (c.set) drawParametric(ctx, vp, theme, f, c.set);
       }
       for (const { f, c } of graphs) {
@@ -104,7 +113,7 @@ export class Scene {
     }
     this.ends = ends;
     // Roots and intersections: small neutral dots, so they don't read as hollow endpoints (a set draws its own points).
-    if (!activeRow?.c.set) for (const m of this.analysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
+    if (!activeRow?.c.set) for (const m of this.activeAnalysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
     // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
     for (const e of ends) dot(ctx, vp, e.x, e.y, 4, e.closed ? e.color : theme.bg, e.color);
     this.drawHover();
@@ -149,12 +158,12 @@ export class Scene {
       if (lenSq === 0) return;
       const t = Math.max(0, Math.min(1, ((p.x - x0) * dx + (p.y - y0) * dy) / lenSq));
       const projX = x0 + t * dx, projY = y0 + t * dy;
-      const d = Math.hypot(projX - p.x, projY - p.y);
-      if (d < 24 && (!best || d < best.d)) {
-        const x = xVal0 !== undefined && xVal1 !== undefined ? xVal0 + t * (xVal1 - xVal0) : vp.fromX(projX);
-        const yVal = fn(x);
-        best = { d, x, y: Number.isFinite(yVal) ? yVal : vp.fromY(projY) };
-      }
+      if (Math.hypot(projX - p.x, projY - p.y) >= 24) return;
+      const x = xVal0 !== undefined && xVal1 !== undefined ? xVal0 + t * (xVal1 - xVal0) : vp.fromX(projX);
+      const yVal = fn(x), finite = Number.isFinite(yVal);
+      // measured to the point on the curve, not on the chord: on a steep bend the two are far apart
+      const d = Math.hypot(projX - p.x, (finite ? vp.py(yVal) : projY) - p.y);
+      if (d < 24 && (!best || d < best.d)) best = { d, x, y: finite ? yVal : vp.fromY(projY) };
     };
 
     for (let i = -24; i <= 24; i++) {
@@ -194,11 +203,12 @@ export class Scene {
     // The nearest root, intersection, extremum, y-intercept or endpoint within 8 px wins, with its exact coordinates.
     if (state.snap) {
       const marks: Mark[] = [
-        ...(this.analysis?.marks ?? []).map(m => ({ ...m, color: active?.color })),
-        ...(this.analysis?.snaps ?? []),
+        ...(this.activeAnalysis?.marks ?? []).map(m => ({ ...m, color: active?.color })),
+        ...(this.modeAnalysis?.snaps ?? []),
         ...this.ends.map(e => {
-          const xText = exactPoint([e.expr, String(e.y)], state.params, e.x)?.x ?? unitLabel(xUnit, e.x, 12);
-          const yText = exactValue(e.expr, state.params, e.x) ?? unitLabel(yUnit, e.y, 12);
+          // A hollow end is only approached: y is the one-sided limit there, not f(x) (⌊x⌋ at (1; 0) has f(1) = 1).
+          const xText = (e.closed ? exactPoint([e.expr, String(e.y)], state.params, e.x)?.x : undefined) ?? unitLabel(xUnit, e.x, 12);
+          const yText = (e.closed ? exactValue(e.expr, state.params, e.x) : undefined) ?? unitLabel(yUnit, e.y, 12);
           return { x: e.x, y: e.y, text: `x = ${xText}   y = ${yText}`, color: e.color };
         }),
       ];
@@ -250,7 +260,7 @@ export class Scene {
     const c = compiled(f, state.mode, state.params);
     // on Wykresy only a set reads points of the plane; a graph is read along its curve
     if (!c.ok || (state.mode === 'graph' && !c.set)) return null;
-    const m = this.nearestMark(this.analysis?.marks ?? [], 8);
+    const m = state.snap ? this.nearestMark(this.activeAnalysis?.marks ?? [], 8) : undefined;
     if (m) return { x: m.x, y: m.y, color: f.color, html: stacked(m.text), dot: true };
     if (c.xy) return { x: vp.fromX(p.x), y: vp.fromY(p.y), color: f.color, html: `x ${format(vp.fromX(p.x))}   y ${format(vp.fromY(p.y))}`, dot: false };
     const z: [number, number] = [vp.fromX(p.x), vp.fromY(p.y)], short = (v: number) => format(v);

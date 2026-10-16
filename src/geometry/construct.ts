@@ -146,7 +146,7 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
     case 'edge':
       if (o.kind === 'polygon') return a.length >= 3 && a.every(isPoint) ? { kind: 'polygon', pts: a as Pt[] } : null;
       if (!isPoint(p) || !isPoint(q)) return null;
-      if (o.kind === 'circle') return { kind: 'circle', cx: p.x, cy: p.y, r: Math.hypot(q.x - p.x, q.y - p.y) };
+      if (o.kind === 'circle') { const rad = Math.hypot(q.x - p.x, q.y - p.y); return rad > 0 ? { kind: 'circle', cx: p.x, cy: p.y, r: rad } : null; }
       if (o.kind === 'angle') return isPoint(r) ? angle(p, q, r, false) : null;
       if (!isLine({ kind: o.kind } as Shape)) return null;
       return p.x === q.x && p.y === q.y ? null : { kind: o.kind as Line['kind'], x1: p.x, y1: p.y, x2: q.x, y2: q.y };
@@ -185,15 +185,23 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
     case 'equation': {
       const [k, l, m] = o.coef ?? [];
       if (![k, l, m].every(Number.isFinite)) return null;
-      if (o.kind === 'circle') return m >= 0 ? { kind: 'circle', cx: k, cy: l, r: m } : null;
+      if (o.kind === 'circle') return m > 0 ? { kind: 'circle', cx: k, cy: l, r: m } : null;
       const n = k * k + l * l;
       // The point nearest the origin, then along the line.
       return n ? { kind: 'line', x1: -k * m / n, y1: -l * m / n, x2: -k * m / n - l, y2: -l * m / n + k } : null;
     }
     case 'three': return isPoint(p) && isPoint(q) && isPoint(r) ? circumcircle(p, q, r) : null;
-    case 'radiusSegment': return isPoint(p) && isLine(q) ? { kind: 'circle', cx: p.x, cy: p.y, r: Math.hypot(q.x2 - q.x1, q.y2 - q.y1) } : null;
-    case 'radius': return isPoint(p) && value >= 0 ? { kind: 'circle', cx: p.x, cy: p.y, r: value } : null;
-    case 'compass': return isPoint(p) && isPoint(q) && isPoint(r) ? { kind: 'circle', cx: r.x, cy: r.y, r: Math.hypot(q.x - p.x, q.y - p.y) } : null;
+    case 'radiusSegment': {
+      if (!isPoint(p) || !isLine(q)) return null;
+      const rad = Math.hypot(q.x2 - q.x1, q.y2 - q.y1);
+      return rad > 0 ? { kind: 'circle', cx: p.x, cy: p.y, r: rad } : null;
+    }
+    case 'radius': return isPoint(p) && value > 0 ? { kind: 'circle', cx: p.x, cy: p.y, r: value } : null;
+    case 'compass': {
+      if (!isPoint(p) || !isPoint(q) || !isPoint(r)) return null;
+      const rad = Math.hypot(q.x - p.x, q.y - p.y);
+      return rad > 0 ? { kind: 'circle', cx: r.x, cy: r.y, r: rad } : null;
+    }
     case 'semicircle': {
       if (!isPoint(p) || !isPoint(q) || (p.x === q.x && p.y === q.y)) return null;
       const cx = (p.x + q.x) / 2, cy = (p.y + q.y) / 2;
@@ -250,13 +258,14 @@ function incircle(a: Pt, b: Pt, c: Pt): Circle | null {
 }
 
 function circumcircle(a: Pt, b: Pt, c: Pt): Circle | null {
-  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
-  const scale = Math.max(Math.abs(a.x - c.x), Math.abs(a.y - c.y), Math.abs(b.x - c.x), Math.abs(b.y - c.y)) ** 2;
+  const ax = a.x - c.x, ay = a.y - c.y, bx = b.x - c.x, by = b.y - c.y;
+  const d = 2 * (ax * by - ay * bx);
+  const scale = Math.max(Math.abs(ax), Math.abs(ay), Math.abs(bx), Math.abs(by)) ** 2;
   if (Math.abs(d) <= 1e-12 * scale) return null; // collinear
-  const sa = a.x ** 2 + a.y ** 2, sb = b.x ** 2 + b.y ** 2, sc = c.x ** 2 + c.y ** 2;
-  const cx = (sa * (b.y - c.y) + sb * (c.y - a.y) + sc * (a.y - b.y)) / d;
-  const cy = (sa * (c.x - b.x) + sb * (a.x - c.x) + sc * (b.x - a.x)) / d;
-  return { kind: 'circle', cx, cy, r: Math.hypot(a.x - cx, a.y - cy) };
+  const sa = ax * ax + ay * ay, sb = bx * bx + by * by;
+  const ux = (sa * by - sb * ay) / d, uy = (sb * ax - sa * bx) / d;
+  const cx = c.x + ux, cy = c.y + uy;
+  return { kind: 'circle', cx, cy, r: Math.hypot(ux, uy) };
 }
 
 // --- Transformations: similarities (x; y) → (a·x + b·y + e; c·x + d·y + f) ---
@@ -269,7 +278,7 @@ export function transform(s: Shape, [a, b, c, d, e, f]: Affine): Shape | null {
   const map = (x: number, y: number) => [a * x + b * y + e, c * x + d * y + f], det = a * d - b * c, k = Math.sqrt(Math.abs(det));
   /** A ray from (x; y) at angle t, mapped: its new start and angle. Mirroring reverses the sense of turning. */
   const turned = (x: number, y: number, from: number, sweep: number) => {
-    const [X, Y] = map(x, y), end = (t: number) => { const [u, v] = map(x + Math.cos(t), y + Math.sin(t)); return Math.atan2(v - Y, u - X); };
+    const [X, Y] = map(x, y), end = (t: number) => Math.atan2(c * Math.cos(t) + d * Math.sin(t), a * Math.cos(t) + b * Math.sin(t));
     return { X, Y, from: end(det < 0 ? from + sweep : from) };
   };
   switch (s.kind) {
@@ -295,7 +304,12 @@ function clampArc(s: Circle | Arc, t: number): number {
   const off = mod(t - s.from);
   return off <= s.sweep ? s.from + off : off - s.sweep < TAU - off ? s.from + s.sweep : s.from;
 }
-const onArc = (s: Circle | Arc, p: Pt | null) => !!p && (s.kind === 'circle' || mod(Math.atan2(p.y - s.cy, p.x - s.cx) - s.from) <= s.sweep + 1e-9);
+const onArc = (s: Circle | Arc, p: Pt | null) => {
+  if (!p) return false;
+  if (s.kind === 'circle') return true;
+  const off = mod(Math.atan2(p.y - s.cy, p.x - s.cx) - s.from);
+  return off <= s.sweep + 1e-9 || off >= TAU - 1e-9;
+};
 
 /** The point at parameter t: along a line-like (0 → first point, 1 → second), or the angle on a circle or arc. */
 export function pointOn(s: Shape, t: number): Pt | null {
@@ -326,11 +340,15 @@ export function intersections(a: Shape, b: Shape): (Pt | null)[] {
     return [within(a, t) && within(b, u) ? pt(a.x1 + t * dx, a.y1 + t * dy) : null];
   }
   if (isLine(a) && b.kind === 'circle') {
-    const dx = a.x2 - a.x1, dy = a.y2 - a.y1, fx = a.x1 - b.cx, fy = a.y1 - b.cy;
-    const A = dx * dx + dy * dy, B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - b.r * b.r, disc = B * B - 4 * A * C;
-    if (disc < -1e-12 * B * B) return [];
-    const s = Math.sqrt(Math.max(0, disc));
-    return [(-B - s) / (2 * A), (-B + s) / (2 * A)].map(t => within(a, t) ? pt(a.x1 + t * dx, a.y1 + t * dy) : null);
+    const dx = a.x2 - a.x1, dy = a.y2 - a.y1, A = dx * dx + dy * dy;
+    if (!A) return [];
+    const fx = a.x1 - b.cx, fy = a.y1 - b.cy;
+    const tMid = -(fx * dx + fy * dy) / A;
+    const px = fx + tMid * dx, py = fy + tMid * dy;
+    const d2 = px * px + py * py, r2 = b.r * b.r;
+    if (d2 > r2 * (1 + 1e-12) * (1 + 1e-12)) return [];
+    const dt = Math.sqrt(Math.max(0, r2 - d2) / A);
+    return [tMid - dt, tMid + dt].map(t => within(a, t) ? pt(a.x1 + t * dx, a.y1 + t * dy) : null);
   }
   if (a.kind === 'circle' && b.kind === 'circle') {
     const dx = b.cx - a.cx, dy = b.cy - a.cy, d = Math.hypot(dx, dy), tol = 1e-12 * (a.r + b.r);
@@ -424,8 +442,8 @@ export function nextName(kind: Kind, taken: Set<string>): string {
 /** The image of A is A′, then A″, A‴… */
 export function primed(name: string, taken: Set<string>): string {
   let n = name;
-  do n += '′'; while (taken.has(n));
-  return n.replace(/′′′$/, '‴').replace(/′′$/, '″');
+  do n = (n + '′').replace(/″′|′′′$/, '‴').replace(/′′$/, '″'); while (taken.has(n));
+  return n;
 }
 
 // --- Descriptions for the object list ---

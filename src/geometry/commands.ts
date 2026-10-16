@@ -62,7 +62,10 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
 
   { name: 'Odcinek', forms: [
     { args: ['P', 'P'], usage: 'Odcinek(A; B)', what: 'odcinek o końcach A, B', make: one('segment', 'through') },
-    { args: ['P', 'N'], usage: 'Odcinek(A; 5)', what: 'odcinek z A o danej długości', make: ([p, l], b) => b.push({ kind: 'segment', def: 'through', of: [p, b.push({ kind: 'point', def: 'offset', of: [p], coef: [l, 0] })] }) },
+    { args: ['P', 'N'], usage: 'Odcinek(A; 5)', what: 'odcinek z A o danej długości', make: ([p, l], b) => {
+      if (!(l > 0)) throw new MathError('Długość odcinka musi być dodatnia.');
+      return b.push({ kind: 'segment', def: 'through', of: [p, b.push({ kind: 'point', def: 'offset', of: [p], coef: [l, 0] })] });
+    } },
   ] },
   { name: 'Wektor', forms: [{ args: ['P', 'P'], usage: 'Wektor(A; B)', what: 'wektor od A do B', make: one('vector', 'through') }] },
   { name: 'Prosta', forms: [
@@ -85,7 +88,10 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
 
   { name: 'Okrąg', forms: [
     { args: ['P', 'P'], usage: 'Okrąg(A; B)', what: 'okrąg o środku A przez B', make: one('circle', 'through') },
-    { args: ['P', 'N'], usage: 'Okrąg(A; 3)', what: 'okrąg o środku A i promieniu 3', make: withValue('circle', 'radius', 1) },
+    { args: ['P', 'N'], usage: 'Okrąg(A; 3)', what: 'okrąg o środku A i promieniu 3', make: ([p, r], b) => {
+      if (!(r > 0)) throw new MathError('Promień musi być dodatni.');
+      return b.push({ kind: 'circle', def: 'radius', of: [p], value: r });
+    } },
     { args: ['P', 'S'], usage: 'Okrąg(A; f)', what: 'okrąg o środku A, promień = długość f', make: one('circle', 'radiusSegment') },
     { args: ['P', 'P', 'P'], usage: 'Okrąg(A; B; C)', what: 'okrąg przez trzy punkty', make: one('circle', 'three') },
   ] },
@@ -176,9 +182,19 @@ const coordinates = (inner: string) => {
   const parts = splitArgs(inner);
   return parts.length === 2 ? parts.map(number) : fail('Punkt ma dwie współrzędne, np. (1; 2).');
 };
+function isPointLiteral(s: string): boolean {
+  if (!s.startsWith('(') || !s.endsWith(')') || s.includes('=')) return false;
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    if ('([{'.includes(s[i])) depth++;
+    else if (')]}'.includes(s[i])) depth--;
+    if (depth === 0 && i < s.length - 1) return false;
+  }
+  return depth === 0 && splitArgs(s.slice(1, -1)).length === 2;
+}
 
 export function parseInput(input: string, objects: GeoObject[]): Parsed {
-  let text = input.trim().replace(/'/g, '′');
+  let text = input.trim().replace(/'''/g, '‴').replace(/''/g, '″').replace(/'/g, '′');
   if (!text) fail('Wpisz definicję, np. A = (1; 2) albo Okrąg(A; 3).');
   let name: string | undefined;
   const named = text.match(/^([^\s=:()]+)\s*([:=])\s*([^]+)$/);
@@ -196,12 +212,11 @@ export function parseInput(input: string, objects: GeoObject[]): Parsed {
   };
   const done = (main: number): Parsed => ({ name, drafts, main: -main - 1 });
 
-  const literal = text.match(/^\(([^]*)\)$/);
-  if (literal) { const [x, y] = coordinates(literal[1]); return done(b.push({ kind: 'point', def: 'free', of: [], x, y })); }
+  if (isPointLiteral(text)) { const [x, y] = coordinates(text.slice(1, -1)); return done(b.push({ kind: 'point', def: 'free', of: [], x, y })); }
 
-  const shifted = text.match(/^(\S+)\s*\+\s*\(([^]*)\)$/);
-  if (shifted && byName.get(shifted[1])?.kind === 'point') {
-    return done(b.push({ kind: 'point', def: 'offset', of: [byName.get(shifted[1])!.id], coef: coordinates(shifted[2]) }));
+  const shifted = text.match(/^(\S+)\s*\+\s*(\([^]*\))$/);
+  if (shifted && byName.get(shifted[1])?.kind === 'point' && isPointLiteral(shifted[2])) {
+    return done(b.push({ kind: 'point', def: 'offset', of: [byName.get(shifted[1])!.id], coef: coordinates(shifted[2].slice(1, -1)) }));
   }
 
   const call = text.match(/^(\p{L}+)\s*\(([^]*)\)$/u);
@@ -212,7 +227,7 @@ export function parseInput(input: string, objects: GeoObject[]): Parsed {
     const args = raw.map(s => {
       const o = byName.get(s);
       if (o) return { roles: ROLES[o.kind], s, id: o.id };
-      if (/^\(.*\)$/.test(s)) return { roles: 'PO', s };
+      if (isPointLiteral(s)) return { roles: 'PO', s };
       if (!s) return fail(`${command.name}: brakuje argumentu.`);
       if (NAME.test(s) && !/^(pi|e|tau|phi)$/i.test(s)) return fail(`Nie ma obiektu „${s}”.`);
       return { roles: 'NA', s };

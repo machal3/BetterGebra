@@ -88,12 +88,13 @@ export function split(t: Expr): [Q, Expr] {
 
 export function add(...xs: Expr[]): Expr {
   const flat: Expr[] = [];
-  for (const x of xs) {
-    if (x.k === '+') flat.push(...x.t);
+  const push = (x: Expr) => {
+    if (x.k === '+') for (const t of x.t) push(t);
     // a number times a sum is spread out inside a sum, so A − A cancels: 2(x + 1) − 2x → 2
-    else if (x.k === '*' && x.t.length === 2 && x.t[0].k === 'n' && x.t[1].k === '+') for (const t of x.t[1].t) flat.push(mul(x.t[0], t));
+    else if (x.k === '*' && x.t.length === 2 && x.t[0].k === 'n' && x.t[1].k === '+') for (const t of x.t[1].t) push(mul(x.t[0], t));
     else flat.push(x);
-  }
+  };
+  for (const x of xs) push(x);
   let c = Q0, inf = 0;
   const groups = new Map<string, { rest: Expr; c: Q }>();
   for (const t of flat) {
@@ -412,7 +413,7 @@ export function together(e: Expr): Expr {
   for (const [, d] of parts) {
     for (const [base, exp] of factorsOf(d)) {
       if (base.k === 'n') { numericLcm = lcmBig(numericLcm, base.v.n ** (qint(exp) ? exp.n : 1n)); continue; }
-      const id = key(base), g = bases.get(id);
+      const id = `${key(base)}#${exp.d}`, g = bases.get(id);
       if (!g) bases.set(id, { base, exp }); else if (qcmp(exp, g.exp) > 0) g.exp = exp;
     }
   }

@@ -421,8 +421,13 @@ export function statsPlot(values: number[]): Plot | null {
   const v = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (v.length < 2) return null;
   const n = v.length, lo = v[0], hi = v[n - 1];
-  const mean = v.reduce((s, t) => s + t, 0) / n, median = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
-  const sd = Math.sqrt(v.reduce((s, t) => s + (t - mean) ** 2, 0) / n);
+  const neumaier = (xs: number[]) => {
+    let s = 0, c = 0;
+    for (const t of xs) { const y = s + t; c += Math.abs(s) >= Math.abs(t) ? (s - y) + t : (t - y) + s; s = y; }
+    return s + c;
+  };
+  const mean = neumaier(v) / n, median = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+  const sd = Math.sqrt(neumaier(v.map(t => (t - mean) ** 2)) / n);
   // integers in a short range: one bar per value; otherwise Sturges' rule
   const ints = v.every(Number.isInteger) && hi - lo <= 40;
   const bins = ints ? hi - lo + 1 : Math.max(1, Math.ceil(Math.log2(n) + 1));
@@ -442,13 +447,15 @@ export function statsPlot(values: number[]): Plot | null {
 export function sequencePlot(f: RealFn, k0: number, k1: number, total?: number, term = 'aₖ'): Plot | null {
   const last = Math.min(k1, k0 + 59);
   const terms: number[] = [], sums: number[] = [];
-  let s = 0;
+  let s = 0, c = 0;
   for (let k = k0; k <= last; k++) {
     const t = f(k);
     if (!Number.isFinite(t)) return null;
-    s += t;
+    const y = s + t;
+    c += Math.abs(s) >= Math.abs(t) ? (s - y) + t : (t - y) + s;
+    s = y;
     terms.push(k, t);
-    sums.push(k, s);
+    sums.push(k, s + c);
   }
   if (!terms.length) return null;
   const ys = [...terms.filter((_, i) => i % 2), ...sums.filter((_, i) => i % 2), 0, ...(total !== undefined && Number.isFinite(total) ? [total] : [])];

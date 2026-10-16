@@ -6,10 +6,12 @@ interface Row { el: HTMLElement; slider: HTMLInputElement; input: HTMLInputEleme
 const rows = new Map<string, Row>();
 let onSlide: () => void = () => {};
 
-/** The slider spans at least −10…10 and grows to include the typed value. */
+/** The slider spans at least −10…10 and grows to include the typed value; its step is fine enough not to round it (0,25 stays 0,25). */
 function fitSlider(slider: HTMLInputElement, value: number): void {
   slider.min = String(Math.min(-10, Math.floor(value)));
   slider.max = String(Math.max(10, Math.ceil(value)));
+  const decimals = Math.min(10, (String(value).split('.')[1] ?? '').length);
+  slider.step = decimals > 1 && !/e/i.test(String(value)) ? String(10 ** -decimals) : '0.1';
   slider.value = String(value);
   fillRange(slider);
 }
@@ -49,6 +51,12 @@ export function syncParameters(): void {
   names.forEach((name, i) => {
     let row = rows.get(name);
     if (!row) { row = createRow(name); rows.set(name, row); }
+    else if (document.activeElement !== row.input) {
+      row.input.value = String(state.params[name]);
+      row.input.setAttribute('aria-invalid', 'false');
+      row.error.textContent = '';
+      fitSlider(row.slider, state.params[name]);
+    }
     if (container.children[i] !== row.el) container.insertBefore(row.el, container.children[i] ?? null);
   });
   $('parameters-empty').hidden = names.length > 0;

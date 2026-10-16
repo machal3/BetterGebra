@@ -5,7 +5,7 @@
  */
 import {
   BF, BZERO, Decimal, bfAbs, bfAdd, bfAtan, bfAtan2, bfCmp, bfDiv, bfExp, bfFloor, bfFromQ, bfInt, bfLn, bfMul, bfMul2, bfNeg,
-  bfPi, bfSign, bfSinCos, bfSqrt, bfSub, bfToDecimal, bfToNumber, norm, top,
+  bfPi, bfSign, bfSinCos, bfSqrt, bfSub, bfSum, bfToDecimal, bfToNumber, norm, top,
 } from './bigfloat';
 import type { Expr } from './expr';
 import { CasError, qint } from './q';
@@ -16,6 +16,7 @@ const C1 = real(bfInt(1));
 const isReal = (z: C) => !z.im.m;
 
 export const cadd = (a: C, b: C, p: number): C => ({ re: bfAdd(a.re, b.re, p), im: bfAdd(a.im, b.im, p) });
+export const csum = (xs: C[], p: number): C => ({ re: bfSum(xs.map(x => x.re), p), im: bfSum(xs.map(x => x.im), p) });
 export const csub = (a: C, b: C, p: number): C => ({ re: bfSub(a.re, b.re, p), im: bfSub(a.im, b.im, p) });
 export function cmul(a: C, b: C, p: number): C {
   if (isReal(a) && isReal(b)) return real(bfMul(a.re, b.re, p));
@@ -202,7 +203,7 @@ export function czeta(s: C, p: number): C {
 
 // --- Expressions ---
 
-type Ctx = { p: number };
+type Ctx = { p: number; retried?: boolean };
 
 /** Value of a constant expression at precision p bits. Throws CasError on free variables or undefined points. */
 export function evalC(e: Expr, p: number): C {
@@ -220,10 +221,21 @@ function ev(e: Expr, ctx: Ctx): C {
       if (e.n === 'inf') throw new CasError('Nieskończoność nie ma wartości liczbowej.');
       throw new CasError(`Zmienna ${e.n} nie ma wartości liczbowej.`);
     case '+': {
-      // Terms may cancel: evaluate them with extra bits, then check how much was lost.
-      const terms = e.t.map(t => ev(t, { p: wp }));
-      let s = terms[0];
-      for (let j = 1; j < terms.length; j++) s = cadd(s, terms[j], wp);
+      // Terms may cancel: evaluate them with extra bits, sum without intermediate rounding, and boost precision if bits cancelled.
+      const terms = e.t.map(t => ev(t, { p: wp, retried: ctx.retried }));
+      const s = csum(terms, wp);
+      if (!ctx.retried) {
+        let maxT = -Infinity;
+        for (const t of terms) maxT = Math.max(maxT, top(t.re), top(t.im));
+        const curT = Math.max(top(s.re), top(s.im));
+        if (maxT > -Infinity) {
+          const lost = maxT - Math.max(curT, maxT - wp);
+          if (lost > 12 && lost <= 2048) {
+            const hp = wp + lost + 16;
+            return csum(e.t.map(t => ev(t, { p: hp, retried: true })), p);
+          }
+        }
+      }
       return s;
     }
     case '*': {
@@ -288,6 +300,17 @@ function evFn(n: string, a: C[], p: number): C {
     case 'floor': return real(bfInt(bfFloor(needReal(z, 'Część całkowita'))));
     case 'ceil': return real(bfInt(-bfFloor(bfNeg(needReal(z, 'Sufit')))));
     case 'round': return real(bfInt(bfFloor(bfAdd(needReal(z, 'Zaokrąglenie'), { m: 1n, e: -1 }, wp))));
+    case 'frac': { const r = needReal(z, 'Część ułamkowa'); return real(bfSub(r, bfInt(bfFloor(r)), p)); }
+    case 'mod': {
+      const x = needReal(a[0], 'mod'), y = needReal(a[1], 'mod');
+      if (!y.m) throw new CasError('mod: dzielnik nie może być zerem.');
+      const qf = bfInt(bfFloor(bfDiv(x, y, wp)));
+      return real(bfSub(x, bfMul(y, qf, wp), p));
+    }
+    case 'binomial': {
+      const [u, v] = a;
+      return cdiv(cgamma(cadd(u, C1, wp), wp), cmul(cgamma(cadd(v, C1, wp), wp), cgamma(cadd(csub(u, v, wp), C1, wp), wp), wp), p);
+    }
     case 'gamma': return cgamma(z, p);
     case 'factorial': return cgamma(cadd(z, C1, wp), p);
     case 'erf': return cerf(z, p);

@@ -255,18 +255,26 @@ export function plotView(p: Plot): HTMLElement {
     if (!f || !g) return;
     const X0 = Math.max(v.px(a), -2), X1 = Math.min(v.px(b), W + 2);
     if (X1 <= X0) return;
-    const top: [number, number][] = [], bottom: [number, number][] = [];
+    const clampY = (Y: number) => Math.max(-H, Math.min(2 * H, Y));
+    const path = new Path2D();
+    let top: [number, number][] = [], bottom: [number, number][] = [];
+    const flush = () => {
+      if (top.length < 2) { top = []; bottom = []; return; }
+      top.forEach(([X, Y], k) => (k ? path.lineTo(X, Y) : path.moveTo(X, Y)));
+      for (let k = bottom.length - 1; k >= 0; k--) path.lineTo(bottom[k][0], bottom[k][1]);
+      path.closePath();
+      top = []; bottom = [];
+    };
     for (let X = X0; ; X = Math.min(X + 1, X1)) {
       const x = v.fromX(X), y = f(x), z = g(x);
-      if (Number.isFinite(y) && Number.isFinite(z)) { top.push([X, v.py(y)]); bottom.push([X, v.py(z)]); }
+      if (Number.isFinite(y) && Number.isFinite(z)) {
+        top.push([X, clampY(v.py(y))]);
+        bottom.push([X, clampY(v.py(z))]);
+      } else flush();
       if (X === X1) break;
     }
-    if (!top.length) return;
-    const path = new Path2D();
-    top.forEach(([X, Y], k) => (k ? path.lineTo(X, Y) : path.moveTo(X, Y)));
-    for (let k = bottom.length - 1; k >= 0; k--) path.lineTo(bottom[k][0], bottom[k][1]);
-    path.closePath();
-    const Y0 = v.py(0);
+    flush();
+    const Y0 = clampY(v.py(0));
     for (const [clipY, clipH, c] of to === undefined ? [[0, Y0, color(0)], [Y0, H - Y0, color(1)]] as const : [[0, H, color(0)]] as const) {
       ctx.save();
       ctx.beginPath(); ctx.rect(0, clipY, W, clipH); ctx.clip();
@@ -460,6 +468,7 @@ export function plotView(p: Plot): HTMLElement {
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('lostpointercapture', end);
   canvas.addEventListener('pointerleave', () => { pointer = null; request(); });
   // The page scrolls with the wheel; Ctrl (or a trackpad pinch, which sets it) zooms.
   canvas.addEventListener('wheel', e => {
@@ -480,7 +489,8 @@ export function plotView(p: Plot): HTMLElement {
     e.preventDefault();
   });
 
-  new ResizeObserver(() => {
+  const ro = new ResizeObserver(() => {
+    if (!canvas.isConnected) { live.delete(draw); ro.disconnect(); return; }
     const r = stage.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     if (!r.width || !r.height) return;
     // keep the same x range and centre when the card changes width
@@ -491,7 +501,8 @@ export function plotView(p: Plot): HTMLElement {
     home = fit(p.x, p.y, W, H, !!p.equal);
     view = was ? fit([was.min, was.max], [was.bottom, was.top], W, H, !!p.equal) : { ...home };
     draw();
-  }).observe(stage);
+  });
+  ro.observe(stage);
   live.add(draw);
   return wrap;
 }

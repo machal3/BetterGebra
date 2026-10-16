@@ -81,7 +81,7 @@ export function parse(input: string): Node {
       while (peek() === ',' || peek() === ';') { take(); args.push(sum()); }
       close();
     } else {
-      if (!startsAtom(peek())) fail(`Uzupełnij argument: ${name}(x).`);
+      if (!startsAtom(peek()) && peek() !== '-') fail(`Uzupełnij argument: ${name}(x).`);
       // sin 2x → sin(2x). It stops at the next function, so 2 sin x cos x is a product of two.
       let arg = unary();
       while (simple(peek())) arg = { t: '*', a: arg, b: pow() };

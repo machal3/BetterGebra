@@ -258,11 +258,13 @@ function define(text: string, target?: GeoObject): string | null {
   const { name, drafts, main } = parsed, victim = target ?? objects.find(o => o.name === name);
   if (name) drafts[main].name = name;
   const replace = new Map<number, GeoObject>();
-  checkpoint();
   if (victim) {
     const loop = dependents(objects, victim.id);
-    if (drafts.some(d => d.of.some(id => loop.has(id)))) { undoStack.pop(); return 'Obiekt nie może zależeć od siebie ani od obiektów zbudowanych na nim.'; }
-    if (name && name !== victim.name && objects.some(o => o.name === name)) { undoStack.pop(); return `Nazwa „${name}” jest zajęta.`; }
+    if (drafts.some(d => d.of.some(id => loop.has(id)))) return 'Obiekt nie może zależeć od siebie ani od obiektów zbudowanych na nim.';
+    if (name && name !== victim.name && objects.some(o => o.name === name)) return `Nazwa „${name}” jest zajęta.`;
+  }
+  checkpoint();
+  if (victim) {
     replace.set(main, victim);
     // A polygon's sides become the new sides, in order; sides left over go, with what was built on them.
     const oldSides = objects.filter(o => o.def === 'edge' && o.of[2] === victim.id), newSides = drafts.flatMap((d, i) => d.def === 'edge' ? [i] : []);
@@ -271,6 +273,13 @@ function define(text: string, target?: GeoObject): string | null {
   }
   const ids = add(drafts, replace);
   objects = topoSort(objects);
+  // An image is of its original's kind: when c becomes a line, so does its reflection c′ (in order, so c″ too).
+  const byId = new Map(objects.map(o => [o.id, o]));
+  for (const o of objects) {
+    if (o.def !== 'reflect' && o.def !== 'rotate' && o.def !== 'translate' && o.def !== 'dilate') continue;
+    const source = byId.get(o.of[0]);
+    if (source && source.kind !== o.kind) o.kind = source.kind;
+  }
   selected = ids[main];
   update();
   return null;
@@ -300,6 +309,18 @@ function checkpoint(): void {
   undoStack.push(snapshot());
   if (undoStack.length > 200) undoStack.shift();
   redoStack = [];
+}
+/** The checkpoint a drawing tool took on its first click, with the redo history it cleared. */
+let toolStart: { depth: number; redo: string[] } | null = null;
+function startTool(): void {
+  const redo = redoStack;
+  checkpoint();
+  toolStart = { depth: undoStack.length, redo };
+}
+/** The tool was cancelled (its dialog closed): back to before its first click, points it placed and redo history included. */
+function cancelTool(): void {
+  if (toolStart && undoStack.length === toolStart.depth) { objects = JSON.parse(undoStack.pop()!); redoStack = toolStart.redo; }
+  toolStart = null;
 }
 function travel(from: string[], to: string[]): void {
   const now = snapshot();
@@ -463,21 +484,22 @@ async function click(x: number, y: number): Promise<void> {
   }
   // Drawing doesn't select: the inspector stays closed while building.
   selected = null;
-  if (fresh) checkpoint();
-  if (tool === 'point') { pointAt(x, y); update(); return; }
+  if (tool === 'point') { checkpoint(); pointAt(x, y); update(); return; }
   // Clicking a segment (or circle) itself: its midpoint (centre), its length.
   if ((tool === 'midpoint' || tool === 'distance') && fresh && hit(x, y, isPoint) === null) {
     const seg = objects.find(o => o.id === hit(x, y, s => s.kind === 'segment' || (tool === 'midpoint' && s.kind === 'circle')));
     if (seg) {
+      checkpoint();
       add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }])[0];
       update();
       return;
     }
   }
   if (tool === 'polygon') {
+    if (fresh) checkpoint();
     const id = pointAt(x, y);
     if (id === picked[0] && picked.length >= 3) { polygonFrom(picked as number[]); picked = []; }
-    else if (id !== picked[picked.length - 1]) picked.push(id);
+    else if (!picked.includes(id)) picked.push(id);
     update();
     return;
   }
@@ -487,7 +509,10 @@ async function click(x: number, y: number): Promise<void> {
   if (slot === undefined) {
     slot = open.find(i => needs[i] === 'point' || needs[i] === 'pointOrLine');
     if (slot === undefined) return; // this tool needs a line, circle… here, and there is none
+    if (fresh) startTool();
     id = pointAt(x, y);
+  } else if (fresh) {
+    startTool();
   }
   if (picked.includes(id!)) { update(); return; }
   picked[slot] = id!;
@@ -497,7 +522,7 @@ async function click(x: number, y: number): Promise<void> {
     if (spec.ask) {
       update();
       const value = await ask(spec.ask);
-      if (value !== null) spec.ask.run(ids, value);
+      if (value === null) cancelTool(); else spec.ask.run(ids, value);
     } else {
       const drafts = spec.existing ? existing(spec.make!(ids)) : spec.make!(ids);
       if (!drafts.length && spec.existing) toast(spec.existing);
@@ -1115,6 +1140,7 @@ export function initGeometry(): void {
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('lostpointercapture', end);
   canvas.addEventListener('pointerleave', () => { pointer = null; request(); });
   initCoords();
   initStyle();

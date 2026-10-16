@@ -7,7 +7,7 @@ const fn = (expression: string): FnState => ({ id: 1, expression, color: '#00000
 test('each row of Wykresy says whether it is a graph or a set', () => {
   const kind = (s: string) => { const k = rowKind(s); return k.kind === 'graph' ? 'graph' : k.xy ? 'xy' : 'z'; };
   for (const s of ['x^2', 'y = x^2', 'f(x) = sin x', 'a x + b', 'x^2 + y^2', '3']) expect(kind(s), s).toBe('graph');
-  for (const s of ['y > x^2', 'x = 2', 'x^2 + y^2 <= 25', '1 < x < 3', 'y = x^2 = 1', 'y^2 = x']) expect(kind(s), s).toBe('xy');
+  for (const s of ['y > x^2', 'x = 2', 'x^2 + y^2 <= 25', '1 < x < 3', 'y = x^2 = 1', 'y^2 = x', 'y = x + y^2', 'y > sin 2x']) expect(kind(s), s).toBe('xy');
   for (const s of ['|z - 1| <= 2', '1 < Re z < 3', 'z^2 = -1', 't + 2i', 'a + bi', 'z = t + 2i', 'y = x + 2i']) expect(kind(s), s).toBe('z');
 });
 
@@ -42,4 +42,11 @@ test('sets on the complex plane read as they did in Zbiory', () => {
   expect(t.set?.kind === 'parametric' && t.set.unknowns).toEqual(['t']);
   // Zespolone stays as it was: f(z) coloured
   expect(compileRow(fn('z^2 + 1'), 'complex', {}).cfn!([0, 1])).toEqual([0, 0]);
+});
+
+test('a condition in x and y keeps juxtaposed arguments: y > sin 2x is y > sin(2x)', () => {
+  const c = compileRow(fn('y > sin 2x'), 'graph', {});
+  const [lhs, rhs] = (c.set as { sides: ((z: [number, number]) => [number, number])[] }).sides;
+  expect(rhs([1, 0.5])[0]).toBeCloseTo(Math.sin(2));
+  expect(lhs([1, 0.5])[0]).toBeCloseTo(0.5);
 });
