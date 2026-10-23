@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f0f0f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Bettergebra — kalkulator wykresów funkcji, płaszczyzny zespolonej i zbiorów liczb zespolonych.">
+  <title>Bettergebra</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f6cbd'/%3E%3Cpath d='M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <script>
+    // Theme before first paint, so a dark-mode reload doesn't flash light.
+    try { const t = JSON.parse(localStorage.getItem('bettergebra.v2') || 'null')?.theme; if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <main class="home" aria-labelledby="home-title">
+    <h1 id="home-title" class="logo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
+      <span>Bettergebra</span>
+    </h1>
+    <p class="home-lead">Co chcesz dziś robić?</p>
+    <nav class="home-choices" aria-label="Wybierz część">
+      <a href="#wykresy">
+        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg></span>
+        <b>Wykresy</b>
+        <span>Funkcje, trygonometria, liczby zespolone i zbiory</span>
+      </a>
+      <a href="#geometria">
+        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span>
+        <b>Geometria</b>
+        <span>Punkty, proste, okręgi i konstrukcje</span>
+      </a>
+      <a href="#kalkulator">
+        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg></span>
+        <b>Kalkulator</b>
+        <span>Wyniki dokładne, równania, pochodne, całki, macierze</span>
+      </a>
+    </nav>
+  </main>
+
+  <div class="app">
+    <nav class="rail" aria-label="Nawigacja">
+      <a class="rail-logo logo" href="#" aria-label="Bettergebra — strona główna" title="Strona główna">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
+      </a>
+      <div id="modes" class="rail-items">
+        <a class="rail-item" href="#wykresy" data-mode="graph" title="Wykresy — funkcje y = f(x), krzywe i obszary w x, y, zbiory na płaszczyźnie zespolonej">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg>
+          <span>Wykresy</span>
+        </a>
+        <a class="rail-item" href="#wykresy" data-mode="complex" title="Zespolone — kolorowanie wartości f(z)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17"/><circle cx="16" cy="8" r="1.7" class="fill"/></svg>
+          <span>Zespolone</span>
+        </a>
+        <a class="rail-item" href="#geometria" data-panel="geometry" title="Geometria — punkty, proste, okręgi i konstrukcje">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+          <span>Geometria</span>
+        </a>
+        <a class="rail-item" href="#kalkulator" data-panel="calculator" title="Kalkulator — obliczenia dokładne i symboliczne">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg>
+          <span>Kalkulator</span>
+        </a>
+      </div>
+    </nav>
+
+    <aside class="sidebar" aria-labelledby="pane-title">
+      <header class="pane-head">
+        <a class="pane-home icon-button" href="#" aria-label="Strona główna" title="Strona główna"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M9 2.39a1.5 1.5 0 0 1 2 0l5.5 4.94c.32.28.5.69.5 1.12v7.05c0 .83-.67 1.5-1.5 1.5H13a1.5 1.5 0 0 1-1.5-1.5V12a.5.5 0 0 0-.5-.5H9a.5.5 0 0 0-.5.5v3.5c0 .83-.67 1.5-1.5 1.5H4.5A1.5 1.5 0 0 1 3 15.5V8.45c0-.43.18-.84.5-1.12zm1.33.74a.5.5 0 0 0-.66 0l-5.5 4.94a.5.5 0 0 0-.17.38v7.05c0 .28.22.5.5.5H7a.5.5 0 0 0 .5-.5V12c0-.83.67-1.5 1.5-1.5h2c.83 0 1.5.67 1.5 1.5v3.5c0 .28.22.5.5.5h2.5a.5.5 0 0 0 .5-.5V8.45a.5.5 0 0 0-.17-.38z"/></svg></a>
+        <h1 id="pane-title" class="pane-title">Wykresy</h1>
+        <div class="pane-actions">
+          <button id="help-button" class="icon-button" type="button" aria-label="Pomoc i skróty" title="Pomoc i skróty  ?"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14m0 10.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5m0-8a2.5 2.5 0 0 1 1.65 4.38l-.15.12-.22.17-.09.07-.16.15c-.33.36-.53.85-.53 1.61a.5.5 0 0 1-1 0 3.2 3.2 0 0 1 1.16-2.62l.25-.19.12-.1A1.5 1.5 0 0 0 10 6.5c-.83 0-1.5.67-1.5 1.5a.5.5 0 0 1-1 0A2.5 2.5 0 0 1 10 5.5"/></svg></button>
+          <button id="theme-button" class="icon-button" type="button" aria-label="Zmień motyw" title="Zmień motyw">
+            <span class="when-light"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 13.5A6.98 6.98 0 0 1 4 14.39c2.83-1.09 4.56-2.42 5.6-4.4 1.04-2 1.33-4.16.75-6.9q1.36.17 2.58.87a7 7 0 0 1 2.55 9.54M5.45 16.92A7.98 7.98 0 1 0 9.88 2.04a.6.6 0 0 0-.61.73c.69 2.82.43 4.88-.55 6.76-.94 1.78-2.55 3.03-5.55 4.1a.6.6 0 0 0-.3.9 8 8 0 0 0 2.59 2.39"/></svg></span><span class="when-dark"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c.28 0 .5.22.5.5v1a.5.5 0 0 1-1 0v-1c0-.28.22-.5.5-.5m0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8m0-1a3 3 0 1 1 0-6 3 3 0 0 1 0 6m7.5-2.5a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1zM10 16c.28 0 .5.22.5.5v1a.5.5 0 0 1-1 0v-1c0-.28.22-.5.5-.5m-6.5-5.5a.5.5 0 0 0 0-1H2.46a.5.5 0 0 0 0 1zm.65-6.35c.2-.2.5-.2.7 0l1 1a.5.5 0 1 1-.7.7l-1-1a.5.5 0 0 1 0-.7m.7 11.7a.5.5 0 0 1-.7-.7l1-1a.5.5 0 0 1 .7.7zm11-11.7a.5.5 0 0 0-.7 0l-1 1a.5.5 0 0 0 .7.7l1-1a.5.5 0 0 0 0-.7m-.7 11.7a.5.5 0 0 0 .7-.7l-1-1a.5.5 0 0 0-.7.7z"/></svg></span>
+          </button>
+        </div>
+      </header>
+
+      <div id="graphs-body" class="sidebar-body">
+        <section class="section" aria-labelledby="functions-title">
+          <div class="section-head">
+            <h2 id="functions-title">Funkcje</h2>
+            <span id="function-count" class="count"></span>
+          </div>
+          <ol id="function-list" class="function-list"></ol>
+          <button id="add-function" class="add-button" type="button">
+            <svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5c.28 0 .5.22.5.5v6.5H17a.5.5 0 0 1 0 1h-6.5V17a.5.5 0 0 1-1 0v-6.5H3a.5.5 0 0 1 0-1h6.5V3c0-.28.22-.5.5-.5"/></svg>
+            <span>Dodaj funkcję</span>
+            <kbd>Enter</kbd>
+          </button>
+        </section>
+
+        <section class="section" aria-labelledby="parameters-title">
+          <div class="section-head"><h2 id="parameters-title">Parametry</h2></div>
+          <p id="parameters-empty" class="hint">Każda litera inna niż <i>x</i> staje się parametrem z suwakiem (w warunkach także inna niż <i>y</i>, <i>z</i>, <i>i</i>). Wpisz np. <code>a·sin(b·x)</code> albo <code>x^2 + y^2 &lt;= r^2</code>.</p>
+          <div id="parameter-list" class="parameter-list"></div>
+        </section>
+      </div>
+
+      <div id="geo-side" class="geo-side">
+        <div class="geo-tabs" role="tablist" aria-label="Panel geometrii">
+          <button id="geo-tab-create" type="button" role="tab" aria-selected="true" aria-controls="geo-create">Tworzenie</button>
+          <button id="geo-tab-objects" type="button" role="tab" aria-selected="false" aria-controls="geo-objects" tabindex="-1">Obiekty <span id="geo-count" class="count"></span></button>
+        </div>
+        <div id="geo-create" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-create">
+          <input id="geo-search" class="geo-search" type="search" spellcheck="false" autocomplete="off" aria-label="Szukaj narzędzia" placeholder="Szukaj narzędzia…">
+          <p id="geo-search-empty" class="hint geo-search-empty" hidden>Nie ma takiego narzędzia.</p>
+          <div id="geo-tools" class="geo-tools"></div>
+        </div>
+        <div id="geo-objects" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-objects" hidden>
+          <form id="geo-input-form" class="geo-input-form">
+            <input id="geo-input" type="text" spellcheck="false" autocomplete="off" aria-label="Definicja obiektu" placeholder="np. A = (1; 2), Okrąg(A; 3), y = 2x + 1">
+            <button class="text-button primary" type="submit">Dodaj</button>
+          </form>
+          <p id="geo-input-error" class="error" role="alert"></p>
+          <details class="geo-commands">
+            <summary>Polecenia i sposoby definiowania</summary>
+            <ul id="geo-reference" class="geo-reference"></ul>
+          </details>
+          <p id="geo-empty" class="hint">Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>Tworzenie</b>.</p>
+          <ol id="geo-list" class="geo-list"></ol>
+        </div>
+      </div>
+
+      <div id="calc-side" class="sidebar-body calc-side">
+        <section class="section" aria-labelledby="calc-history-title">
+          <div class="section-head">
+            <h2 id="calc-history-title">Historia</h2>
+            <button id="calc-clear-history" class="icon-button small" type="button" aria-label="Wyczyść historię" title="Wyczyść historię"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 4h3a1.5 1.5 0 0 0-3 0m-1 0a2.5 2.5 0 0 1 5 0h5a.5.5 0 0 1 0 1h-1.05l-1.2 10.34A3 3 0 0 1 12.27 18H7.73a3 3 0 0 1-2.98-2.66L3.55 5H2.5a.5.5 0 0 1 0-1zM5.74 15.23A2 2 0 0 0 7.73 17h4.54a2 2 0 0 0 1.99-1.77L15.44 5H4.56zM8.5 7.5c.28 0 .5.22.5.5v6a.5.5 0 0 1-1 0V8c0-.28.22-.5.5-.5M12 8a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/></svg></button>
+          </div>
+          <p id="calc-history-empty" class="hint">Tu pojawią się Twoje obliczenia. Strzałki ↑ ↓ w polu wpisywania przywołują poprzednie.</p>
+          <ol id="calc-history" class="calc-history"></ol>
+        </section>
+        <section class="section" aria-labelledby="calc-examples-title">
+          <div class="section-head"><h2 id="calc-examples-title">Przykłady</h2></div>
+          <div id="calc-examples" class="calc-examples"></div>
+        </section>
+        <section class="section">
+          <details class="calc-ref">
+            <summary>Zapis i polecenia</summary>
+            <table class="syntax">
+              <tr><td><code>2x</code>, <code>x^2</code>, <code>x²</code>, <code>√x</code>, <code>|x|</code>, <code>n!</code></td><td>jak w wykresach; ułamki dziesiętne z kropką</td></tr>
+              <tr><td><code>pi</code>, <code>e</code>, <code>i</code>, <code>inf</code>, <code>phi</code></td><td>stałe; <code>i</code> to jednostka urojona</td></tr>
+              <tr><td><code>x^2 = 2</code>, <code>x + y = 3, x − y = 1</code></td><td>równania i układy</td></tr>
+              <tr><td><code>x^2 &lt; 4</code>, <code>1 &lt; 2x &lt;= 5</code></td><td>nierówności</td></tr>
+              <tr><td><code>diff(f, x, n)</code>, <code>pochodna f</code>, <code>d/dx f</code></td><td>pochodne</td></tr>
+              <tr><td><code>integrate(f, x, a, b)</code>, <code>całka f dx</code>, <code>całka f od a do b</code></td><td>całki</td></tr>
+              <tr><td><code>limit(f, x->a)</code>, <code>granica f przy x->0+</code></td><td>granice (też jednostronne)</td></tr>
+              <tr><td><code>taylor(f, x, a, n)</code>, <code>sum(f, k, 1, inf)</code></td><td>szeregi i sumy</td></tr>
+              <tr><td><code>solve</code>, <code>factor</code>, <code>expand</code>, <code>simplify</code>, <code>apart</code></td><td>algebra (też po polsku: <code>rozwiąż</code>, <code>rozłóż</code>, <code>rozwiń</code>, <code>uprość</code>)</td></tr>
+              <tr><td><code>[[1, 2], [3, 4]]</code>, <code>det</code>, <code>inverse</code>, <code>eigenvalues</code></td><td>macierze</td></tr>
+              <tr><td><code>\frac{1}{2}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{x \to 0}</code>, <code>\begin{pmatrix}…\end{pmatrix}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
+              <tr><td><code>wykres sin x, cos x</code>, <code>wykres x^2 + y^2 = 25</code></td><td>wykresy funkcji i krzywych</td></tr>
+              <tr><td><code>isprime</code>, <code>gcd</code>, <code>lcm</code>, <code>powmod</code>, <code>crt</code>, <code>totient</code></td><td>teoria liczb</td></tr>
+              <tr><td><code>N(x, 100)</code>, <code>ans</code></td><td>cyfry dziesiętne, poprzedni wynik</td></tr>
+              <tr><td><code>badanie funkcji f</code>, <code>styczna do f w 1</code></td><td>przebieg zmienności, styczna</td></tr>
+            </table>
+          </details>
+        </section>
+      </div>
+    </aside>
+
+    <main id="stage" class="stage">
+      <canvas id="plot" tabindex="0" aria-label="Wykres. Przeciągnij, aby przesunąć. Kółko lub gest przybliża. Strzałki przesuwają, plus i minus przybliżają, 0 przywraca widok."></canvas>
+      <canvas id="hover" aria-hidden="true"></canvas>
+      <div id="readout" class="readout" hidden></div>
+      <p id="range-caption" class="caption" aria-hidden="true"></p>
+
+      <div class="toolbar" role="toolbar" aria-label="Narzędzia wykresu" aria-orientation="vertical">
+        <div class="tool-group">
+          <button id="zoom-in" type="button" aria-label="Przybliż" title="Przybliż  +"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 5.5c.28 0 .5.22.5.5v2h2a.5.5 0 0 1 0 1H9v2a.5.5 0 0 1-1 0V9H6a.5.5 0 0 1 0-1h2V6c0-.28.22-.5.5-.5m0-3.5a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
+          <button id="zoom-out" type="button" aria-label="Oddal" title="Oddal  −"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 8a.5.5 0 0 1 0 1H6a.5.5 0 0 1 0-1zM8.5 2a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="fit-view" type="button" aria-label="Dopasuj oś y do wykresów" title="Dopasuj oś y  F"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m15 3.63 1.14 1.18a.5.5 0 1 0 .72-.7l-1.82-1.88a.75.75 0 0 0-1.08 0L12.14 4.1a.5.5 0 1 0 .72.7L14 3.63V7.5a.5.5 0 0 0 1 0zM3 5c0-1.1.9-2 2-2h4.5a.5.5 0 0 1 0 1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h4.5a.5.5 0 0 1 0 1H5a2 2 0 0 1-2-2zm13.14 10.2L15 16.36V12.5a.5.5 0 1 0-1 0v3.87l-1.14-1.18a.5.5 0 1 0-.72.7l1.82 1.88c.3.3.79.3 1.08 0l1.82-1.88a.5.5 0 1 0-.72-.7"/></svg></button>
+          <button id="equal-axes" type="button" aria-label="Równe osie 1:1" title="Równe osie 1:1"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M6.76 7.07q.23.16.24.43v5a.5.5 0 0 1-1 0V8.3l-.28.15a.5.5 0 1 1-.44-.9l1-.5a.5.5 0 0 1 .48.02M14 7.5a.5.5 0 0 0-.72-.45l-1 .5a.5.5 0 1 0 .44.9L13 8.3v4.19a.5.5 0 0 0 1 0zm-4 1a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0M9.5 12a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1M2 6.75A2.75 2.75 0 0 1 4.75 4h10.5A2.75 2.75 0 0 1 18 6.75v6.5A2.75 2.75 0 0 1 15.25 16H4.75A2.75 2.75 0 0 1 2 13.25zM4.75 5C3.78 5 3 5.78 3 6.75v6.5c0 .97.78 1.75 1.75 1.75h10.5c.97 0 1.75-.78 1.75-1.75v-6.5C17 5.78 16.22 5 15.25 5z"/></svg></button>
+          <button id="reset-view" type="button" aria-label="Przywróć widok" title="Przywróć widok  0"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10A6 6 0 0 0 5.53 6H7.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 1 0v1.6a7 7 0 1 1-1.98 4.36.5.5 0 0 1 1 .08L4 10a6 6 0 0 0 12 0"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="analysis-button" type="button" aria-pressed="false" aria-controls="analysis" aria-label="Badanie funkcji" title="Badanie funkcji  B"><span class="tool-text serif">f′</span></button>
+          <button id="view-button" type="button" popovertarget="view-panel" aria-label="Ustawienia widoku" title="Siatka, osie, zakres"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M14.95 5a2.5 2.5 0 0 0-4.9 0H2.5a.5.5 0 0 0 0 1h7.55a2.5 2.5 0 0 0 4.9 0h2.55a.5.5 0 0 0 0-1zM12.5 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3m-2.55 7a2.5 2.5 0 0 0-4.9 0H2.5a.5.5 0 0 0 0 1h2.55a2.5 2.5 0 0 0 4.9 0h7.55a.5.5 0 0 0 0-1zM7.5 16a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3"/></svg></button>
+          <button id="export" type="button" aria-label="Zapisz wykres jako PNG" title="Zapisz PNG"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 17a.5.5 0 0 1 .09 1H4.5a.5.5 0 0 1-.09-1H15.5M10 2a.5.5 0 0 1 .5.41V14.3l3.64-3.65a.5.5 0 0 1 .64-.06l.07.06c.17.17.2.44.06.63l-.06.07-4.5 4.5a.5.5 0 0 1-.25.14L10 16a.5.5 0 0 1-.4-.2l-4.46-4.45a.5.5 0 0 1 .64-.76l.07.06 3.65 3.64V2.5c0-.27.22-.5.5-.5"/></svg></button>
+        </div>
+      </div>
+
+      <section id="analysis" class="analysis" aria-label="Badanie funkcji" aria-live="polite" hidden>
+        <header class="analysis-head">
+          <h2>Badanie</h2>
+          <div id="analysis-target" class="analysis-target"></div>
+          <button id="analysis-close" class="icon-button small" type="button" aria-label="Zamknij badanie"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07z"/></svg></button>
+        </header>
+        <dl class="ledger">
+          <div data-row="v0"><dt>f(0)</dt><dd id="value-zero">—</dd></div>
+          <div data-row="v1"><dt>f(1)</dt><dd id="value-one">—</dd></div>
+          <div data-row="roots"><dt id="roots-label">Miejsca zerowe</dt><dd id="roots">—</dd></div>
+          <div data-row="cross"><dt>Przecięcia</dt><dd id="intersections">—</dd></div>
+        </dl>
+        <p class="analysis-foot">w widocznym zakresie</p>
+      </section>
+
+      <div id="view-panel" class="popover view-panel" popover aria-labelledby="view-title">
+        <h3 id="view-title" class="popover-title">Widok</h3>
+        <label class="switch"><span>Siatka</span><input type="checkbox" id="grid-toggle" role="switch"></label>
+        <label class="switch"><span>Osie</span><input type="checkbox" id="axes-toggle" role="switch"></label>
+        <label class="switch"><span>Przyciąganie kursora</span><input type="checkbox" id="snap-toggle" role="switch"></label>
+        <h4 class="subhead">Etykiety osi</h4>
+        <label class="geo-style-row"><span>Oś x</span>
+          <select id="x-unit"><option value="num">Liczby</option><option value="pi">Wielokrotności π</option><option value="deg">Stopnie</option></select>
+        </label>
+        <label class="geo-style-row unit-row"><span>Oś y</span>
+          <select id="y-unit"><option value="num">Liczby</option><option value="pi">Wielokrotności π</option><option value="deg">Stopnie</option></select>
+        </label>
+        <h4 class="subhead">Zakres</h4>
+        <div class="range-grid">
+          <label for="x-min">x od</label><input id="x-min" type="number" step="any" inputmode="decimal">
+          <label for="x-max">do</label><input id="x-max" type="number" step="any" inputmode="decimal">
+          <label for="y-min">y od</label><input id="y-min" type="number" step="any" inputmode="decimal">
+          <label for="y-max">do</label><input id="y-max" type="number" step="any" inputmode="decimal">
+        </div>
+        <p id="range-error" class="error" role="alert"></p>
+      </div>
+    </main>
+
+    <main id="calc" class="calc" aria-label="Kalkulator">
+      <div class="calc-column">
+        <div id="calc-empty" class="calc-empty calc-hero">
+          <span class="calc-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg></span>
+          <h2>Kalkulator symboliczny</h2>
+          <p>Wyniki dokładne — ułamki, pierwiastki, π — a cyfry dziesiętne tylko te, które są pewne. Wpisz wyrażenie, równanie albo polecenie po polsku lub angielsku.</p>
+        </div>
+        <form id="calc-form" class="calc-composer" role="search" aria-label="Obliczenie">
+          <div class="calc-field">
+            <input id="calc-input" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="go" aria-label="Wyrażenie, równanie lub polecenie" placeholder="np. całka x^2 sin x dx, x^3 − 2 = 0, rozłóż 2^64 + 1">
+            <button class="calc-go" type="submit" aria-label="Oblicz" title="Oblicz  Enter"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg></button>
+          </div>
+          <div id="calc-preview" class="calc-preview" aria-live="off"></div>
+          <div class="calc-bar">
+            <div id="calc-keys" class="calc-keys" role="toolbar" aria-label="Wstaw symbol"></div>
+            <label class="calc-digits"><span>Cyfry</span>
+              <select id="calc-digits"><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+            </label>
+          </div>
+          <div class="calc-progress" aria-hidden="true"></div>
+        </form>
+        <div id="calc-status" class="calc-status" role="status" hidden>
+          <span class="calc-spinner" aria-hidden="true"></span><span>Obliczanie…</span>
+          <button id="calc-stop" class="calc-stop" type="button">Przerwij</button>
+        </div>
+        <section id="calc-suggest" class="calc-suggest" aria-label="Przykłady">
+          <div id="calc-empty-tabs" class="calc-tabs" role="tablist" aria-label="Rodzaj przykładów"></div>
+          <div id="calc-empty-examples" class="calc-tiles" role="tabpanel"></div>
+        </section>
+        <div id="calc-results" class="calc-results" aria-live="polite"></div>
+      </div>
+    </main>
+
+    <main id="geometry" class="stage geometry" aria-label="Geometria">
+      <canvas id="geo-canvas" aria-label="Rysunek geometryczny. Wybierz narzędzie w panelu bocznym i klikaj na płaszczyźnie."></canvas>
+      <p id="geo-hint" class="geo-hint" aria-live="polite"></p>
+      <section id="geo-inspect" class="geo-inspect" aria-label="Zaznaczony obiekt" hidden>
+        <div class="geo-inspect-head">
+          <span id="geo-coords-name" class="geo-coords-name"></span>
+          <button id="geo-inspect-close" class="icon-button small" type="button" aria-label="Zamknij" title="Zamknij  Esc"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07z"/></svg></button>
+        </div>
+        <form id="geo-coords" class="geo-coords" aria-label="Współrzędne punktu" onsubmit="return false">
+          <label>x <input id="geo-x" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
+          <label>y <input id="geo-y" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
+          <p id="geo-coords-note" class="geo-coords-note"></p>
+          <p id="geo-coords-error" class="error" role="alert"></p>
+        </form>
+        <div id="geo-style" class="geo-style">
+          <div class="geo-style-row"><span>Kolor</span><div id="geo-colors" class="geo-colors" role="group" aria-label="Kolor"></div></div>
+          <label class="geo-style-row" id="geo-width-row"><span id="geo-width-label">Grubość</span><input id="geo-width" type="range" min="1" max="8" step="0.5"><output id="geo-width-out"></output></label>
+          <div class="geo-style-row" id="geo-dash-row"><span>Linia</span>
+            <div class="geo-seg" role="group" aria-label="Styl linii" data-key="dash">
+              <button type="button" data-value="" aria-label="Ciągła" title="Ciągła"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/></svg></button>
+              <button type="button" data-value="dashed" aria-label="Kreskowana" title="Kreskowana"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18" stroke-dasharray="5 3.5"/></svg></button>
+              <button type="button" data-value="dotted" aria-label="Kropkowana" title="Kropkowana"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18" stroke-width="2.4" stroke-dasharray="0.1 4.5"/></svg></button>
+            </div>
+          </div>
+          <div class="geo-style-row" id="geo-shape-row"><span>Kształt</span>
+            <div class="geo-seg" role="group" aria-label="Kształt punktu" data-key="shape">
+              <button type="button" data-value="" aria-label="Kropka" title="Kropka"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" class="fill"/></svg></button>
+              <button type="button" data-value="ring" aria-label="Pierścień" title="Pierścień"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg></button>
+              <button type="button" data-value="cross" aria-label="Krzyżyk" title="Krzyżyk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
+            </div>
+          </div>
+          <label class="geo-style-row" id="geo-fill-row"><span>Wypełnienie</span><input id="geo-fill" type="range" min="0" max="1" step="0.05"><output id="geo-fill-out"></output></label>
+          <label class="geo-style-row"><span>Etykieta</span>
+            <select id="geo-label">
+              <option value="">Automatycznie</option>
+              <option value="name">Nazwa</option>
+              <option value="value">Nazwa i wartość</option>
+              <option value="none">Brak</option>
+            </select>
+          </label>
+          <button id="geo-style-reset" class="geo-style-reset" type="button">Przywróć domyślny wygląd</button>
+        </div>
+      </section>
+      <div class="toolbar" role="toolbar" aria-label="Narzędzia rysunku" aria-orientation="vertical">
+        <div class="tool-group">
+          <button id="geo-undo" type="button" aria-label="Cofnij" title="Cofnij  Ctrl+Z"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5a.5.5 0 0 0-1 0v4.9c0 .33.27.6.6.6h4.9a.5.5 0 0 0 0-1H5.9l3.48-3.02a4 4 0 0 1 5.25 6.04l-8.17 7.1a.5.5 0 0 0 .65.76l8.17-7.1a5 5 0 0 0-6.56-7.55L5 6.46z"/></svg></button>
+          <button id="geo-redo" type="button" aria-label="Ponów" title="Ponów  Ctrl+Y"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15 2.5a.5.5 0 0 1 1 0v4.9a.6.6 0 0 1-.6.6h-4.9a.5.5 0 0 1 0-1h3.6l-3.48-3.02a4 4 0 1 0-5.24 6.04l8.17 7.1a.5.5 0 1 1-.66.76l-8.17-7.1a5 5 0 1 1 6.56-7.55L15 6.46z"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="geo-zoom-in" type="button" aria-label="Przybliż" title="Przybliż"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 5.5c.28 0 .5.22.5.5v2h2a.5.5 0 0 1 0 1H9v2a.5.5 0 0 1-1 0V9H6a.5.5 0 0 1 0-1h2V6c0-.28.22-.5.5-.5m0-3.5a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
+          <button id="geo-zoom-out" type="button" aria-label="Oddal" title="Oddal"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 8a.5.5 0 0 1 0 1H6a.5.5 0 0 1 0-1zM8.5 2a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
+          <button id="geo-reset" type="button" aria-label="Przywróć widok" title="Przywróć widok"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10A6 6 0 0 0 5.53 6H7.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 1 0v1.6a7 7 0 1 1-1.98 4.36.5.5 0 0 1 1 .08L4 10a6 6 0 0 0 12 0"/></svg></button>
+        </div>
+        <div class="tool-group">
+          <button id="geo-grid" type="button" aria-pressed="false" aria-label="Kratka" title="Kratka"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 11c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4A1.5 1.5 0 0 1 2 16.5v-4c0-.83.67-1.5 1.5-1.5zm9 0c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-4c0-.83.67-1.5 1.5-1.5zm-9 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m9 0h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m-9-10C8.33 2 9 2.67 9 3.5v4C9 8.33 8.33 9 7.5 9h-4A1.5 1.5 0 0 1 2 7.5v-4C2 2.67 2.67 2 3.5 2zm9 0c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4A1.5 1.5 0 0 1 11 7.5v-4c0-.83.67-1.5 1.5-1.5zm-9 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m9 0h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5"/></svg></button>
+          <button id="geo-axes" type="button" aria-pressed="false" aria-label="Układ współrzędnych" title="Układ współrzędnych"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 2.5v13h13M2.75 4.25 4.5 2.5l1.75 1.75M15.75 13.75l1.75 1.75-1.75 1.75"/></svg></button>
+          <button id="geo-export" type="button" aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 17a.5.5 0 0 1 .09 1H4.5a.5.5 0 0 1-.09-1H15.5M10 2a.5.5 0 0 1 .5.41V14.3l3.64-3.65a.5.5 0 0 1 .64-.06l.07.06c.17.17.2.44.06.63l-.06.07-4.5 4.5a.5.5 0 0 1-.25.14L10 16a.5.5 0 0 1-.4-.2l-4.46-4.45a.5.5 0 0 1 .64-.76l.07.06 3.65 3.64V2.5c0-.27.22-.5.5-.5"/></svg></button>
+          <button id="geo-clear" type="button" aria-label="Wyczyść rysunek" title="Wyczyść rysunek"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 4h3a1.5 1.5 0 0 0-3 0m-1 0a2.5 2.5 0 0 1 5 0h5a.5.5 0 0 1 0 1h-1.05l-1.2 10.34A3 3 0 0 1 12.27 18H7.73a3 3 0 0 1-2.98-2.66L3.55 5H2.5a.5.5 0 0 1 0-1zM5.74 15.23A2 2 0 0 0 7.73 17h4.54a2 2 0 0 0 1.99-1.77L15.44 5H4.56zM8.5 7.5c.28 0 .5.22.5.5v6a.5.5 0 0 1-1 0V8c0-.28.22-.5.5-.5M12 8a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/></svg></button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="help" class="help" aria-labelledby="help-title">
+    <header class="help-head">
+      <h2 id="help-title">Pomoc</h2>
+      <form method="dialog"><button class="icon-button" aria-label="Zamknij" title="Zamknij"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07z"/></svg></button></form>
+    </header>
+    <div class="help-body">
+      <section>
+        <h3>Zapis</h3>
+        <table class="syntax">
+          <tr><td><code>x^2</code>, <code>x²</code>, <code>2x</code>, <code>3(x+1)</code></td><td>potęgi, mnożenie bez znaku</td></tr>
+          <tr><td><code>sqrt(x)</code>, <code>√x</code>, <code>root(3; x)</code>, <code>|x|</code></td><td>pierwiastki, wartość bezwzględna</td></tr>
+          <tr><td><code>sin x</code>, <code>tg x</code>, <code>arcsin x</code>, <code>sin^-1 x</code></td><td>trygonometria (radiany, <code>30°</code> w stopniach)</td></tr>
+          <tr><td><code>ln x</code>, <code>log x</code>, <code>log_2(x)</code>, <code>e^x</code></td><td>logarytmy i wykładnicza</td></tr>
+          <tr><td><code>max(x; 1)</code>, <code>mod(x; 3)</code>, <code>x!</code>, <code>floor x</code></td><td>argumenty oddziel średnikiem</td></tr>
+          <tr><td><code>pi</code>, <code>π</code>, <code>e</code>, <code>tau</code>, <code>phi</code></td><td>stałe</td></tr>
+          <tr><td><code>a·sin(b·x)</code></td><td>inne litery to parametry z suwakiem</td></tr>
+        </table>
+      </section>
+      <section>
+        <h3>Tryby</h3>
+        <ul class="plain">
+          <li><b>Zespolone</b>: <code>z^2 + 1</code>. Kolor to argument f(z), ciemny punkt to zero, jasny to biegun.</li>
+          <li><b>Geometria</b>: wybierz narzędzie i klikaj — puste miejsce tworzy punkt, kliknięcie linii kładzie punkt na niej. Narzędziem <b>Przesuń</b> przeciągasz punkty, a zależne obiekty podążają za nimi. Współrzędne zaznaczonego punktu (lub dwukrotnie klikniętego) wpiszesz w okienku x, y. Każdy obiekt ma definicję, np. <code>Okrąg(A; B; C)</code> — kliknij ją na liście, aby ją zmienić, albo wpisz nową w polu nad listą (<code>c = Okrąg(A; 3)</code>, <code>y = 2x + 1</code>). <kbd>Ctrl</kbd>+<kbd>Z</kbd> cofa, <kbd>Delete</kbd> usuwa zaznaczony obiekt, <kbd>Esc</kbd> przerywa.</li>
+          <li><b>Kalkulator</b>: wpisz wyrażenie, równanie albo polecenie (np. <code>całka x^2 sin x dx</code>, <code>granica sin(x)/x przy x->0</code>, <code>rozłóż x^4 − 1</code>). Wyniki są dokładne; postać dziesiętną liczy się w arytmetyce dowolnej precyzji i pokazuje tylko pewne cyfry. Zmienne traktowane są jako rzeczywiste. Obliczenia trwające dłużej niż 20 s są przerywane.</li>
+          <li><b>Wykresy</b>: obok funkcji <code>y = f(x)</code> każdy wiersz może być zbiorem. Warunki i równania w <i>x</i> i <i>y</i> to krzywe i obszary: <code>x^2 + y^2 = 25</code>, <code>y &gt; x^2</code>, <code>x = 2</code>. Z <code>z</code> albo <code>i</code> — zbiory liczb zespolonych: <code>|z - 1| &lt;= 2</code>, <code>1 &lt; Re z &lt; 3</code>, <code>z^2 = -1</code>, krzywe i obszary <code>t + 2i</code>, <code>a + bi</code> (zakres niewiadomych w ustawieniach wiersza).</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Skróty</h3>
+        <table class="keys">
+          <tr><td><kbd>Enter</kbd></td><td>nowa funkcja pod ostatnią</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>poprzednia / następna funkcja</td></tr>
+          <tr><td><kbd>Backspace</kbd></td><td>w pustym polu usuwa funkcję</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>koniec edycji</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>przesuwanie wykresu (gdy aktywny)</td></tr>
+          <tr><td><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></td><td>przybliż, oddal, przywróć widok</td></tr>
+          <tr><td><kbd>Shift</kbd> + kółko</td><td>skaluje tylko oś y (<kbd>Alt</kbd>: tylko x)</td></tr>
+          <tr><td><kbd>F</kbd> <kbd>B</kbd> <kbd>?</kbd></td><td>dopasuj y, badanie funkcji, ta pomoc</td></tr>
+        </table>
+      </section>
+      <p class="hint">Miejsca zerowe i przecięcia są szukane numerycznie w widocznym zakresie. Wartość bez znaku ≈ jest udowodniona w arytmetyce dokładnej. Stan zapisuje się w przeglądarce.</p>
+    </div>
+  </dialog>
+
+  <dialog id="geo-ask" class="geo-ask" aria-labelledby="geo-ask-label">
+    <form method="dialog">
+      <label id="geo-ask-label" for="geo-ask-input"></label>
+      <input id="geo-ask-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false">
+      <p id="geo-ask-error" class="error" role="alert"></p>
+      <div class="setting-actions">
+        <button id="geo-ask-cancel" class="text-button" type="button">Anuluj</button>
+        <button class="text-button primary" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
