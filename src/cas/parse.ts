@@ -39,6 +39,9 @@ export const COMMANDS: Record<string, [number, number]> = {
   contfrac: [1, 2], rationalize: [1, 2],
   det: [1, 1], inverse: [1, 1], transpose: [1, 1], rank: [1, 1], rref: [1, 1], trace: [1, 1], eigenvalues: [1, 1],
   eigenvectors: [1, 1], charpoly: [1, 2], nullspace: [1, 1], dot: [2, 2], cross: [2, 2], norm: [1, 1], identity: [1, 1],
+  adjugate: [1, 1], cofactor: [1, 1], minor: [3, 3], diag: [1, Infinity], dimensions: [1, 1], element: [3, 3],
+  submatrix: [5, 5], augment: [2, 2], hadamard: [2, 2], linsolve: [2, 2], isinvertible: [1, 1], issymmetric: [1, 1],
+  echelon: [1, 1], rowspace: [1, 1], colspace: [1, 1], lu: [1, 1], qr: [1, 1], cholesky: [1, 1], diagonalize: [1, 1], properties: [1, 1],
   mean: [1, Infinity], median: [1, Infinity], variance: [1, Infinity], stdev: [1, Infinity], sort: [1, Infinity], total: [1, Infinity],
   degree: [1, 2], coeffs: [1, 2], discriminant: [1, 2], quotient: [2, 3], remainder: [2, 3], polygcd: [2, 3], resultant: [3, 3],
   trigexpand: [1, 1], trigreduce: [1, 1], expandlog: [1, 1],
@@ -77,6 +80,16 @@ export const ALIAS: Record<string, string> = {
   det: 'det', wyznacznik: 'det', inv: 'inverse', inverse: 'inverse', odwrotna: 'inverse', transpose: 'transpose', transpozycja: 'transpose', transponuj: 'transpose',
   rank: 'rank', rzad: 'rank', rref: 'rref', schodkowa: 'rref', trace: 'trace', slad: 'trace',   eigenvalues: 'eigenvalues', wartosciwlasne: 'eigenvalues', eigenvectors: 'eigenvectors', wektorywlasne: 'eigenvectors',
   charpoly: 'charpoly', wielomiancharakterystyczny: 'charpoly', nullspace: 'nullspace', jadro: 'nullspace', kernel: 'nullspace',
+  adjugate: 'adjugate', adj: 'adjugate', dopelnienie: 'adjugate', macierzdopelniona: 'adjugate', cofactor: 'cofactor', kofaktor: 'cofactor', dopelnieniealgebraiczne: 'cofactor',
+  minor: 'minor', dimensions: 'dimensions', wymiar: 'dimensions', wymiary: 'dimensions', dim: 'dimensions',
+  element: 'element', wpis: 'element', entry: 'element', submatrix: 'submatrix', podmacierz: 'submatrix',
+  augment: 'augment', dolacz: 'augment', hstack: 'augment', sklej: 'augment', hadamard: 'hadamard', iloczynelementowy: 'hadamard', elementwise: 'hadamard',
+  diag: 'diag', diagonal: 'diag', diagonalna: 'diag', linsolve: 'linsolve', linearsolve: 'linsolve', ukladmacierzowy: 'linsolve',
+  isinvertible: 'isinvertible', odwracalna: 'isinvertible', invertible: 'isinvertible', niesobliwa: 'isinvertible',
+  issymmetric: 'issymmetric', symetryczna: 'issymmetric', symmetric: 'issymmetric',
+  echelon: 'echelon', gauss: 'echelon', rowspace: 'rowspace', przestrzenwierszy: 'rowspace', colspace: 'colspace', przestrzenkolumn: 'colspace',
+  lu: 'lu', rozkladlu: 'lu', qr: 'qr', rozkladqr: 'qr', cholesky: 'cholesky', choleski: 'cholesky', rozkladcholeskiego: 'cholesky',
+  diagonalize: 'diagonalize', diagonalizuj: 'diagonalize', diagonalizacja: 'diagonalize', properties: 'properties', wlasnosci: 'properties', wlasciwosci: 'properties',
   dot: 'dot', iloczynskalarny: 'dot', cross: 'cross', iloczynwektorowy: 'cross', norm: 'norm', norma: 'norm', dlugosc: 'norm',
   identity: 'identity', jednostkowa: 'identity',   mean: 'mean', srednia: 'mean', average: 'mean', median: 'median', mediana: 'median', variance: 'variance', wariancja: 'variance',
   stdev: 'stdev', std: 'stdev', odchylenie: 'stdev', sort: 'sort', sortuj: 'sort', total: 'total',
@@ -222,8 +235,9 @@ export function parse(input: string): Node {
     const first = relation();
     if (open === '(' || (peek() !== ',' && peek() !== ';')) {
       expect(close, 'Brakuje nawiasu zamykającego.');
-      // (a, b) is a pair only with a comma; otherwise grouping.
-      return first;
+      // (a, b) is a pair only with a comma; [a] and {a} really are a one-element list and set.
+      if (open === '(') return first;
+      return { t: 'list', items: [first], bracket: open === '{' ? '{' : '[' };
     }
     // [1, 2; 3, 4] — rows split by semicolons
     const rows: Node[][] = [[first]];

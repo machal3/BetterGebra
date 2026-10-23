@@ -13,6 +13,8 @@ import { toML, toText } from './format';
 import { complexParts, constSign, binomialBig } from './functions';
 import { definite, integrate, partialFractions } from './integrate';
 import * as LA from './matrix';
+import * as MS from './matsteps';
+import type { Step } from './matsteps';
 import { nodeML } from './nodeformat';
 import * as NT from './ntheory';
 import { Decimal } from './bigfloat';
@@ -23,7 +25,7 @@ export { sugar };
 import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from './poly';
 import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, bitLength, gcd as bgcd } from './q';
 import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } from './simplify';
-import { Interval, Sol, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
+import { Interval, LinearInfo, Sol, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
 import { product as prodOf, sum as sumOf, ratioHint } from './sums';
 import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRow, features, fmt, graphText, implicitPlot, matrixPlot, parametricSeries, plotOf, regionPlot, rootsPlot, sequencePlot, statsPlot, zText } from './plot';
 export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
@@ -34,7 +36,9 @@ setDomainText(toText);
 // --- Result shape (plain JSON: crosses the worker boundary) ---
 
 export interface Row { ml: string; text: string; note?: string }
-export interface Pod { title: string; rows: Row[]; note?: string; plot?: Plot; more?: { label: string; query: string } }
+/** `steps`: a worked solution, shown folded under the card's rows. */
+export interface Pod { title: string; rows: Row[]; note?: string; plot?: Plot; more?: { label: string; query: string }; steps?: Step[] }
+export type { Step };
 export interface Result { input: Row | null; pods: Pod[]; error?: string; ans?: string; interpreted?: string }
 
 const M = (inner: string) => `<math display="block">${inner}</math>`;
@@ -581,7 +585,11 @@ function system(items: Node[], env: Env, varsHint: string[] | null): Out {
   return systemFromExprs(exprs, varsHint);
 }
 function systemFromExprs(exprs: Expr[], varsHint: string[] | null): Out {
-  const vs = varsHint ?? variables(add(...exprs.map(e => mul(e, e)))).filter(v => v !== 'k');
+  // x, y, z, u, v, w are the usual unknowns; when at least two of them occur, other
+  // letters act as parameters (a x + y = 1). solve([...], [x, y, ...]) overrides this.
+  const all = variables(add(...exprs.map(e => mul(e, e)))).filter(v => v !== 'k');
+  const standard = all.filter(v => 'xyzuvw'.includes(v));
+  const vs = varsHint ?? (standard.length >= 2 ? standard : all);
   if (!vs.length) fail('Układ nie ma niewiadomych.');
   if (vs.length === 1) {
     const pods: Pod[] = [];
@@ -590,7 +598,14 @@ function systemFromExprs(exprs: Expr[], varsHint: string[] | null): Out {
     return { pods };
   }
   const r = solveSystem(exprs, vs);
-  const pods = [systemPod(r, vs)];
+  const first = systemPod(r, vs);
+  // The matrix view of a linear system, and the same elimination steps under its solution card.
+  const lin = r.linear;
+  if (lin) {
+    const ls = safe(() => LA.linsolve(lin.A, lin.b));
+    if (ls && stepsFit(lin.augmented)) first.steps = steps(() => MS.linsolveSteps(lin.A, lin.b, ls, simp, vs));
+  }
+  const pods = [first, ...(lin ? safe(() => systemMatrixPods(lin, vs)) ?? [] : [])];
   if (vs.length === 2) {
     const [vx, vy] = vs.includes('x') && vs.includes('y') ? ['x', 'y'] : vs;
     const pts: [number, number][] = r.kind === 'solutions' ? r.list.flatMap(sol => {
@@ -612,11 +627,21 @@ function twoVars(e: Expr): [string, string] {
   return [vs[0], vs[1]];
 }
 function systemPod(r: ReturnType<typeof solveSystem>, vs: string[]): Pod {
-  if (r.kind === 'none') return { title: 'Rozwiązanie', rows: [textRow('Układ jest sprzeczny: brak rozwiązań.')] };
+  if (r.kind === 'none') {
+    const c = r.linear?.contradiction;
+    if (!r.linear || !c) return { title: 'Układ sprzeczny', rows: [textRow('Brak rozwiązań.')] };
+    const rows: Row[] = [
+      { ml: M(`${mo('0')}${mo('=')}${toML(c.value)}`), text: `0 = ${toText(c.value)}` },
+      textRow(`rząd A = ${r.linear.rankA}, rząd [A | b] = ${r.linear.rankAug}`),
+    ];
+    const note = `Wiersz ${c.row + 1} daje sprzeczność 0 = ${toText(c.value)}. Rząd A jest mniejszy niż rząd [A | b], więc układ nie ma rozwiązań (twierdzenie Kroneckera–Capellego).`;
+    return { title: 'Układ sprzeczny', rows, note };
+  }
   if (r.kind === 'unknown') return { title: 'Rozwiązanie', rows: [textRow(r.note)] };
   if (r.kind === 'param') {
     const rows = vs.map((v, k) => r.free.includes(v) ? { ml: M(`${mi(v)}${mo('∈')}<mi mathvariant="normal">ℝ</mi>`), text: `${v} ∈ ℝ` } : eqRow(mi(v), v, r.values[k]));
-    return { title: 'Rozwiązanie', rows, note: `Nieskończenie wiele rozwiązań (parametr${r.free.length > 1 ? 'y' : ''}: ${r.free.join(', ')}).` };
+    const rank = r.linear ? ` rząd A = ${r.linear.rankA} < ${vs.length} niewiadomych.` : '';
+    return { title: 'Rozwiązanie', rows, note: `Nieskończenie wiele rozwiązań (parametr${r.free.length > 1 ? 'y' : ''}: ${r.free.join(', ')}).${rank}` };
   }
   const rows = r.list.map(sol => ({
     ml: M(sol.map((v, k) => `${mi(vs[k])}${mo('=')}${toML(v)}`).join(`${mo(',')}<mspace width="0.6em"/>`)),
@@ -624,6 +649,66 @@ function systemPod(r: ReturnType<typeof solveSystem>, vs: string[]): Pod {
     note: sol.some(v => isConstant(v) && !isNum(v)) ? sol.map((v, k) => (isNum(v) ? '' : `${vs[k]} ${shortApprox(v)}`)).filter(Boolean).join(', ') : undefined,
   }));
   return { title: r.list.length > 1 ? 'Rozwiązania' : 'Rozwiązanie', rows };
+}
+
+/** A linear system in matrix form: A·x = b, the augmented matrix, ranks and Cramer's rule when it applies. */
+function systemMatrixPods(lin: LinearInfo, vs: string[]): Pod[] {
+  const [m, n] = dims(lin.A);
+  const b = lin.b.map(v => [v]);
+  const rows: Row[] = [
+    matRow(lin.A, '<mi>A</mi>', 'A'),
+    matRow(b, '<mi>b</mi>', 'b'),
+    {
+      ml: M(`${mo('[')}<mi>A</mi>${mo('|')}<mi>b</mi>${mo(']')}${mo('=')}${MS.matML(lin.augmented, { bar: n })}`),
+      text: `[A | b] = ${MS.matText(lin.augmented, n)}`,
+    },
+  ];
+  const pods: Pod[] = [{
+    title: 'Postać macierzowa',
+    rows,
+    note: `A·x = b, gdzie x = (${vs.join(', ')})ᵀ. Macierz A ma wymiar ${m}×${n}, a wektor b ma długość ${m}.`,
+    more: { label: 'Rozwiąż macierzowo', query: `linsolve(${matText(lin.A)}, [${lin.b.map(toText).join(', ')}])` },
+  }];
+  const rankRows: Row[] = [
+    textRow(`rząd A = ${lin.rankA}`),
+    textRow(`rząd [A | b] = ${lin.rankAug}`),
+  ];
+  if (!lin.contradiction) rankRows.push(textRow(`niewiadome: ${n}, stopnie swobody: ${n - lin.rankA}`));
+  if (lin.contradiction) {
+    rankRows.unshift({ ml: M(`<mn>0</mn>${mo('=')}${toML(lin.contradiction.value)}`), text: `0 = ${toText(lin.contradiction.value)} (wiersz ${lin.contradiction.row + 1})` });
+  }
+  const free = lin.free.map(j => vs[j]);
+  const rankNote = lin.contradiction
+    ? 'Rząd A jest mniejszy niż rząd [A | b] — układ jest sprzeczny.'
+    : free.length
+      ? `Rząd A jest mniejszy niż liczba niewiadomych: rozwiązanie ma ${free.length} ${free.length === 1 ? 'stopień swobody' : free.length < 5 ? 'stopnie swobody' : 'stopni swobody'} (zmienne wolne: ${free.join(', ')}).`
+      : 'Rząd A równa się liczbie niewiadomych — rozwiązanie jest dokładnie jedno.';
+  pods.push({ title: 'Rząd i zmienne wolne', rows: rankRows, note: rankNote });
+
+  // Cramer's rule for a square, non-singular system: xᵢ = det Aᵢ / det A.
+  if (m === n && lin.rankA === n && n >= 2 && n <= 4 && stepsFit(lin.A)) {
+    const detA = safe(() => simp(LA.det(lin.A)));
+    const ls = safe(() => LA.linsolve(lin.A, lin.b));
+    if (detA && !isZero(expand(detA)) && ls?.kind === 'unique') {
+      const cramer: Row[] = [eqRow('<mi>det</mi><mi>A</mi>', 'det A', detA)];
+      let ok = true;
+      for (let i = 0; i < n && ok; i++) {
+        const Ai = lin.A.map((r, j) => r.map((v, k) => (k === i ? lin.b[j] : v)));
+        const di = safe(() => simp(LA.det(Ai)));
+        if (!di) { ok = false; break; }
+        const xi = simp(div(di, detA));
+        if (!same(xi, simp(ls.x[i]))) { ok = false; break; }
+        const diT = isNum(di) ? toText(di) : `(${toText(di)})`;
+        const detT = isNum(detA) ? toText(detA) : `(${toText(detA)})`;
+        cramer.push({
+          ml: M(`<msub><mi>x</mi><mn>${i + 1}</mn></msub>${mo('=')}<mfrac>${toML(di)}${toML(detA)}</mfrac>${mo('=')}${toML(xi)}`),
+          text: `x${subscript(i + 1)} = det A${subscript(i + 1)} / det A = ${diT} / ${detT} = ${toText(xi)}`,
+        });
+      }
+      if (ok) pods.push({ title: 'Wzory Cramera', rows: cramer, note: 'Aᵢ to macierz A z i-tą kolumną zastąpioną przez b. Zakładamy, że det A ≠ 0.' });
+    }
+  }
+  return pods;
 }
 
 // --- Matrices and lists ---
@@ -634,41 +719,112 @@ function matML(m: Expr[][]): string {
 const matText = (m: Expr[][]) => `[${m.map(r => `[${r.map(toText).join(', ')}]`).join(', ')}]`;
 const matRow = (m: Expr[][], lhs = '', lhsText = ''): Row => ({ ml: M(`${lhs}${lhs ? mo('=') : ''}${matML(m)}`), text: `${lhsText ? lhsText + ' = ' : ''}${matText(m)}` });
 
+const simp = (e: Expr): Expr => safe(() => simplify(e)) ?? e;
+const simpM = (m: Expr[][]): Expr[][] => m.map(r => r.map(simp));
+/** Worked solutions only where they stay readable: numeric matrices up to 8×9, symbolic up to 3×4. */
+const stepsFit = (m: Expr[][]) => { const [n, k] = dims(m); return m.flat().every(isNum) ? n <= 8 && k <= 9 : n <= 3 && k <= 4; };
+const steps = (f: () => Step[] | null): Step[] | undefined => safe(f) ?? undefined;
+const SUP_T = '<msup><mi>A</mi><mi>T</mi></msup>', A_INV = '<msup><mi>A</mi><mn>−1</mn></msup>';
+
 function matrixPods(m: Expr[][]): Pod[] {
   const [n, k] = dims(m);
-  const pods: Pod[] = [{ title: 'Macierz', rows: [matRow(m.map(r => r.map(c => safe(() => simplify(c)) ?? c)))], note: `wymiar ${n}×${k}` }];
-  const rk = safe(() => LA.rank(m));
-  if (rk !== null) pods.push({ title: 'Rząd', rows: [textRow(String(rk))] });
+  const constant = m.flat().every(isConstant), numeric = m.flat().every(isNum);
+  const pods: Pod[] = [{ title: 'Macierz', rows: [matRow(simpM(m))], note: `wymiar ${n}×${k}${n === k ? ' (kwadratowa)' : ''}` }];
+  const props = safe(() => MS.properties(m, simp));
+  if (props && props.tags.length) {
+    const rows = props.tags.map(t => textRow(t));
+    if (props.minors) rows.push({ ml: M(`${mtext('minory wiodące')}${mo(':')}<mspace width="0.4em"/>${props.minors.map((d, i) => `<msub><mi>D</mi><mn>${i + 1}</mn></msub>${mo('=')}${toML(d)}`).join(`${mo(',')}<mspace width="0.5em"/>`)}`), text: `minory wiodące: ${props.minors.map((d, i) => `D${subscript(i + 1)} = ${toText(d)}`).join(', ')}` });
+    pods.push({ title: 'Własności', rows });
+  }
+  const ech = safe(() => LA.echelon(m));
+  const rk = ech ? ech.pivots.length : null;
+  if (rk !== null) pods.push({ title: 'Rząd', rows: [textRow(String(rk))], note: `liczba niezerowych wierszy postaci schodkowej${n === k ? (rk === n ? ' — rząd pełny' : ` — brakuje ${n - rk} do pełnego`) : ''}` });
   if (n === k) {
     const d = safe(() => LA.det(m));
-    if (d) pods.push({ title: 'Wyznacznik', rows: [row(simplify(d), isConstant(d) && !isNum(d) ? shortApprox(d) : undefined)] });
-    pods.push({ title: 'Ślad', rows: [row(simplify(LA.trace(m)))] });
+    if (d) {
+      const dv = simp(d);
+      pods.push({ title: 'Wyznacznik', rows: [row(dv, isConstant(d) && !isNum(d) ? shortApprox(d) : undefined)], steps: stepsFit(m) && n >= 2 ? steps(() => MS.detSteps(m, dv, simp)) : undefined });
+    }
+    pods.push({ title: 'Ślad', rows: [row(simp(LA.trace(m)))], note: 'suma elementów przekątnej = suma wartości własnych' });
     if (d && !isZero(expand(d)) && n <= 8) {
-      const inv = safe(() => LA.inverse(m));
-      if (inv) pods.push({ title: 'Macierz odwrotna', rows: [matRow(inv.map(r => r.map(c => safe(() => simplify(c)) ?? c)), '<msup><mi>A</mi><mn>−1</mn></msup>', 'A⁻¹')] });
-    } else if (d) pods.push({ title: 'Macierz odwrotna', rows: [textRow('Nie istnieje: macierz jest osobliwa (det = 0).')] });
+      const inv = safe(() => simpM(LA.inverse(m)));
+      if (inv) pods.push({ title: 'Macierz odwrotna', rows: [matRow(inv, A_INV, 'A⁻¹')], steps: (numeric ? n <= 6 : n <= 3) ? steps(() => MS.inverseSteps(m, inv, simp)) : undefined });
+    } else if (d) pods.push({ title: 'Macierz odwrotna', rows: [textRow('Nie istnieje: macierz jest osobliwa (det A = 0).')], note: 'Dla macierzy osobliwej układ A·x = b może być sprzeczny albo mieć nieskończenie wiele rozwiązań — zależy to od wektora b.' });
+    if (n >= 2 && n <= 5 && (n <= 4 || constant)) {
+      const adj = safe(() => simpM(LA.adjugate(m)));
+      if (adj) pods.push({ title: 'Macierz dołączona', rows: [matRow(adj, '<mi>adj</mi><mo>(</mo><mi>A</mi><mo>)</mo>', 'adj(A)')], note: 'transponowana macierz dopełnień algebraicznych; A·adj(A) = det(A)·I' });
+    }
     if (n <= 10) {
       const cp = safe(() => LA.charpoly(m));
       if (cp) {
         pods.push({ title: 'Wielomian charakterystyczny', rows: [{ ml: M(`<mi>det</mi>${mo('(')}<mi>λ</mi><mi>I</mi>${mo('−')}<mi>A</mi>${mo(')')}${mo('=')}${toML(cp)}`), text: toText(cp) }] });
         const ev = eigen(m, cp);
         if (ev) pods.push(...ev);
+        if (n >= 2 && n <= 6) {
+          const dg = safe(() => MS.diagonalize(m, cp, simp));
+          if (typeof dg === 'string') pods.push({ title: 'Diagonalizacja', rows: [textRow(dg)] });
+          else if (dg && !LA.isDiagonal(m)) {
+            const rows = [matRow(dg.D, '<mi>D</mi>', 'D'), matRow(dg.P, '<mi>P</mi>', 'P')];
+            if (dg.Pinv) rows.push(matRow(dg.Pinv, '<msup><mi>P</mi><mn>−1</mn></msup>', 'P⁻¹'));
+            pods.push({ title: 'Diagonalizacja', rows, note: `A = P·D·P⁻¹${dg.complex ? ' (nad ℂ)' : ''}: na przekątnej D są wartości własne, w kolumnach P odpowiadające im wektory własne.` });
+          }
+        }
       }
     }
   }
-  if (n === 2 && k === 2 && m.flat().every(isConstant)) {
+  // forms of the matrix reached by row operations, with the operations themselves
+  if (ech) pods.push({ title: 'Postać schodkowa (Gauss)', rows: [matRow(simpM(ech.R))], steps: stepsFit(m) ? steps(() => MS.echelonSteps(m, 'ref', ech.R)) : undefined });
+  const rr = safe(() => LA.rref(m));
+  if (rr) pods.push({ title: 'Postać schodkowa zredukowana', rows: [matRow(rr.R)], steps: stepsFit(m) ? steps(() => MS.echelonSteps(m, 'rref', rr.R)) : undefined });
+  if (n === k && n >= 2 && n <= 6 && constant) {
+    const dec = safe(() => LA.lu(m));
+    if (dec) pods.push({ ...luPod(dec), steps: stepsFit(m) ? steps(() => MS.luSteps(m, dec)) : undefined });
+    const ch = safe(() => MS.choleskyOf(m, simp));
+    if (ch) pods.push({ title: 'Rozkład Choleskiego', rows: [matRow(ch, '<mi>L</mi>', 'L')], note: 'A = L·Lᵀ (macierz symetryczna dodatnio określona, L dolnotrójkątna z dodatnią przekątną).' });
+  }
+  if (constant && n >= 2 && n <= 4 && k >= 2 && k <= n) {
+    const f = safe(() => MS.qrOf(m, simp));
+    if (f) pods.push({ title: 'Rozkład QR', rows: [matRow(f.Q, '<mi>Q</mi>', 'Q'), matRow(f.R, '<mi>R</mi>', 'R')], note: 'A = Q·R (Gram–Schmidt): kolumny Q są ortonormalne, R jest górnotrójkątna.' });
+  }
+  if (rk !== null && n >= 1 && k >= 1 && n <= 8 && k <= 8) {
+    const ns = safe(() => (rk < k ? LA.nullspace(m) : []));
+    if (ns && ns.length) {
+      const rows = ns.map(v => ({ ml: M(matML(v.map(c => [simp(c)]))), text: `(${v.map(c => toText(simp(c))).join(', ')})` }));
+      pods.push({ title: `Jądro (wymiar ${ns.length})`, rows, note: 'Baza rozwiązań A·x = 0.', steps: stepsFit(m) ? steps(() => MS.nullspaceSteps(m, ns)) : undefined });
+    }
+  }
+  if (rk !== null && n <= 8 && k <= 8 && (rk < n || rk < k)) {
+    const rs = safe(() => LA.rowspace(m));
+    const cs = safe(() => LA.colspace(m));
+    if (rs && cs) {
+      const rows: Row[] = [
+        { ml: M(`${mtext('baza wierszy')}${mo(':')}<mspace width="0.4em"/>${matML(rs)}`), text: `baza wierszy: ${matText(rs)}` },
+        { ml: M(`${mtext('baza kolumn')}${mo(':')}<mspace width="0.4em"/>${matML(LA.transpose(cs))}`), text: `baza kolumn: ${matText(LA.transpose(cs))}` },
+      ];
+      pods.push({ title: 'Podprzestrzenie', rows, note: `rząd ${rk}, defekt ${k - rk}.` });
+    }
+  }
+  if (n === 2 && k === 2 && constant) {
     const v = m.flat().map(c => safe(() => approx(c)));
     if (v.every(z => z && Math.abs(z.im) < 1e-12)) {
       const plot = safe(() => matrixPlot(v[0]!.re, v[1]!.re, v[2]!.re, v[3]!.re));
       if (plot) pods.push({ title: 'Przekształcenie płaszczyzny', rows: [], plot, note: 'Obraz kwadratu jednostkowego, wektorów bazy i prostych własnych (kierunków, które A tylko rozciąga).' });
     }
   }
-  pods.push({ title: 'Macierz transponowana', rows: [matRow(LA.transpose(m), '<msup><mi>A</mi><mi>T</mi></msup>', 'Aᵀ')] });
-  const r = safe(() => LA.rref(m));
-  if (r) pods.push({ title: 'Postać schodkowa zredukowana', rows: [matRow(r.R)] });
+  pods.push({ title: 'Macierz transponowana', rows: [matRow(LA.transpose(m), SUP_T, 'Aᵀ')] });
+  if (n === k && n <= 6) {
+    const sq = safe(() => simpM(matMul(m, m)));
+    if (sq) pods.push({ title: 'Kwadrat macierzy', rows: [matRow(sq, '<msup><mi>A</mi><mn>2</mn></msup>', 'A²')] });
+  }
   return pods;
 }
 
+function luPod(dec: LA.LU): Pod {
+  const rows: Row[] = [matRow(simpM(dec.L), '<mi>L</mi>', 'L'), matRow(simpM(dec.U), '<mi>U</mi>', 'U')];
+  const pIdentity = dec.P.every((r, i) => r.every((v, j) => isZero(sub(v, i === j ? ONE : ZERO))));
+  if (!pIdentity) rows.unshift(matRow(simpM(dec.P), '<mi>P</mi>', 'P'));
+  return { title: 'Rozkład LU', rows, note: pIdentity ? 'A = L·U (L jednostkowa dolnotrójkątna z mnożnikami eliminacji, U górnotrójkątna).' : 'P·A = L·U (P to permutacja wierszy).' };
+}
 function eigen(m: Expr[][], cp: Expr): Pod[] | null {
   const p = polyOf(cp, 'λ');
   if (!p) return null;
@@ -777,6 +933,26 @@ const vecArg = (n: Node, env: Env): Expr[] => {
 };
 const statsArgs = (args: Node[], env: Env) => args.length === 1 ? listArg(args[0], env) : args.map(a => exprArg(a, env));
 const one = (title: string, e: Expr, note?: string): Out => ({ pods: [{ title, rows: [row(e, note ?? (isConstant(e) && !isNum(e) ? shortApprox(e) : undefined))] }], value: ex(e) });
+
+function matOut(title: string, m: Expr[][], lhs = '', lhsText = '', note?: string): Out {
+  const s = m.map(r => r.map(c => safe(() => simplify(c)) ?? c));
+  return { pods: [{ title, rows: [matRow(s, lhs, lhsText)], note }], value: { t: 'matrix', rows: s } };
+}
+function vecOut(title: string, vs: Expr[], note?: string): Out {
+  const s = vs.map(v => safe(() => simplify(v)) ?? v);
+  return { pods: [{ title, rows: [{ ml: M(`${mo('[')}${s.map(toML).join(mo(','))}${mo(']')}`), text: `[${s.map(toText).join(', ')}]` }], note }], value: { t: 'list', items: s.map(ex), set: false } };
+}
+const indexArg = (n: Node | undefined, env: Env, what: string, len: number): number => {
+  const k = intArg(n, env, what);
+  if (k < 1 || k > len) fail(`${what}: numer od 1 do ${len}.`);
+  return k - 1;
+};
+function diagMatrix(vals: Expr[]): Out {
+  if (!vals.length) fail('Diagonala: potrzebuję co najmniej jednej wartości.');
+  if (vals.length > 30) fail('Diagonala: najwyżej 30 elementów.');
+  const m = vals.map((v, i) => vals.map((_, j) => (i === j ? v : ZERO)));
+  return matOut('Macierz diagonalna', m, '', '', `wymiar ${vals.length}×${vals.length}`);
+}
 
 function command(name: string, args: Node[], env: Env): Out {
   switch (name) {
@@ -908,11 +1084,33 @@ function command(name: string, args: Node[], env: Env): Out {
       return one(`Najlepsze przybliżenie wymierne (mianownik ≤ ${maxDen})`, num(best), `błąd ${shortApprox(sub(num(best), e)).replace('≈ ', '')}`);
     }
     // linear algebra
-    case 'det': return one('Wyznacznik', simplify(LA.det(matArg(args[0], env))));
-    case 'inverse': { const m = LA.inverse(matArg(args[0], env)).map(r => r.map(c => simplify(c))); return { pods: [{ title: 'Macierz odwrotna', rows: [matRow(m)] }], value: { t: 'matrix', rows: m } }; }
+    case 'det': {
+      const m = matArg(args[0], env);
+      const d = simplify(LA.det(m));
+      const out = one('Wyznacznik', d);
+      if (stepsFit(m) && m.length >= 2) out.pods[0].steps = steps(() => MS.detSteps(m, d, simp));
+      return out;
+    }
+    case 'inverse': {
+      const A = matArg(args[0], env);
+      const m = simpM(LA.inverse(A));
+      return { pods: [{ title: 'Macierz odwrotna', rows: [matRow(m, A_INV, 'A⁻¹')], steps: (A.flat().every(isNum) ? A.length <= 6 : A.length <= 3) ? steps(() => MS.inverseSteps(A, m, simp)) : undefined }], value: { t: 'matrix', rows: m } };
+    }
     case 'transpose': { const m = LA.transpose(matArg(args[0], env)); return { pods: [{ title: 'Macierz transponowana', rows: [matRow(m)] }], value: { t: 'matrix', rows: m } }; }
-    case 'rank': return one('Rząd macierzy', num(LA.rank(matArg(args[0], env))));
-    case 'rref': { const m = LA.rref(matArg(args[0], env)).R; return { pods: [{ title: 'Postać schodkowa zredukowana', rows: [matRow(m)] }], value: { t: 'matrix', rows: m } }; }
+    case 'rank': {
+      const A = matArg(args[0], env);
+      const e = LA.echelon(A);
+      const out = one('Rząd macierzy', num(e.pivots.length));
+      if (stepsFit(A)) out.pods[0].steps = steps(() => MS.echelonSteps(A, 'ref', e.R));
+      return out;
+    }
+    case 'rref': case 'echelon': {
+      const A = matArg(args[0], env);
+      const mode = name === 'rref' ? 'rref' : 'ref';
+      const m = mode === 'rref' ? LA.rref(A).R : LA.echelon(A).R;
+      const s = stepsFit(A) ? steps(() => MS.echelonSteps(A, mode, m)) : undefined;
+      return { pods: [{ title: mode === 'rref' ? 'Postać schodkowa zredukowana' : 'Postać schodkowa (Gauss)', rows: [matRow(simpM(m))], steps: s }], value: { t: 'matrix', rows: m } };
+    }
     case 'trace': return one('Ślad', LA.trace(matArg(args[0], env)));
     case 'charpoly': {
       const m = matArg(args[0], env);
@@ -924,9 +1122,11 @@ function command(name: string, args: Node[], env: Env): Out {
       return { pods: eigen(m, LA.charpoly(m)) ?? [] };
     }
     case 'nullspace': {
-      const ns = LA.nullspace(matArg(args[0], env));
-      if (!ns.length) return { pods: [{ title: 'Jądro', rows: [textRow('Tylko wektor zerowy.')] }] };
-      return { pods: [{ title: `Baza jądra (wymiar ${ns.length})`, rows: ns.map(v => ({ ml: M(matML(v.map(c => [c]))), text: `(${v.map(toText).join(', ')})` })) }] };
+      const A = matArg(args[0], env);
+      const ns = LA.nullspace(A);
+      const s = stepsFit(A) ? steps(() => MS.nullspaceSteps(A, ns)) : undefined;
+      if (!ns.length) return { pods: [{ title: 'Jądro', rows: [textRow('Tylko wektor zerowy.')], steps: s }] };
+      return { pods: [{ title: `Baza jądra (wymiar ${ns.length})`, rows: ns.map(v => ({ ml: M(matML(v.map(c => [c]))), text: `(${v.map(toText).join(', ')})` })), steps: s }] };
     }
     case 'dot': return one('Iloczyn skalarny', simplify(LA.dot(vecArg(args[0], env), vecArg(args[1], env))));
     case 'cross': {
@@ -935,6 +1135,141 @@ function command(name: string, args: Node[], env: Env): Out {
     }
     case 'norm': { const v = vecArg(args[0], env); return one('Norma euklidesowa', simplify(sqrt(add(...v.map(c => pow(fn('abs', c), TWO)))))); }
     case 'identity': { const n = intArg(args[0], env, 'Rozmiar'); if (n < 1 || n > 20) fail('Rozmiar od 1 do 20.'); const m = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? ONE : ZERO))); return { pods: [{ title: 'Macierz jednostkowa', rows: [matRow(m)] }], value: { t: 'matrix', rows: m } }; }
+    case 'adjugate': return matOut('Macierz dołączona', LA.adjugate(matArg(args[0], env)), '<mi>adj</mi><mo>(</mo><mi>A</mi><mo>)</mo>', 'adj(A)', 'A·adj(A) = det(A)·I.');
+    case 'cofactor': return matOut('Macierz dopełnień algebraicznych', LA.cofactor(matArg(args[0], env)));
+    case 'minor': {
+      const m = matArg(args[0], env);
+      const i = indexArg(args[1], env, 'Numer wiersza', m.length);
+      const j = indexArg(args[2], env, 'Numer kolumny', m[0].length);
+      return matOut(`Minor (${i + 1}, ${j + 1})`, LA.minor(m, i, j));
+    }
+    case 'diag': {
+      if (args.length === 1) {
+        const v = evaluate(args[0], env);
+        if (v.t === 'matrix') {
+          const n = Math.min(v.rows.length, v.rows[0].length);
+          return vecOut('Przekątna macierzy', v.rows.slice(0, n).map((r, i) => r[i]));
+        }
+        if (v.t === 'list') return diagMatrix(v.items.map(i => scalar(i, 'Diagonala')));
+        return diagMatrix([scalar(v, 'Diagonala')]);
+      }
+      return diagMatrix(args.map(a => exprArg(a, env, 'Diagonala')));
+    }
+    case 'dimensions': {
+      const [r, c] = dims(matArg(args[0], env));
+      return {
+        pods: [{ title: 'Wymiar macierzy', rows: [textRow(`${r} × ${c}`)], note: 'wiersze × kolumny' }],
+        value: { t: 'list', items: [ex(num(r)), ex(num(c))], set: false },
+      };
+    }
+    case 'element': {
+      const m = matArg(args[0], env);
+      const i = indexArg(args[1], env, 'Numer wiersza', m.length);
+      const j = indexArg(args[2], env, 'Numer kolumny', m[0].length);
+      return one(`Element (${i + 1}, ${j + 1})`, m[i][j]);
+    }
+    case 'submatrix': {
+      const m = matArg(args[0], env);
+      const [n, k] = dims(m);
+      const r1 = indexArg(args[1], env, 'Pierwszy wiersz', n), r2 = indexArg(args[2], env, 'Ostatni wiersz', n);
+      const c1 = indexArg(args[3], env, 'Pierwsza kolumna', k), c2 = indexArg(args[4], env, 'Ostatnia kolumna', k);
+      if (r1 > r2 || c1 > c2) fail('Podmacierz: początek zakresu nie może być za końcem.');
+      return matOut('Podmacierz', m.slice(r1, r2 + 1).map(r => r.slice(c1, c2 + 1)), '', '', `wiersze ${r1 + 1}–${r2 + 1}, kolumny ${c1 + 1}–${c2 + 1}`);
+    }
+    case 'augment': {
+      const A = matArg(args[0], env);
+      const b = evaluate(args[1], env);
+      const B: Expr[][] = b.t === 'list' && b.items.every(i => i.t === 'expr') && b.items.length === A.length
+        ? b.items.map(i => [(i as { e: Expr }).e])
+        : matArg(args[1], env);
+      if (A.length !== B.length) fail(`Dołączenie: macierze mają ${A.length} i ${B.length} wierszy.`);
+      return matOut('Macierz dołączona', A.map((r, i) => [...r, ...B[i]]));
+    }
+    case 'hadamard': {
+      const A = matArg(args[0], env), B = matArg(args[1], env);
+      const [n, k] = dims(A), [n2, k2] = dims(B);
+      if (n !== n2 || k !== k2) fail(`Iloczyn Hadamarda: wymiary ${n}×${k} i ${n2}×${k2} są różne.`);
+      return matOut('Iloczyn Hadamarda', A.map((r, i) => r.map((v, j) => mul(v, B[i][j]))));
+    }
+    case 'linsolve': {
+      const A = matArg(args[0], env), b = vecArg(args[1], env);
+      const sol = LA.linsolve(A, b);
+      const s = stepsFit(A) ? steps(() => MS.linsolveSteps(A, b, sol, simp)) : undefined;
+      if (sol.kind === 'none') {
+        const rows: Row[] = [
+          { ml: M(`${mo('0')}${mo('=')}${toML(sol.value)}`), text: `0 = ${toText(sol.value)}` },
+          { ml: M(`${mtext('rząd A')}${mo('=')}<mn>${sol.rankA}</mn>${mo(',')}<mspace width="0.5em"/>${mtext('rząd [A | b]')}${mo('=')}<mn>${sol.rankAug}</mn>`), text: `rząd A = ${sol.rankA}, rząd [A | b] = ${sol.rankAug}` },
+        ];
+        const note = `Wiersz ${sol.row + 1} daje sprzeczność 0 = ${toText(sol.value)}. Rząd A jest mniejszy niż rząd [A | b], więc układ nie ma rozwiązań (twierdzenie Kroneckera–Capellego).`;
+        return { pods: [{ title: 'Układ sprzeczny', rows, note, steps: s }] };
+      }
+      const rows: Row[] = sol.x.map((v, i) => ({
+        ml: M(`<msub><mi>x</mi><mn>${i + 1}</mn></msub>${mo('=')}${toML(simplify(v))}`),
+        text: `x${subscript(i + 1)} = ${toText(simplify(v))}`,
+      }));
+      const note = sol.kind === 'inf' ? `Nieskończenie wiele rozwiązań (parametry: ${sol.params.join(', ')}).` : undefined;
+      return { pods: [{ title: 'Rozwiązanie układu', rows, note, steps: s }], value: { t: 'list', items: sol.x.map(v => ex(simplify(v))), set: false } };
+    }
+    case 'lu': {
+      const A = matArg(args[0], env);
+      const dec = LA.lu(A);
+      if (!dec) return { pods: [{ title: 'Rozkład LU', rows: [textRow('Nie istnieje: macierz jest osobliwa.')] }] };
+      const pod = luPod(dec);
+      if (stepsFit(A)) pod.steps = steps(() => MS.luSteps(A, dec));
+      return { pods: [pod], value: { t: 'matrix', rows: simpM(dec.U) } };
+    }
+    case 'cholesky': {
+      const A = matArg(args[0], env);
+      LA.square(A, 'Rozkład Choleskiego');
+      const L = MS.choleskyOf(A, simp);
+      if (!L) return { pods: [{ title: 'Rozkład Choleskiego', rows: [textRow('Nie istnieje: rozkład L·Lᵀ ma tylko macierz symetryczna dodatnio określona (o stałych elementach).')] }] };
+      return { pods: [{ title: 'Rozkład Choleskiego', rows: [matRow(L, '<mi>L</mi>', 'L')], note: 'A = L·Lᵀ.' }], value: { t: 'matrix', rows: L } };
+    }
+    case 'qr': {
+      const A = matArg(args[0], env);
+      const f = MS.qrOf(A, simp);
+      if (!f) return { pods: [{ title: 'Rozkład QR', rows: [textRow('Nie wyznaczę: potrzebuję macierzy liczbowej o liniowo niezależnych kolumnach (co najwyżej tylu, ile wierszy).')] }] };
+      return { pods: [{ title: 'Rozkład QR', rows: [matRow(f.Q, '<mi>Q</mi>', 'Q'), matRow(f.R, '<mi>R</mi>', 'R')], note: 'A = Q·R (Gram–Schmidt): kolumny Q są ortonormalne, R jest górnotrójkątna.' }] };
+    }
+    case 'diagonalize': {
+      const A = matArg(args[0], env);
+      LA.square(A, 'Diagonalizacja');
+      const dg = MS.diagonalize(A, LA.charpoly(A), simp);
+      if (typeof dg === 'string') return { pods: [{ title: 'Diagonalizacja', rows: [textRow(dg)] }] };
+      if (!dg) return { pods: [{ title: 'Diagonalizacja', rows: [textRow('Nie wyznaczę dokładnie: wartości własnych nie da się zapisać dokładnie albo wektory własne są zbyt złożone.')] }] };
+      const rows = [matRow(dg.D, '<mi>D</mi>', 'D'), matRow(dg.P, '<mi>P</mi>', 'P')];
+      if (dg.Pinv) rows.push(matRow(dg.Pinv, '<msup><mi>P</mi><mn>−1</mn></msup>', 'P⁻¹'));
+      return { pods: [{ title: 'Diagonalizacja', rows, note: `A = P·D·P⁻¹${dg.complex ? ' (nad ℂ)' : ''}.` }], value: { t: 'matrix', rows: dg.D } };
+    }
+    case 'properties': {
+      const A = matArg(args[0], env);
+      const pr = MS.properties(A, simp);
+      const rows = pr.tags.length ? pr.tags.map(t => textRow(t)) : [textRow('Brak szczególnych własności.')];
+      if (pr.minors) rows.push(textRow(`minory wiodące: ${pr.minors.map((d, i) => `D${subscript(i + 1)} = ${toText(d)}`).join(', ')}`));
+      return { pods: [{ title: 'Własności', rows }] };
+    }
+    case 'isinvertible': {
+      const m = matArg(args[0], env);
+      const [n, k] = dims(m);
+      if (n !== k) return { pods: [{ title: 'Czy macierz jest odwracalna?', rows: [textRow('Nie')], note: `Tylko macierz kwadratowa może mieć odwrotną (ta jest ${n}×${k}).` }], value: ex(ZERO) };
+      const ok = LA.isInvertible(m);
+      return { pods: [{ title: 'Czy macierz jest odwracalna?', rows: [textRow(ok ? 'Tak' : 'Nie')], note: ok ? `det ≠ 0 (macierz ${n}×${n}).` : 'Macierz jest osobliwa (det = 0).' }], value: ex(num(ok ? 1 : 0)) };
+    }
+    case 'issymmetric': {
+      const m = matArg(args[0], env);
+      const ok = LA.isSymmetric(m);
+      return { pods: [{ title: 'Czy macierz jest symetryczna?', rows: [textRow(ok ? 'Tak' : 'Nie')], note: ok ? 'Aᵀ = A.' : 'Aᵀ ≠ A.' }], value: ex(num(ok ? 1 : 0)) };
+    }
+    case 'rowspace': {
+      const basis = LA.rowspace(matArg(args[0], env));
+      if (!basis.length) return { pods: [{ title: 'Baza przestrzeni wierszy', rows: [textRow('Tylko wektor zerowy.')] }] };
+      return matOut(`Baza przestrzeni wierszy (wymiar ${basis.length})`, basis);
+    }
+    case 'colspace': {
+      const basis = LA.colspace(matArg(args[0], env));
+      if (!basis.length) return { pods: [{ title: 'Baza przestrzeni kolumn', rows: [textRow('Tylko wektor zerowy.')] }] };
+      return matOut(`Baza przestrzeni kolumn (wymiar ${basis.length})`, basis, '', '', 'Wektory bazy wypisane wierszami.');
+    }
     // statistics
     case 'mean': case 'median': case 'variance': case 'stdev': case 'sort': case 'total': {
       const xs = statsArgs(args, env);

@@ -133,6 +133,7 @@ export function setInverse(f: typeof inverseHook) { inverseHook = f; }
 function matrixOp(op: Exclude<Op, 'neg'>, a: Value, b: Value): Value {
   const isM = (v: Value): v is { t: 'matrix'; rows: Expr[][] } => v.t === 'matrix';
   const vec = (v: Value): Expr[][] | null => v.t === 'list' && v.items.every(i => i.t === 'expr') ? v.items.map(i => [(i as { e: Expr }).e]) : null;
+  const rowVec = (v: Value): Expr[][] | null => v.t === 'list' && v.items.every(i => i.t === 'expr') ? [v.items.map(i => (i as { e: Expr }).e)] : null;
   if (op === '+' || op === '-') {
     if (isM(a) && isM(b)) {
       const [n, m] = dims(a.rows);
@@ -146,8 +147,9 @@ function matrixOp(op: Exclude<Op, 'neg'>, a: Value, b: Value): Value {
     if (isM(a) && isM(b)) return { t: 'matrix', rows: matMul(a.rows, b.rows) };
     if (isM(a) && b.t === 'expr') return { t: 'matrix', rows: a.rows.map(r => r.map(x => mul(x, b.e))) };
     if (a.t === 'expr' && isM(b)) return { t: 'matrix', rows: b.rows.map(r => r.map(x => mul(a.e, x))) };
-    // matrix · vector given as a list
+    // matrix · vector given as a list, and a row vector times a matrix
     if (isM(a) && vec(b)) return { t: 'list', items: matMul(a.rows, vec(b)!).map(r => ex(r[0])), set: false };
+    if (a.t === 'list' && isM(b) && rowVec(a)) return { t: 'list', items: matMul(rowVec(a)!, b.rows)[0].map(ex), set: false };
     return fail('Tych obiektów nie da się pomnożyć.');
   }
   if (op === '/') {

@@ -529,11 +529,26 @@ function refineReal(f: Expr, x: string, v: number): C {
 
 // --- Systems ---
 
+/** The matrix form A·x = b of a linear system, with the ranks that decide consistency. */
+export interface LinearInfo {
+  A: Expr[][];
+  b: Expr[];
+  augmented: Expr[][];
+  /** Columns of A with a pivot. */
+  pivots: number[];
+  rankA: number;
+  rankAug: number;
+  /** Indices of the unknowns that are free. */
+  free: number[];
+  /** Present when the augmented column has a pivot: the row 0 = value that contradicts the system. */
+  contradiction?: { row: number; value: Expr };
+}
+
 export type SystemResult =
-  | { kind: 'solutions'; list: Expr[][]; note?: string }
-  | { kind: 'param'; values: Expr[]; free: string[] }
-  | { kind: 'none' }
-  | { kind: 'unknown'; note: string };
+  | { kind: 'solutions'; list: Expr[][]; note?: string; linear?: LinearInfo }
+  | { kind: 'param'; values: Expr[]; free: string[]; linear?: LinearInfo }
+  | { kind: 'none'; linear?: LinearInfo }
+  | { kind: 'unknown'; note: string; linear?: LinearInfo };
 
 /** Each equation is f = 0. Returns value lists in the order of vars. */
 export function solveSystem(eqs: Expr[], vars: string[]): SystemResult {
@@ -549,7 +564,7 @@ export function solveSystem(eqs: Expr[], vars: string[]): SystemResult {
       const c = coeffsOf(rest, v, 1);
       if (!c || c.length > 2 || (c[1] && vars.some(w => !freeOf(c[1], w)))) { linear = false; break; }
       row.push(c[1] ?? ZERO);
-      rest = c[0];
+      rest = c.length ? c[0] : ZERO;
     }
     if (!linear) break;
     if (vars.some(w => !freeOf(rest, w))) { linear = false; break; }
@@ -563,16 +578,31 @@ export function solveSystem(eqs: Expr[], vars: string[]): SystemResult {
 function linearSystem(rows: Expr[][], vars: string[]): SystemResult {
   const n = vars.length;
   const { R, pivots } = rref(rows);
-  if (pivots.includes(n)) return { kind: 'none' };
-  const free = vars.filter((_, j) => !pivots.includes(j));
+  const coeffPivots = pivots.filter(p => p < n);
+  const freeIdx = vars.map((_, j) => j).filter(j => !coeffPivots.includes(j));
+  const linear: LinearInfo = {
+    A: rows.map(r => r.slice(0, n)),
+    b: rows.map(r => r[n]),
+    augmented: rows,
+    pivots: coeffPivots,
+    rankA: coeffPivots.length,
+    rankAug: pivots.length,
+    free: freeIdx,
+  };
+  if (pivots.includes(n)) {
+    const row = R.findIndex(r => r.slice(0, n).every(isZero) && !isZero(r[n]));
+    if (row >= 0) linear.contradiction = { row, value: R[row][n] };
+    return { kind: 'none', linear };
+  }
+  const free = vars.filter((_, j) => !coeffPivots.includes(j));
   const values: Expr[] = vars.map(v => sym(v));
-  pivots.forEach((p, i) => {
+  coeffPivots.forEach((p, i) => {
     let v = R[i][n];
-    for (let j = p + 1; j < n; j++) if (!pivots.includes(j) && nonzero(R[i][j])) v = sub(v, mul(R[i][j], sym(vars[j])));
+    for (let j = p + 1; j < n; j++) if (!coeffPivots.includes(j) && nonzero(R[i][j])) v = sub(v, mul(R[i][j], sym(vars[j])));
     values[p] = cancel(together(v));
   });
-  if (free.length) return { kind: 'param', values, free };
-  return { kind: 'solutions', list: [values] };
+  if (free.length) return { kind: 'param', values, free, linear };
+  return { kind: 'solutions', list: [values], linear };
 }
 
 function nonlinear(fs: Expr[], vars: string[], depth = 0): SystemResult {
@@ -629,6 +659,7 @@ function eliminate(fs: Expr[], vars: string[], i: number, v: string, values: Exp
   const rest = vars.filter(w => w !== v);
   const all: Expr[][] = [];
   let anyParam = false;
+  let anyUnknown: string | null = null;
   for (const value of values) {
     const others = fs.filter((_, j) => j !== i).map(f => expand(cancel(together(subst(f, v, value))))).filter(f => !isZero(f));
     if (others.some(f => isConstant(f) && !isZero(f) && !isNearZero(f))) continue;
@@ -647,8 +678,13 @@ function eliminate(fs: Expr[], vars: string[], i: number, v: string, values: Exp
         all.push(full);
       }
     } else if (r.kind === 'param') anyParam = true;
+    else if (r.kind === 'unknown') anyUnknown = r.note;
   }
-  if (!all.length) return anyParam ? { kind: 'unknown', note: 'Układ ma nieskończenie wiele rozwiązań.' } : { kind: 'none' };
+  if (!all.length) {
+    if (anyParam) return { kind: 'unknown', note: 'Układ ma nieskończenie wiele rozwiązań.' };
+    if (anyUnknown) return { kind: 'unknown', note: anyUnknown };
+    return { kind: 'none' };
+  }
   // drop duplicates
   const uniq: Expr[][] = [];
   for (const s of all) if (!uniq.some(u => u.every((e, k) => same(e, s[k]) || nearlySame(e, s[k])))) uniq.push(s);

@@ -30,8 +30,8 @@ export const EXAMPLES: [string, [string, string][]][] = [
   ['Analiza', [['pochodna x^x', 'pochodna'], ['całka x^2 e^x dx', 'całka'], ['całka e^(-x^2) od -inf do inf', 'całka Gaussa'], ['granica (1 + 1/n)^n przy n->inf', 'granica'], ['szereg tan x', 'szereg Taylora'], ['badanie funkcji x^3 - 3x', 'przebieg zmienności'], ['sum(1/k^2, k, 1, inf)', 'szereg']]],
   ['Wykresy', [['wykres sin x, cos x', 'dwie funkcje'], ['wykres x^2 + y^2 = 25, y = x - 1', 'okrąg i prosta'], ['x^2/9 + y^2/4 = 1', 'elipsa'], ['wykres [cos t, sin(2t)]', 'krzywa parametryczna'], ['badanie funkcji (x^2 + 1)/(x - 1)', 'asymptoty'], ['całka sin x od 0 do 2pi', 'pole ze znakiem']]],
   ['LaTeX', [[String.raw`\int_0^{\pi} \sin x \, dx`, 'całka'], [String.raw`\lim_{x \to 0} \frac{\sin x}{x}`, 'granica'], [String.raw`\sum_{k=1}^{\infty} \frac{1}{k^2}`, 'szereg'], [String.raw`\frac{d}{dx} x^x`, 'pochodna'], [String.raw`\begin{cases} x + y = 5 \\ x y = 6 \end{cases}`, 'układ'], [String.raw`\det\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`, 'wyznacznik']]],
-  ['Równania', [['sin(x) = 1/2', 'trygonometryczne'], ['2^x = 3^(x - 1)', 'wykładnicze'], ['sqrt(x + 3) = x - 3', 'z pierwiastkiem'], ['x + y = 5, x y = 6', 'układ'], ['(x - 1)/(x + 2) >= 0', 'nierówność'], ['x^5 - x - 1 = 0', 'numerycznie']]],
-  ['Macierze', [['[[2, 1], [1, 2]]', 'macierz'], ['det([[a, b], [c, d]])', 'wyznacznik'], ['inverse([[1, 2, 3], [0, 1, 4], [5, 6, 0]])', 'odwrotna'], ['eigenvalues([[4, 1], [2, 3]])', 'wartości własne']]],
+  ['Równania', [['sin(x) = 1/2', 'trygonometryczne'], ['2^x = 3^(x - 1)', 'wykładnicze'], ['sqrt(x + 3) = x - 3', 'z pierwiastkiem'], ['x + y = 5, x y = 6', 'układ'], ['x + y = 5, x - y = 1', 'układ liniowy'], ['(x - 1)/(x + 2) >= 0', 'nierówność'], ['x^5 - x - 1 = 0', 'numerycznie']]],
+  ['Macierze', [['[[2, 1], [1, 2]]', 'macierz'], ['det([[a, b], [c, d]])', 'wyznacznik'], ['inverse([[1, 2, 3], [0, 1, 4], [5, 6, 0]])', 'odwrotna'], ['eigenvalues([[4, 1], [2, 3]])', 'wartości własne'], ['adjugate([[1, 2], [3, 4]])', 'macierz dołączona'], ['linsolve([[2, 1], [1, -1]], [5, 1])', 'układ macierzowy'], ['linsolve([[1, 2], [2, 4]], [3, 7])', 'układ sprzeczny'], ['x + y = 5, x - y = 1', 'układ i macierz'], ['diag(1, 2, 3)', 'macierz diagonalna'], ['echelon([[1, 2, 3], [4, 5, 6], [7, 8, 10]])', 'eliminacja Gaussa'], ['charpoly([[1, 2], [3, 4]])', 'wielomian charakterystyczny']]],
   ['Teoria liczb', [['rozłóż 2^64 + 1', 'czynniki'], ['isprime(2^89 - 1)', 'pierwszość'], ['nwd(462, 1071)', 'NWD'], ['crt([2, 3, 2], [3, 5, 7])', 'kongruencje'], ['totient(10^12)', 'φ Eulera'], ['fibonacci(300)', 'Fibonacci']]],
   ['Statystyka', [['{2, 4, 4, 4, 5, 5, 7, 9}', 'statystyki'], ['median(3, 1, 4, 1, 5, 9, 2, 6)', 'mediana']]],
 ];
@@ -185,7 +185,7 @@ function render(r: Result): void {
   }
   if (r.error) cards.push(h('section', { class: 'pod pod-error', role: 'alert' }, h('p', {}, r.error)));
   r.pods.forEach((p, i) => {
-    const c = podCard(p);
+    const c = podCard(p, i === 0 && !r.error);
     // the first card is the answer; plots and cards without rows take the full width
     if (i === 0 && !r.error) c.classList.add('pod-primary');
     if (p.plot || !p.rows.length) c.classList.add('pod-wide');
@@ -214,9 +214,10 @@ function card(title: string, body: HTMLElement[], note?: string, copy?: string, 
 /** Long plain numbers wrap as text; MathML would run off the card. */
 const LONG = /^[−-]?[\d.e+−-]{70,}$/;
 
-function podCard(p: Pod): HTMLElement {
+function podCard(p: Pod, openSteps = false): HTMLElement {
   const rows = p.rows.map(rowEl);
   if (p.plot) rows.push(plotView(p.plot));
+  if (p.steps?.length) rows.push(stepsEl(p.steps, openSteps));
   let extra: HTMLElement | undefined;
   if (p.more) {
     const more = p.more;
@@ -225,6 +226,25 @@ function podCard(p: Pod): HTMLElement {
     extra = b;
   }
   return card(p.title, rows, p.note, p.rows.length ? p.rows.map(r => r.text).join('\n') : undefined, extra);
+}
+
+/** The worked solution under a result: numbered operations, each with the matrix it produced. */
+function stepsEl(steps: NonNullable<Pod['steps']>, open: boolean): HTMLElement {
+  const items = steps.map((s, i) => {
+    const item = h('li', { class: 'pod-step' },
+      h('div', { class: 'pod-step-head' },
+        h('span', { class: 'pod-step-no' }, `${i + 1}.`),
+        h('span', { class: 'pod-step-op' }, s.op)),
+    );
+    if (s.ml) item.append(h('div', { class: 'pod-math pod-step-math', html: s.ml }));
+    if (s.note) item.append(h('p', { class: 'pod-step-note' }, s.note));
+    return item;
+  });
+  return h('details', { class: 'pod-steps', open },
+    h('summary', {},
+      h('span', {}, 'Kroki rozwiązania'),
+      h('span', { class: 'count' }, String(steps.length))),
+    h('ol', { class: 'pod-steps-list' }, ...items));
 }
 
 function rowEl(r: Row): HTMLElement {

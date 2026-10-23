@@ -1,14 +1,15 @@
 import { expect, test } from 'vitest';
 import { run } from '../src/cas/engine';
 
-/** text of the first row of the card with this title */
-function card(q: string, title: string): string {
+function findPod(q: string, title: string) {
   const r = run(q);
   if (r.error) throw new Error(`${q}: ${r.error}`);
   const p = r.pods.find(p => p.title === title);
   if (!p) throw new Error(`${q}: no card „${title}” in ${r.pods.map(p => p.title).join(', ')}`);
-  return p.rows.map(r => r.text).join(' | ');
+  return p;
 }
+/** text of the first row of the card with this title */
+const card = (q: string, title: string): string => findPod(q, title).rows.map(r => r.text).join(' | ');
 
 test('exact arithmetic', () => {
   expect(card('2^100', 'Wynik')).toBe('1267650600228229401496703205376');
@@ -80,6 +81,109 @@ test('matrices and statistics', () => {
   expect(card('[[1,2],[3,4]]', 'Macierz odwrotna')).toBe('A⁻¹ = [[−2, 1], [3/2, −1/2]]');
   expect(card('eigenvalues([[2,1],[1,2]])', 'Wartości własne')).toBe('λ = 1 | λ = 3');
   expect(card('{2, 4, 4, 4, 5, 5, 7, 9}', 'Statystyki')).toContain('średnia: 5');
+});
+
+test('matrices: more operations and automatic cards', () => {
+  expect(card('adjugate([[1,2],[3,4]])', 'Macierz dołączona')).toBe('adj(A) = [[4, −2], [−3, 1]]');
+  expect(card('det([[5]])', 'Wyznacznik')).toBe('5');
+  expect(card('transpose([[1,2]])', 'Macierz transponowana')).toBe('[[1], [2]]');
+  expect(card('[[1,2]]', 'Macierz')).toBe('[[1, 2]]');
+  expect(card('cofactor([[1,2],[3,4]])', 'Macierz dopełnień algebraicznych')).toBe('[[4, −3], [−2, 1]]');
+  expect(card('minor([[1,2,3],[4,5,6],[7,8,9]], 1, 2)', 'Minor (1, 2)')).toBe('[[4, 6], [7, 9]]');
+  expect(card('diag([[1,2],[3,4]])', 'Przekątna macierzy')).toBe('[1, 4]');
+  expect(card('diag(1, 2, 3)', 'Macierz diagonalna')).toBe('[[1, 0, 0], [0, 2, 0], [0, 0, 3]]');
+  expect(card('dimensions([[1,2,3],[4,5,6]])', 'Wymiar macierzy')).toBe('2 × 3');
+  expect(card('element([[1,2],[3,4]], 2, 1)', 'Element (2, 1)')).toBe('3');
+  expect(card('submatrix([[1,2,3],[4,5,6],[7,8,9]], 2, 3, 1, 2)', 'Podmacierz')).toBe('[[4, 5], [7, 8]]');
+  expect(card('augment([[1,2],[3,4]], [[5],[6]])', 'Macierz dołączona')).toBe('[[1, 2, 5], [3, 4, 6]]');
+  expect(card('hadamard([[1,2],[3,4]], [[5,6],[7,8]])', 'Iloczyn Hadamarda')).toBe('[[5, 12], [21, 32]]');
+  expect(card('linsolve([[2,1],[1,-1]], [5,1])', 'Rozwiązanie układu')).toBe('x₁ = 2 | x₂ = 1');
+  expect(card('linsolve([[1,2],[2,4]], [3,6])', 'Rozwiązanie układu')).toBe('x₁ = 3 − 2t1 | x₂ = t1');
+  expect(card('linsolve([[1,2],[2,4]], [3,7])', 'Układ sprzeczny')).toBe('0 = 1 | rząd A = 1, rząd [A | b] = 2');
+  expect(card('isinvertible([[1,2],[3,4]])', 'Czy macierz jest odwracalna?')).toBe('Tak');
+  expect(card('issymmetric([[1,2],[2,3]])', 'Czy macierz jest symetryczna?')).toBe('Tak');
+  expect(card('echelon([[1,2,3],[4,5,6],[7,8,10]])', 'Postać schodkowa (Gauss)')).toBe('[[1, 2, 3], [0, 1, 2], [0, 0, 1]]');
+  expect(card('rowspace([[1,2,3],[2,4,6]])', 'Baza przestrzeni wierszy (wymiar 1)')).toBe('[[1, 2, 3]]');
+  expect(card('colspace([[1,2,3],[2,4,6]])', 'Baza przestrzeni kolumn (wymiar 1)')).toBe('[[1, 2]]');
+  expect(card('[[1,2],[3,4]] * [5,6]', 'Lista')).toBe('[17; 39]');
+  expect(card('[1,2] * [[1,2],[3,4]]', 'Lista')).toBe('[7; 10]');
+  // a singular matrix brings its kernel and row/column bases
+  expect(card('[[1,2],[2,4]]', 'Jądro (wymiar 1)')).toBe('(−2, 1)');
+  expect(card('[[1,2],[2,4]]', 'Podprzestrzenie')).toBe('baza wierszy: [[1, 2]] | baza kolumn: [[1], [2]]');
+  // and the LU decomposition of a numeric matrix
+  expect(card('[[1,2],[3,4]]', 'Rozkład LU')).toBe('L = [[1, 0], [3, 1]] | U = [[1, 2], [0, −2]]');
+});
+
+test('matrices: worked solutions and further forms', () => {
+  // determinant: the formula, then the arithmetic
+  expect(findPod('det([[1,2],[3,4]])', 'Wyznacznik').steps?.map(s => s.text)).toEqual(['det A = 1·4 − 2·3', '= 4 − 6 = −2']);
+  expect(findPod('det([[1,2,3],[4,5,6],[7,8,10]])', 'Wyznacznik').steps?.[0].text).toBe('det A = 1·5·10 + 2·6·7 + 3·4·8 − 3·5·7 − 1·6·8 − 2·4·10');
+  // inverse: [A | I] reduced to [I | A⁻¹], the 2×2 formula, and a check
+  const inv = findPod('inverse([[1,2],[3,4]])', 'Macierz odwrotna');
+  expect(inv.steps?.[0].text).toBe('[[1, 2 | 1, 0], [3, 4 | 0, 1]]');
+  expect(inv.steps?.some(s => s.text === 'A⁻¹ = [[−2, 1], [3/2, −1/2]]')).toBe(true);
+  expect(inv.steps?.at(-1)?.op).toBe('Sprawdzenie: A·A⁻¹ = I');
+  // row operations end with the rank and the pivot columns
+  const ech = findPod('echelon([[1,2,3],[4,5,6],[7,8,10]])', 'Postać schodkowa (Gauss)');
+  expect(ech.steps?.some(s => s.op.startsWith('Postać schodkowa: 3 niezerowe wiersze'))).toBe(true);
+  // A·x = b: augmented matrix, the free variable, and the check
+  const sol = findPod('linsolve([[1,2],[2,4]], [3,6])', 'Rozwiązanie układu');
+  expect(sol.steps?.some(s => s.text === 'x₁ = 3 − 2t1, x₂ = t1')).toBe(true);
+  expect(sol.steps?.at(-1)?.op).toBe('Sprawdzenie: A·x = b dla każdego wiersza ✓');
+  // the kernel ends with the basis vector built from the free variable
+  const ker = findPod('nullspace([[1,2],[2,4]])', 'Baza jądra (wymiar 1)');
+  expect(ker.steps?.at(-1)?.text).toBe('(−2, 1)');
+  // automatic matrix cards carry the same steps where they fit
+  expect(findPod('[[1,2],[3,4]]', 'Wyznacznik').steps?.length).toBe(2);
+  expect(findPod('[[1,2],[3,4]]', 'Postać schodkowa (Gauss)').steps?.length).toBeGreaterThan(2);
+  expect(findPod('[[1,2],[3,4]]', 'Macierz odwrotna').steps?.length).toBeGreaterThan(3);
+
+  // further decompositions and properties
+  expect(card('lu([[1,2],[3,4]])', 'Rozkład LU')).toBe('L = [[1, 0], [3, 1]] | U = [[1, 2], [0, −2]]');
+  expect(card('cholesky([[4,2],[2,3]])', 'Rozkład Choleskiego')).toBe('L = [[2, 0], [1, √2]]');
+  expect(card('qr([[1,0],[0,1]])', 'Rozkład QR')).toBe('Q = [[1, 0], [0, 1]] | R = [[1, 0], [0, 1]]');
+  expect(card('diagonalize([[2,1],[1,2]])', 'Diagonalizacja')).toBe('D = [[1, 0], [0, 3]] | P = [[−1, 1], [1, 1]] | P⁻¹ = [[−1/2, 1/2], [1/2, 1/2]]');
+  expect(card('properties([[2,1],[1,2]])', 'Własności')).toContain('dodatnio określona');
+  expect(card('properties([[1,2],[2,4]])', 'Własności')).toContain('osobliwa (det A = 0');
+  expect(card('[[1,2],[2,4]]', 'Macierz odwrotna')).toContain('osobliwa (det A = 0)');
+  expect(card('properties([[1,2,3],[4,5,6]])', 'Własności')).toBe('prostokątna 2×3 (więcej kolumn niż wierszy)');
+  expect(card('diagonalize([[1,1],[0,1]])', 'Diagonalizacja')).toContain('nie jest diagonalizowalna');
+  expect(card('lu([[1,2],[2,4]])', 'Rozkład LU')).toBe('Nie istnieje: macierz jest osobliwa.');
+});
+
+test('systems: matrix form, ranks and Cramer', () => {
+  const q = 'x + y = 5, x - y = 1';
+  expect(card(q, 'Rozwiązanie')).toBe('x = 3, y = 2');
+  expect(card(q, 'Postać macierzowa')).toBe('A = [[1, 1], [1, −1]] | b = [[5], [1]] | [A | b] = [[1, 1 | 5], [1, −1 | 1]]');
+  expect(card(q, 'Rząd i zmienne wolne')).toBe('rząd A = 2 | rząd [A | b] = 2 | niewiadome: 2, stopnie swobody: 0');
+  expect(card(q, 'Wzory Cramera')).toBe('det A = −2 | x₁ = det A₁ / det A = −6 / −2 = 3 | x₂ = det A₂ / det A = −4 / −2 = 2');
+  expect(findPod(q, 'Postać macierzowa').more?.query).toBe('linsolve([[1, 1], [1, −1]], [5, 1])');
+  const steps = findPod(q, 'Rozwiązanie').steps;
+  expect(steps?.some(s => s.text === 'x = 3, y = 2')).toBe(true);
+  expect(steps?.at(-1)?.op).toBe('Sprawdzenie: A·x = b dla każdego wiersza ✓');
+
+  // an inconsistent system names the contradictory row instead of only saying "no solutions"
+  const bad = 'x + y = 1, x + y = 2';
+  expect(card(bad, 'Układ sprzeczny')).toBe('0 = 1 | rząd A = 1, rząd [A | b] = 2');
+  expect(card(bad, 'Rząd i zmienne wolne')).toBe('0 = 1 (wiersz 2) | rząd A = 1 | rząd [A | b] = 2');
+
+  // a free variable in a 2×3 system, and the same elimination steps
+  const under = 'x + y + z = 1, x - y = 0';
+  expect(card(under, 'Rozwiązanie')).toBe('x = (1 − z)/2 | y = (1 − z)/2 | z ∈ ℝ');
+  expect(card(under, 'Postać macierzowa')).toBe('A = [[1, 1, 1], [1, −1, 0]] | b = [[1], [0]] | [A | b] = [[1, 1, 1 | 1], [1, −1, 0 | 0]]');
+  expect(card(under, 'Rząd i zmienne wolne')).toBe('rząd A = 2 | rząd [A | b] = 2 | niewiadome: 3, stopnie swobody: 1');
+  expect(findPod(under, 'Rozwiązanie').steps?.some(s => s.text === 'x = 1/2 − t1/2, y = 1/2 − t1/2, z = t1')).toBe(true);
+
+  // a symbolic coefficient is a parameter when x and y are present; Cramer works exactly
+  const sym = 'a x + y = 1, x + y = 2';
+  expect(card(sym, 'Rozwiązanie')).toBe('x = −1/(a − 1), y = (2a − 1)/(a − 1)');
+  expect(card(sym, 'Wzory Cramera')).toBe('det A = a − 1 | x₁ = det A₁ / det A = −1 / (a − 1) = −1/(a − 1) | x₂ = det A₂ / det A = (2a − 1) / (a − 1) = (2a − 1)/(a − 1)');
+  expect(findPod(sym, 'Postać macierzowa').more?.query).toBe('linsolve([[a, 1], [1, 1]], [1, 2])');
+
+  // no matrix cards for a genuinely nonlinear system
+  const nonlin = run('x^2 + y^2 = 25, y = x - 1');
+  expect(nonlin.error).toBeFalsy();
+  expect(nonlin.pods.some(p => p.title === 'Postać macierzowa')).toBe(false);
 });
 
 test('bad input is a readable error, never a crash', () => {

@@ -992,6 +992,41 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .pod-long { min-width: 0; padding: 4px 0; font: 15px/22px var(--mono); overflow-wrap: anywhere; word-break: break-all; color: var(--fg1); }
 .pod-note { margin: 6px 0 0; font: var(--caption1); color: var(--fg3); }
 .pod-more { justify-self: start; margin: 4px 0 0 -10px; }
+
+/* Worked solutions: a disclosure under the answer, one numbered row operation per step */
+.pod-steps { margin-top: 8px; border-top: 1px solid var(--stroke2); }
+.pod-steps summary {
+  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 4px; list-style: none; cursor: pointer;
+  border-radius: var(--r-medium); color: var(--brand-fg-link); font: var(--body1-strong);
+}
+.pod-steps summary::-webkit-details-marker { display: none; }
+.pod-steps summary::before {
+  content: ""; flex: none; width: 12px; height: 12px; background: currentColor; rotate: -90deg;
+  transition: rotate var(--d-fast) var(--ease);
+  -webkit-mask: var(--icon-chevron) center / contain no-repeat; mask: var(--icon-chevron) center / contain no-repeat;
+}
+.pod-steps[open] summary::before { rotate: 0deg; }
+.pod-steps summary:hover { background: var(--subtle-hover); color: var(--brand-fg-link-hover); }
+.pod-steps summary .count {
+  min-width: 20px; padding: 1px 7px; border-radius: var(--r-circular);
+  background: var(--n-bg3); color: var(--fg3); font: var(--caption1); text-align: center; font-variant-numeric: tabular-nums;
+}
+.pod-steps-list { display: grid; gap: 6px; margin: 2px 0 4px; padding: 0; list-style: none; }
+.pod-step {
+  min-width: 0; padding: 7px 10px 8px; border-left: 2px solid color-mix(in srgb, var(--brand-stroke1) 34%, transparent);
+  border-radius: 0 var(--r-medium) var(--r-medium) 0;
+  background: color-mix(in srgb, var(--n-bg3) 52%, transparent);
+}
+.pod-step-head { display: flex; align-items: baseline; gap: 6px; }
+.pod-step-no { flex: none; color: var(--fg3); font: var(--caption1-strong); font-variant-numeric: tabular-nums; }
+.pod-step-op { min-width: 0; color: var(--fg2); font: var(--body1); overflow-wrap: anywhere; }
+.pod-step-math { padding-top: 2px; font-size: 17px; }
+.pod-step-note { margin: 2px 0 0; font: var(--caption1); color: var(--fg3); }
+/* In a matrix drawn by matsteps: the bars around an augmented block and the rows that just changed */
+.pod-step-math mtd.mat-bar { border-left: 1.5px solid color-mix(in srgb, var(--fg1) 45%, transparent); padding-left: .5em; }
+.pod-step-math mtr.mat-hl > mtd { background: color-mix(in srgb, var(--brand-bg) 14%, transparent); }
+.pod-primary .pod-steps { border-top-color: color-mix(in srgb, var(--brand-stroke1) 18%, transparent); }
+.pod-primary .pod-step { background: color-mix(in srgb, var(--card) 72%, transparent); }
 @container (min-width: 600px) {
   .pod:not(.pod-wide, .pod-primary, .pod-error) {
     display: grid; grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) auto; column-gap: 24px; align-items: start; padding: 8px 12px 8px 20px;
@@ -1182,6 +1217,8 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   .calc-tabs button { flex: none; }
   .calc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calc-tile { padding: 10px 12px; }
+  .pod-step { padding: 6px 8px; }
+  .pod-step-math { font-size: 15px; }
   .calc-tile::after { display: none; }
   .pod { padding: 10px 12px 12px; }
   .pod-primary { padding: 12px 14px 14px; }
