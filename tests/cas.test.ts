@@ -97,8 +97,8 @@ test('matrices: more operations and automatic cards', () => {
   expect(card('submatrix([[1,2,3],[4,5,6],[7,8,9]], 2, 3, 1, 2)', 'Podmacierz')).toBe('[[4, 5], [7, 8]]');
   expect(card('augment([[1,2],[3,4]], [[5],[6]])', 'Macierz dołączona')).toBe('[[1, 2, 5], [3, 4, 6]]');
   expect(card('hadamard([[1,2],[3,4]], [[5,6],[7,8]])', 'Iloczyn Hadamarda')).toBe('[[5, 12], [21, 32]]');
-  expect(card('linsolve([[2,1],[1,-1]], [5,1])', 'Rozwiązanie układu')).toBe('x₁ = 2 | x₂ = 1');
-  expect(card('linsolve([[1,2],[2,4]], [3,6])', 'Rozwiązanie układu')).toBe('x₁ = 3 − 2t1 | x₂ = t1');
+  expect(card('linsolve([[2,1],[1,-1]], [5,1])', 'Rozwiązanie układu')).toBe('x₁ = 2, x₂ = 1');
+  expect(card('linsolve([[1,2],[2,4]], [3,6])', 'Rozwiązanie układu')).toBe('x₁ = 3 − 2t1, x₂ = t1');
   expect(card('linsolve([[1,2],[2,4]], [3,7])', 'Układ sprzeczny')).toBe('0 = 1 | rząd A = 1, rząd [A | b] = 2');
   expect(card('isinvertible([[1,2],[3,4]])', 'Czy macierz jest odwracalna?')).toBe('Tak');
   expect(card('issymmetric([[1,2],[2,3]])', 'Czy macierz jest symetryczna?')).toBe('Tak');
@@ -154,9 +154,9 @@ test('matrices: worked solutions and further forms', () => {
 test('systems: matrix form, ranks and Cramer', () => {
   const q = 'x + y = 5, x - y = 1';
   expect(card(q, 'Rozwiązanie')).toBe('x = 3, y = 2');
-  expect(card(q, 'Postać macierzowa')).toBe('A = [[1, 1], [1, −1]] | b = [[5], [1]] | [A | b] = [[1, 1 | 5], [1, −1 | 1]]');
+  expect(card(q, 'Postać macierzowa')).toBe('[[1, 1], [1, −1]]·[x, y] = [5, 1] | A = [[1, 1], [1, −1]] | b = [[5], [1]] | [A | b] = [[1, 1 | 5], [1, −1 | 1]]');
   expect(card(q, 'Rząd i zmienne wolne')).toBe('rząd A = 2 | rząd [A | b] = 2 | niewiadome: 2, stopnie swobody: 0');
-  expect(card(q, 'Wzory Cramera')).toBe('det A = −2 | x₁ = det A₁ / det A = −6 / −2 = 3 | x₂ = det A₂ / det A = −4 / −2 = 2');
+  expect(card(q, 'Wzory Cramera')).toBe('det A = −2 | x = det A₁ / det A = (−6) / (−2) = 3 | y = det A₂ / det A = (−4) / (−2) = 2');
   expect(findPod(q, 'Postać macierzowa').more?.query).toBe('linsolve([[1, 1], [1, −1]], [5, 1])');
   const steps = findPod(q, 'Rozwiązanie').steps;
   expect(steps?.some(s => s.text === 'x = 3, y = 2')).toBe(true);
@@ -169,16 +169,28 @@ test('systems: matrix form, ranks and Cramer', () => {
 
   // a free variable in a 2×3 system, and the same elimination steps
   const under = 'x + y + z = 1, x - y = 0';
-  expect(card(under, 'Rozwiązanie')).toBe('x = (1 − z)/2 | y = (1 − z)/2 | z ∈ ℝ');
-  expect(card(under, 'Postać macierzowa')).toBe('A = [[1, 1, 1], [1, −1, 0]] | b = [[1], [0]] | [A | b] = [[1, 1, 1 | 1], [1, −1, 0 | 0]]');
+  expect(card(under, 'Rozwiązanie')).toBe('x = (1 − z)/2, y = (1 − z)/2, z ∈ ℝ');
+  expect(card(under, 'Postać macierzowa')).toBe('[[1, 1, 1], [1, −1, 0]]·[x, y, z] = [1, 0] | A = [[1, 1, 1], [1, −1, 0]] | b = [[1], [0]] | [A | b] = [[1, 1, 1 | 1], [1, −1, 0 | 0]]');
   expect(card(under, 'Rząd i zmienne wolne')).toBe('rząd A = 2 | rząd [A | b] = 2 | niewiadome: 3, stopnie swobody: 1');
   expect(findPod(under, 'Rozwiązanie').steps?.some(s => s.text === 'x = 1/2 − t1/2, y = 1/2 − t1/2, z = t1')).toBe(true);
 
   // a symbolic coefficient is a parameter when x and y are present; Cramer works exactly
   const sym = 'a x + y = 1, x + y = 2';
   expect(card(sym, 'Rozwiązanie')).toBe('x = −1/(a − 1), y = (2a − 1)/(a − 1)');
-  expect(card(sym, 'Wzory Cramera')).toBe('det A = a − 1 | x₁ = det A₁ / det A = −1 / (a − 1) = −1/(a − 1) | x₂ = det A₂ / det A = (2a − 1) / (a − 1) = (2a − 1)/(a − 1)');
+  expect(card(sym, 'Wzory Cramera')).toBe('det A = a − 1 | x = det A₁ / det A = (−1) / (a − 1) = −1/(a − 1) | y = det A₂ / det A = (2a − 1) / (a − 1) = (2a − 1)/(a − 1)');
   expect(findPod(sym, 'Postać macierzowa').more?.query).toBe('linsolve([[a, 1], [1, 1]], [1, 2])');
+
+  // a system is written under a brace, one equation per line, in the input, the solution and the steps
+  const brace = (ml: string) => /<mtable class="sys">/.test(ml) && /class="sys-brace"/.test(ml);
+  expect(brace(run(q).input!.ml)).toBe(true);
+  expect((run(q).input!.ml.match(/<mtr>/g) ?? []).length).toBe(2);
+  expect(brace(findPod(q, 'Rozwiązanie').rows[0].ml)).toBe(true);
+  expect(findPod(q, 'Rozwiązanie').steps?.[0]).toMatchObject({ op: 'Układ równań', text: 'x + y = 5, x − y = 1' });
+  expect(card('linsolve([[2,1],[1,-1]], [5,1])', 'Układ równań')).toBe('2x₁ + x₂ = 5, x₁ − x₂ = 1');
+  expect(card('linsolve([[1,-2,0],[0,1/2,-1]], [0,3])', 'Układ równań')).toBe('x₁ − 2x₂ = 0, (1/2)x₂ − x₃ = 3');
+  // matrices are bracketed by CSS borders, not by stretchy operators that need a math font
+  expect(findPod('[[1,2],[3,4]]', 'Macierz').rows[0].ml).toContain('<mtable class="mat">');
+  expect(run('[[1,2],[3,4]]').input!.ml).not.toContain('<mo>[</mo>');
 
   // no matrix cards for a genuinely nonlinear system
   const nonlin = run('x^2 + y^2 = 25, y = x - 1');

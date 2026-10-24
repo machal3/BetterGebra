@@ -94,10 +94,31 @@ function numML(v: Q): string {
   return row(sign, `<mfrac>${mn(intText(n))}${mn(intText(v.d))}</mfrac>`);
 }
 
+/**
+ * A system written as in a textbook: a brace, one equation per line, aligned on the relation sign. Each line is
+ * [left, sign, right] in MathML; a line with an empty sign fills the left cell only. The brace is the first cell,
+ * drawn by CSS (.sys-brace) so it stretches without an OpenType MATH font; columnalign is for Firefox,
+ * the CSS for Chromium and Safari.
+ */
+export function systemML(lines: [string, string, string][]): string {
+  if (lines.length === 1) return row(...lines[0]);
+  const rows = lines.map(([l, s, r], i) =>
+    `<mtr>${i ? '' : `<mtd rowspan="${lines.length}" class="sys-brace"></mtd>`}<mtd class="sys-l" columnalign="${s ? 'right' : 'left'}">${l}</mtd><mtd class="sys-s">${s ? mo(s) : ''}</mtd><mtd class="sys-r" columnalign="left">${r}</mtd></mtr>`).join('');
+  return `<mtable class="sys">${rows}</mtable>`;
+}
+
+/** A matrix: the brackets are the table's CSS borders (.mat), which stretch with any font. */
+export const matrixTable = (rows: string) => `<mtable class="mat">${rows}</mtable>`;
+
 export function toML(e: Expr): string {
   switch (e.k) {
     case 'n': return numML(e.v);
-    case 's': return SYMBOLS[e.n] ? mi(SYMBOLS[e.n]) : mi(e.n);
+    case 's': {
+      if (SYMBOLS[e.n]) return mi(SYMBOLS[e.n]);
+      // t1, x2: a letter with an index, as the parameters of a solution are named
+      const m = /^([a-zA-Zα-ω])(\d+)$/.exec(e.n);
+      return m ? `<msub>${mi(m[1])}${mn(m[2])}</msub>` : mi(e.n);
+    }
     case '+': {
       const cd = commonDenominator(e);
       if (cd) return `<mfrac>${row(toML(cd[0]))}${mn(intText(cd[1]))}</mfrac>`;
