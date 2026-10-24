@@ -6,7 +6,7 @@
  */
 import { Expr, ONE, ZERO, add, div, expand, isConstant, isNum, isZero, mul, neg, num, sqrt, sub } from './expr';
 import { matMul, identityM } from './evaluate';
-import { toML, toText } from './format';
+import { matrixTable, systemML, toML, toText } from './format';
 import { constSign } from './functions';
 import * as LA from './matrix';
 import { approx } from './numeric';
@@ -28,10 +28,10 @@ const isUnitNum = (e: Expr, v: bigint) => isNum(e) && (e as { v: Q }).v.d === 1n
 const DET_A = `${mi('det')}<mspace width="0.2em"/>${mi('A')}`;
 const A_INV = '<msup><mi>A</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup>';
 
-/** A matrix in brackets; `bar` puts a vertical line before that column, `hl` highlights rows that just changed. */
+/** A matrix in brackets (see matrixTable); `bar` puts a vertical line before that column, `hl` highlights rows that just changed. */
 export function matML(m: M, opts: { bar?: number; hl?: number[] } = {}): string {
   const rows = m.map((r, i) => `<mtr${opts.hl?.includes(i) ? ' class="mat-hl"' : ''}>${r.map((c, j) => `<mtd${opts.bar !== undefined && j === opts.bar ? ' class="mat-bar"' : ''}>${toML(c)}</mtd>`).join('')}</mtr>`);
-  return `<mrow>${mo('[')}<mtable>${rows.join('')}</mtable>${mo(']')}</mrow>`;
+  return matrixTable(rows.join(''));
 }
 export function matText(m: M, bar?: number): string {
   const r = (row: Expr[]) => bar === undefined ? row.map(toText).join(', ') : `${row.slice(0, bar).map(toText).join(', ')} | ${row.slice(bar).map(toText).join(', ')}`;
@@ -239,14 +239,37 @@ export function luSteps(A: M, dec: LA.LU): Step[] | null {
 
 const xName = (j: number) => ({ ml: `<msub><mi>x</mi><mn>${j + 1}</mn></msub>`, text: `x${subscript(j + 1)}` });
 
+/** The equations of A·x = b, one per line under a brace (2x + y = 5); unknowns are x₁, x₂, … unless named. */
+export function equationsML(A: M, b: Expr[], names?: string[]): { ml: string; text: string } {
+  const name = (j: number) => names?.[j] ? { ml: mi(names[j]), text: names[j] } : xName(j);
+  const lines = A.map((row, i) => {
+    let ml = '', text = '';
+    row.forEach((a, j) => {
+      if (isZero(a)) return;
+      let minus = false, mag = a;
+      const t = toText(a);
+      if (/^[−-]/.test(t) && !compound(t)) { minus = true; mag = neg(a); }
+      if (ml) { ml += mo(minus ? '−' : '+'); text += minus ? ' − ' : ' + '; }
+      else if (minus) { ml += mo('−'); text += '−'; }
+      const one = isUnitNum(mag, 1n);
+      ml += (one ? '' : `${pML(mag)}<mo>&#x2062;</mo>`) + name(j).ml;
+      text += (one ? '' : pText(mag)) + name(j).text;
+    });
+    return { ml: ml || '<mn>0</mn>', text: `${text || '0'} = ${toText(b[i])}`, rhs: toML(b[i]) };
+  });
+  return { ml: systemML(lines.map(l => [l.ml, '=', l.rhs])), text: lines.map(l => l.text).join(', ') };
+}
+
 export function linsolveSteps(A: M, b: Expr[], sol: LA.LinearSolution, simp: (e: Expr) => Expr, names?: string[]): Step[] | null {
   const m = A[0].length;
   const aug = A.map((r, i) => [...r, b[i]]);
-  const r = elimSteps(aug, 'rref', { bar: m, start: 'Macierz rozszerzona [A | b]', stopAt: m });
+  const r = elimSteps(aug, 'rref', { bar: m, start: 'Współczynniki niewiadomych tworzą macierz A, wyrazy wolne kolumnę b: macierz rozszerzona [A | b]', stopAt: m });
   const name = (j: number) => names?.[j]
     ? { ml: `<mi>${names[j]}</mi>`, text: names[j] }
     : xName(j);
   const steps = r.steps;
+  const eqs = equationsML(A, b, names);
+  steps.unshift({ op: 'Układ równań', ml: ML(eqs.ml), text: eqs.text });
   const rankA = r.pivots.length;
   const bad = r.R.findIndex(row => row.slice(0, m).every(isZero) && !isZero(row[m]));
   if (sol.kind === 'none') {
@@ -258,7 +281,7 @@ export function linsolveSteps(A: M, b: Expr[], sol: LA.LinearSolution, simp: (e:
   }
   if (bad >= 0) return null;
   const xs = sol.x.map(v => simp(v));
-  const rows = xs.map((v, j) => `${name(j).ml}${mo('=')}${toML(v)}`).join(`${mo(',')}<mspace width="0.6em"/>`);
+  const rows = systemML(xs.map((v, j) => [name(j).ml, '=', toML(v)]));
   const rowsT = xs.map((v, j) => `${name(j).text} = ${toText(v)}`).join(', ');
   if (sol.kind === 'unique') {
     steps.push({ op: `Rząd A = rząd [A | b] = ${rankA} = liczba niewiadomych: dokładnie jedno rozwiązanie, odczytane z ostatniej kolumny`, ml: ML(rows), text: rowsT });

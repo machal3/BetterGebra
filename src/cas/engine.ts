@@ -9,7 +9,7 @@ import { diff, diffN, limit, Lim, taylor } from './calculus';
 import { Env, Value, evaluate, ex, scalar, setInverse, dims, matMul } from './evaluate';
 import { Expr, I, INF, ONE, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isFn } from './expr';
 import { compileDouble } from './fast';
-import { toML, toText } from './format';
+import { matrixTable, systemML, toML, toText } from './format';
 import { complexParts, constSign, binomialBig } from './functions';
 import { definite, integrate, partialFractions } from './integrate';
 import * as LA from './matrix';
@@ -639,12 +639,13 @@ function systemPod(r: ReturnType<typeof solveSystem>, vs: string[]): Pod {
   }
   if (r.kind === 'unknown') return { title: 'Rozwiązanie', rows: [textRow(r.note)] };
   if (r.kind === 'param') {
-    const rows = vs.map((v, k) => r.free.includes(v) ? { ml: M(`${mi(v)}${mo('∈')}<mi mathvariant="normal">ℝ</mi>`), text: `${v} ∈ ℝ` } : eqRow(mi(v), v, r.values[k]));
+    const lines: [string, string, string][] = vs.map((v, k) => r.free.includes(v) ? [mi(v), '∈', '<mi mathvariant="normal">ℝ</mi>'] : [mi(v), '=', toML(r.values[k])]);
+    const text = vs.map((v, k) => r.free.includes(v) ? `${v} ∈ ℝ` : `${v} = ${toText(r.values[k])}`).join(', ');
     const rank = r.linear ? ` rząd A = ${r.linear.rankA} < ${vs.length} niewiadomych.` : '';
-    return { title: 'Rozwiązanie', rows, note: `Nieskończenie wiele rozwiązań (parametr${r.free.length > 1 ? 'y' : ''}: ${r.free.join(', ')}).${rank}` };
+    return { title: 'Rozwiązanie', rows: [{ ml: M(systemML(lines)), text }], note: `Nieskończenie wiele rozwiązań (parametr${r.free.length > 1 ? 'y' : ''}: ${r.free.join(', ')}).${rank}` };
   }
   const rows = r.list.map(sol => ({
-    ml: M(sol.map((v, k) => `${mi(vs[k])}${mo('=')}${toML(v)}`).join(`${mo(',')}<mspace width="0.6em"/>`)),
+    ml: M(systemML(sol.map((v, k) => [mi(vs[k]), '=', toML(v)]))),
     text: sol.map((v, k) => `${vs[k]} = ${toText(v)}`).join(', '),
     note: sol.some(v => isConstant(v) && !isNum(v)) ? sol.map((v, k) => (isNum(v) ? '' : `${vs[k]} ${shortApprox(v)}`)).filter(Boolean).join(', ') : undefined,
   }));
@@ -655,7 +656,12 @@ function systemPod(r: ReturnType<typeof solveSystem>, vs: string[]): Pod {
 function systemMatrixPods(lin: LinearInfo, vs: string[]): Pod[] {
   const [m, n] = dims(lin.A);
   const b = lin.b.map(v => [v]);
+  const x = vs.map(v => [sym(v)]);
   const rows: Row[] = [
+    {
+      ml: M(`${matML(lin.A)}${mo('·')}${matML(x)}${mo('=')}${matML(b)}`),
+      text: `${matText(lin.A)}·[${vs.join(', ')}] = [${lin.b.map(toText).join(', ')}]`,
+    },
     matRow(lin.A, '<mi>A</mi>', 'A'),
     matRow(b, '<mi>b</mi>', 'b'),
     {
@@ -690,6 +696,7 @@ function systemMatrixPods(lin: LinearInfo, vs: string[]): Pod[] {
     const detA = safe(() => simp(LA.det(lin.A)));
     const ls = safe(() => LA.linsolve(lin.A, lin.b));
     if (detA && !isZero(expand(detA)) && ls?.kind === 'unique') {
+      const row2 = (f: string, k?: number) => `<mrow><mi>${f}</mi><mspace width="0.17em"/>${k ? `<msub><mi>A</mi><mn>${k}</mn></msub>` : '<mi>A</mi>'}</mrow>`;
       const cramer: Row[] = [eqRow('<mi>det</mi><mi>A</mi>', 'det A', detA)];
       let ok = true;
       for (let i = 0; i < n && ok; i++) {
@@ -698,14 +705,13 @@ function systemMatrixPods(lin: LinearInfo, vs: string[]): Pod[] {
         if (!di) { ok = false; break; }
         const xi = simp(div(di, detA));
         if (!same(xi, simp(ls.x[i]))) { ok = false; break; }
-        const diT = isNum(di) ? toText(di) : `(${toText(di)})`;
-        const detT = isNum(detA) ? toText(detA) : `(${toText(detA)})`;
+        const pT = (e: Expr) => { const t = toText(e); return /^[\d/]+$/.test(t) ? t : `(${t})`; };
         cramer.push({
-          ml: M(`<msub><mi>x</mi><mn>${i + 1}</mn></msub>${mo('=')}<mfrac>${toML(di)}${toML(detA)}</mfrac>${mo('=')}${toML(xi)}`),
-          text: `x${subscript(i + 1)} = det A${subscript(i + 1)} / det A = ${diT} / ${detT} = ${toText(xi)}`,
+          ml: M(`${mi(vs[i])}${mo('=')}<mfrac>${row2('det', i + 1)}${row2('det')}</mfrac>${mo('=')}<mfrac>${toML(di)}${toML(detA)}</mfrac>${mo('=')}${toML(xi)}`),
+          text: `${vs[i]} = det A${subscript(i + 1)} / det A = ${pT(di)} / ${pT(detA)} = ${toText(xi)}`,
         });
       }
-      if (ok) pods.push({ title: 'Wzory Cramera', rows: cramer, note: 'Aᵢ to macierz A z i-tą kolumną zastąpioną przez b. Zakładamy, że det A ≠ 0.' });
+      if (ok) pods.push({ title: 'Wzory Cramera', rows: cramer, note: `Aᵢ to macierz A z i-tą kolumną zastąpioną przez b (kolejność niewiadomych: ${vs.join(', ')}). Zakładamy, że det A ≠ 0.` });
     }
   }
   return pods;
@@ -714,7 +720,7 @@ function systemMatrixPods(lin: LinearInfo, vs: string[]): Pod[] {
 // --- Matrices and lists ---
 
 function matML(m: Expr[][]): string {
-  return `<mrow>${mo('[')}<mtable>${m.map(r => `<mtr>${r.map(c => `<mtd>${toML(c)}</mtd>`).join('')}</mtr>`).join('')}</mtable>${mo(']')}</mrow>`;
+  return matrixTable(m.map(r => `<mtr>${r.map(c => `<mtd>${toML(c)}</mtd>`).join('')}</mtr>`).join(''));
 }
 const matText = (m: Expr[][]) => `[${m.map(r => `[${r.map(toText).join(', ')}]`).join(', ')}]`;
 const matRow = (m: Expr[][], lhs = '', lhsText = ''): Row => ({ ml: M(`${lhs}${lhs ? mo('=') : ''}${matML(m)}`), text: `${lhsText ? lhsText + ' = ' : ''}${matText(m)}` });
@@ -1195,20 +1201,23 @@ function command(name: string, args: Node[], env: Env): Out {
       const A = matArg(args[0], env), b = vecArg(args[1], env);
       const sol = LA.linsolve(A, b);
       const s = stepsFit(A) ? steps(() => MS.linsolveSteps(A, b, sol, simp)) : undefined;
+      const eqs = MS.equationsML(A, b);
+      const system: Pod = { title: 'Układ równań', rows: [{ ml: M(eqs.ml), text: eqs.text }], note: 'A·x = b zapisane jako równania.' };
       if (sol.kind === 'none') {
         const rows: Row[] = [
           { ml: M(`${mo('0')}${mo('=')}${toML(sol.value)}`), text: `0 = ${toText(sol.value)}` },
           { ml: M(`${mtext('rząd A')}${mo('=')}<mn>${sol.rankA}</mn>${mo(',')}<mspace width="0.5em"/>${mtext('rząd [A | b]')}${mo('=')}<mn>${sol.rankAug}</mn>`), text: `rząd A = ${sol.rankA}, rząd [A | b] = ${sol.rankAug}` },
         ];
         const note = `Wiersz ${sol.row + 1} daje sprzeczność 0 = ${toText(sol.value)}. Rząd A jest mniejszy niż rząd [A | b], więc układ nie ma rozwiązań (twierdzenie Kroneckera–Capellego).`;
-        return { pods: [{ title: 'Układ sprzeczny', rows, note, steps: s }] };
+        return { pods: [{ title: 'Układ sprzeczny', rows, note, steps: s }, system] };
       }
-      const rows: Row[] = sol.x.map((v, i) => ({
-        ml: M(`<msub><mi>x</mi><mn>${i + 1}</mn></msub>${mo('=')}${toML(simplify(v))}`),
-        text: `x${subscript(i + 1)} = ${toText(simplify(v))}`,
-      }));
+      const xs = sol.x.map(v => simplify(v));
+      const rows: Row[] = [{
+        ml: M(systemML(xs.map((v, i) => [`<msub><mi>x</mi><mn>${i + 1}</mn></msub>`, '=', toML(v)]))),
+        text: xs.map((v, i) => `x${subscript(i + 1)} = ${toText(v)}`).join(', '),
+      }];
       const note = sol.kind === 'inf' ? `Nieskończenie wiele rozwiązań (parametry: ${sol.params.join(', ')}).` : undefined;
-      return { pods: [{ title: 'Rozwiązanie układu', rows, note, steps: s }], value: { t: 'list', items: sol.x.map(v => ex(simplify(v))), set: false } };
+      return { pods: [{ title: 'Rozwiązanie układu', rows, note, steps: s }, system], value: { t: 'list', items: sol.x.map(v => ex(simplify(v))), set: false } };
     }
     case 'lu': {
       const A = matArg(args[0], env);

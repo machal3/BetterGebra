@@ -1022,8 +1022,42 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .pod-step-op { min-width: 0; color: var(--fg2); font: var(--body1); overflow-wrap: anywhere; }
 .pod-step-math { padding-top: 2px; font-size: 17px; }
 .pod-step-note { margin: 2px 0 0; font: var(--caption1); color: var(--fg3); }
+/* Matrices and systems in MathML: brackets and braces drawn by CSS, so they stretch even without a MATH font */
+mtable.mat {
+  --t: .075em;
+  margin-inline: .12em; padding: .1em .3em;
+  border-inline: var(--t) solid currentColor;
+  background:
+    linear-gradient(currentColor, currentColor) left top / .28em var(--t) no-repeat,
+    linear-gradient(currentColor, currentColor) left bottom / .28em var(--t) no-repeat,
+    linear-gradient(currentColor, currentColor) right top / .28em var(--t) no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / .28em var(--t) no-repeat;
+}
+/* math layout in Chromium and Safari aligns cells only by the -webkit- values */
+mtable.sys > mtr > mtd { padding: .12em 0; }
+mtable.sys > mtr > mtd.sys-l { padding-inline-start: .3em; text-align: right; text-align: -webkit-right; }
+mtable.sys > mtr > mtd:is(.sys-r, [columnalign="left"]) { text-align: left; text-align: -webkit-left; }
+mtable.sys > mtr > mtd.sys-s { padding-inline: .28em; text-align: center; text-align: -webkit-center; }
+mtable.sys > mtr > mtd.sys-brace {
+  --t: .075em;
+  width: .45em; min-width: .45em; padding: 0;
+  background: currentColor;
+  -webkit-mask: var(--brace-top) center top / .45em .5em no-repeat, var(--brace-mid) center / .45em 1em no-repeat,
+    var(--brace-bottom) center bottom / .45em .5em no-repeat,
+    linear-gradient(#000, #000) center top .5em / var(--t) calc(50% - 1em) no-repeat,
+    linear-gradient(#000, #000) center bottom .5em / var(--t) calc(50% - 1em) no-repeat;
+  mask: var(--brace-top) center top / .45em .5em no-repeat, var(--brace-mid) center / .45em 1em no-repeat,
+    var(--brace-bottom) center bottom / .45em .5em no-repeat,
+    linear-gradient(#000, #000) center top .5em / var(--t) calc(50% - 1em) no-repeat,
+    linear-gradient(#000, #000) center bottom .5em / var(--t) calc(50% - 1em) no-repeat;
+}
+:root {
+  --brace-top: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 10'%3E%3Cpath d='M8 .75C5.5 .75 4.5 2 4.5 4.5V10' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --brace-mid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 20'%3E%3Cpath d='M4.5 0V5C4.5 8.5 3.5 10 1 10C3.5 10 4.5 11.5 4.5 15V20' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --brace-bottom: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 10'%3E%3Cpath d='M4.5 0V5.5C4.5 8 5.5 9.25 8 9.25' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
 /* In a matrix drawn by matsteps: the bars around an augmented block and the rows that just changed */
-.pod-step-math mtd.mat-bar { border-left: 1.5px solid color-mix(in srgb, var(--fg1) 45%, transparent); padding-left: .5em; }
+mtable.mat mtd.mat-bar { border-left: 1.5px solid color-mix(in srgb, var(--fg1) 45%, transparent); padding-left: .5em; }
 .pod-step-math mtr.mat-hl > mtd { background: color-mix(in srgb, var(--brand-bg) 14%, transparent); }
 .pod-primary .pod-steps { border-top-color: color-mix(in srgb, var(--brand-stroke1) 18%, transparent); }
 .pod-primary .pod-step { background: color-mix(in srgb, var(--card) 72%, transparent); }

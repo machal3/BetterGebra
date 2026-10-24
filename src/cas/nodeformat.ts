@@ -3,7 +3,7 @@
  * as such, other commands by their Polish names.
  */
 import type { Node } from './parse';
-import { FN_NAMES } from './format';
+import { FN_NAMES, matrixTable, systemML } from './format';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 const mi = (s: string, normal = false) => normal || s.length > 1 ? `<mi mathvariant="normal">${esc(s)}</mi>` : `<mi>${esc(s)}</mi>`;
@@ -48,9 +48,16 @@ function ml(n: Node): string {
     case 'post': return n.o === "'" ? `<msup>${row(wrap(n.a, 6))}${mo('′')}</msup>` : row(wrap(n.a, 6), mo(n.o));
     case 'rel': return row(n.parts.map((p, k) => (k ? mo(relSym(n.ops[k - 1])) : '') + ml(p)).join(''));
     case 'list': {
+      // a system of equations: one per line under a brace
+      if (n.items.length > 1 && n.items.every(i => i.t === 'rel')) {
+        return systemML(n.items.map(i => {
+          const r = i as { parts: Node[]; ops: string[] };
+          return r.parts.length === 2 ? [ml(r.parts[0]), relSym(r.ops[0]), ml(r.parts[1])] : [ml(i), '', ''];
+        }));
+      }
       if (n.items.length && n.items.every(i => i.t === 'list') && n.bracket === '[') {
         const rows = n.items.map(r => `<mtr>${(r as { items: Node[] }).items.map(c => `<mtd>${ml(c)}</mtd>`).join('')}</mtr>`).join('');
-        return fence('[', ']', `<mtable>${rows}</mtable>`);
+        return matrixTable(rows);
       }
       const inner = n.items.map(ml).join(mo(';'));
       return n.bracket === '{' ? fence('{', '}', inner) : fence('[', ']', inner);
@@ -125,5 +132,7 @@ function call(name: string, args: Node[], sup?: string): string {
   }
   const label = FN_NAMES[name] ?? COMMAND_NAMES[name] ?? name;
   const head = sup ? `<msup>${mi(label, true)}${row(sup)}</msup>` : mi(label, true);
+  // det [matrix], as in a textbook: the brackets already enclose the argument
+  if (args.length === 1 && a[0].startsWith('<mtable class="mat">')) return row(head, APPLY, '<mspace width="0.17em"/>', a[0]);
   return row(head, APPLY, paren(a.join(mo(';'))));
 }
