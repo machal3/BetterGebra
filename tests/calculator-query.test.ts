@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { run } from '../src/cas/engine';
-import { calculatorQuery } from '../src/ui/function-list';
+import { calculatorQuery } from '../src/calculator-query';
 import type { FnState, Mode } from '../src/state';
 
 const fn = (expression: string): FnState => ({ id: 1, expression, color: '#000000', visible: true, from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2, dash: '' });
