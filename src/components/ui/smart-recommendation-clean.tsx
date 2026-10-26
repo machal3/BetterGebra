@@ -27,10 +27,15 @@ export type SmartRecommendationProps = {
   onAccept?: (option: Recommendation) => void;
   onUndo?: (option: Recommendation) => void;
   defaultOpen?: boolean;
+  /** Bettergebra: the accept button's text for an option (Polish default "Przyjmij …") */
+  acceptLabel?: (option: Recommendation) => string;
+  /** Bettergebra: shows the 0–3 signal bars; off where the options are commands, not guesses */
+  showSignal?: boolean;
   className?: string;
 };
 
-const signalText = ["No signal", "Weak signal", "Good signal", "Strong signal"];
+// Bettergebra: Polish strings throughout, and the acceptLabel and showSignal props
+const signalText = ["Brak sygnału", "Słaby sygnał", "Dobry sygnał", "Mocny sygnał"];
 /** Any signal outside 0–3 (NaN, "3", 7, -1) is read as the nearest valid level, NaN as no signal */
 const level = (s: unknown): 0 | 1 | 2 | 3 => {
   const n = Math.round(Number(s));
@@ -40,11 +45,13 @@ const level = (s: unknown): 0 | 1 | 2 | 3 => {
 const lowerFirst = (s: string) => (/^\p{Lu}\p{Ll}/u.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 export function SmartRecommendation({
-  title = "Smart recommendation",
+  title = "Podpowiedź",
   options,
   onAccept,
   onUndo,
   defaultOpen = true,
+  acceptLabel,
+  showSignal = true,
   className,
 }: SmartRecommendationProps) {
   // By position, so two options with the same id stay apart
@@ -84,7 +91,7 @@ export function SmartRecommendation({
   const isRecommended = at === 0;
   const done = accepted === at;
   const signal = level(current.signal);
-  const acceptText = `Accept ${lowerFirst(String(current.label))}`;
+  const acceptText = acceptLabel ? acceptLabel(current) : `Przyjmij: ${lowerFirst(String(current.label))}`;
 
   return (
     <>
@@ -97,7 +104,7 @@ export function SmartRecommendation({
           <span className="ui-src__title" dir="auto" title={title}>
             {title}
           </span>
-          {!isRecommended && <span className="ui-src__pill">Alternative</span>}
+          {!isRecommended && <span className="ui-src__pill">Inna opcja</span>}
           <span className="ui-src__chevron">
             <Icon d="m4.5 6.25 3.5 3.5 3.5-3.5" />
           </span>
@@ -109,14 +116,18 @@ export function SmartRecommendation({
         </div>
 
         <footer className="ui-src__foot">
-          <span className="ui-src__signal" data-level={signal} title={signalText[signal]}>
-            <span className="ui-src__bars" aria-hidden="true">
-              {[1, 2, 3].map((n) => (
-                <span key={n} data-on={signal >= n || undefined} />
-              ))}
+          {showSignal ? (
+            <span className="ui-src__signal" data-level={signal} title={signalText[signal]}>
+              <span className="ui-src__bars" aria-hidden="true">
+                {[1, 2, 3].map((n) => (
+                  <span key={n} data-on={signal >= n || undefined} />
+                ))}
+              </span>
+              {signalText[signal]}
             </span>
-            {signalText[signal]}
-          </span>
+          ) : (
+            <span />
+          )}
 
           <div className="ui-src__actions">
             {options.length > 1 && !done && (
@@ -129,7 +140,7 @@ export function SmartRecommendation({
                   onClick={() => setMenu((m) => !m)}
                 >
                   <Icon d="M5 12.5v-9M2.75 5.75 5 3.5l2.25 2.25M11 3.5v9M8.75 10.25 11 12.5l2.25-2.25" />
-                  Alternatives
+                  Inne opcje
                 </button>
                 {menu && (
                   <div className="ui-src__menu" role="menu" data-flip={flip || undefined}>
@@ -150,13 +161,15 @@ export function SmartRecommendation({
                           <span className="ui-src__option-name" dir="auto" title={o.label}>
                             {o.label}
                           </span>
-                          {i === 0 && <span className="ui-src__tag">Recommended</span>}
+                          {i === 0 && <span className="ui-src__tag">Polecane</span>}
                         </span>
-                        <span className="ui-src__mini" data-level={level(o.signal)} aria-label={signalText[level(o.signal)]}>
-                          {[1, 2, 3].map((n) => (
-                            <span key={n} data-on={level(o.signal) >= n || undefined} />
-                          ))}
-                        </span>
+                        {showSignal && (
+                          <span className="ui-src__mini" data-level={level(o.signal)} aria-label={signalText[level(o.signal)]}>
+                            {[1, 2, 3].map((n) => (
+                              <span key={n} data-on={level(o.signal) >= n || undefined} />
+                            ))}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -167,8 +180,8 @@ export function SmartRecommendation({
               <>
                 <span className="ui-src__done" role="status">
                   <Icon d="m3.5 8.5 3 3 6-7" />
-                  <span className="ui-src__done-text" title={`${current.label} accepted`}>
-                    <bdi>{current.label}</bdi> accepted
+                  <span className="ui-src__done-text" title={`${current.label}: przyjęto`}>
+                    <bdi>{current.label}</bdi>: przyjęto
                   </span>
                 </span>
                 <button
@@ -180,7 +193,7 @@ export function SmartRecommendation({
                   }}
                 >
                   <Icon d="M3.5 6.5h6.25a2.75 2.75 0 0 1 0 5.5H8M5.75 4.25 3.5 6.5l2.25 2.25" />
-                  Undo
+                  Cofnij
                 </button>
               </>
             ) : (
