@@ -490,7 +490,7 @@ async function click(x: number, y: number): Promise<void> {
     const seg = objects.find(o => o.id === hit(x, y, s => s.kind === 'segment' || (tool === 'midpoint' && s.kind === 'circle')));
     if (seg) {
       checkpoint();
-      add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }])[0];
+      add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }]);
       update();
       return;
     }

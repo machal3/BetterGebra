@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "jsx-a11y"],
+  "categories": { "correctness": "error" },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/react-in-jsx-scope": "off",
+    "no-unused-vars": ["error", { "ignoreRestSiblings": true, "argsIgnorePattern": "^_" }]
+  },
+  "overrides": [
+    {
+      "files": ["src/cas/**", "src/math/**"],
+      "rules": {
+        "no-loss-of-precision": "off",
+        "no-control-regex": "off",
+        "oxc/erasing-op": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist", "output", "node_modules"]
+}
