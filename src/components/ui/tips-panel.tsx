@@ -28,10 +28,13 @@ export type TipsPanelProps = {
   /** Shows the Close button in the footer */
   onClose?: () => void;
   closeLabel?: string;
+  /** Bettergebra: shows the "0/3 gotowe" counter in the heading – off where taking a tip only navigates */
+  showCount?: boolean;
   className?: string;
 };
 
-export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close", className }: TipsPanelProps) {
+// Bettergebra: Polish defaults ("Wskazówki", "Zamknij", "gotowe", "Gotowe") and the showCount prop
+export function TipsPanel({ title = "Wskazówki", tips, onClose, closeLabel = "Zamknij", showCount = true, className }: TipsPanelProps) {
   const [done, setDone] = useState<Set<string>>(new Set());
   // Tips that share an id still get their own key, so marking one never marks the other
   const seen = new Map<string, number>();
@@ -53,9 +56,11 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
           <h3 className="ui-tp__title" dir="auto">
             {title}
           </h3>
-          <span className="ui-tp__count" aria-live="polite">
-            {count.format(doneCount)}/{count.format(tips.length)} done
-          </span>
+          {showCount && (
+            <span className="ui-tp__count" aria-live="polite">
+              {count.format(doneCount)}/{count.format(tips.length)} gotowe
+            </span>
+          )}
         </header>
 
         <div className="ui-tp__card">
@@ -73,7 +78,7 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
                   {isDone ? (
                     <span className="ui-tp__done" role="status">
                       <CheckIcon />
-                      {tip.doneLabel ?? "Done"}
+                      {tip.doneLabel ?? "Gotowe"}
                     </span>
                   ) : (
                     <button
@@ -105,7 +110,7 @@ export function TipsPanel({ title = "Tips", tips, onClose, closeLabel = "Close",
   );
 }
 
-const count = new Intl.NumberFormat("en");
+const count = new Intl.NumberFormat("pl");
 
 /** Keyboard key for tip descriptions, e.g. <Kbd>⌘K</Kbd> */
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="ui-tp__kbd">{children}</kbd>;
