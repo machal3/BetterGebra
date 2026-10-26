@@ -1,0 +1,219 @@
+/* Kalkulator: the composer at the centre, result cards, plots in results, history and examples. Tokens: styles/tokens.css. */
+
+#calc.calc { position: relative; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; background: var(--b-page); }
+.b-calc {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-s4);
+  width: min(100%, 860px); margin: 0 auto; padding: 40px 32px 72px;
+  font: 400 var(--b-fs-body)/20px var(--b-font); color: var(--b-ink);
+}
+
+/* ---------- Empty state ---------- */
+.b-calc-hero { display: grid; justify-items: center; gap: var(--b-s2); padding: 24px 0 4px; text-align: center; }
+.b-calc-hero-icon {
+  display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 14px;
+  background: var(--b-accent); color: #ffffff; box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--b-accent) 60%, transparent);
+}
+.b-calc-hero h2 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; color: var(--b-strong); }
+.b-calc-hero p { max-width: 560px; margin: 0; color: var(--b-text); }
+
+/* ---------- Composer: the centre of the page ---------- */
+.b-composer {
+  border-radius: var(--b-r-2xl); background: var(--b-card); box-shadow: var(--b-shadow-float);
+  transition: box-shadow var(--b-normal) ease;
+}
+.b-composer:focus-within { box-shadow: 0 0 0 1px var(--b-accent), 0 0 0 4px var(--b-focus), var(--b-shadow-float); }
+.b-composer-field { display: flex; align-items: center; gap: var(--b-s2); padding: 8px 8px 4px 20px; }
+.b-composer-field input {
+  flex: 1; min-width: 0; height: 52px; margin: 0; padding: 0; border: 0; outline: none; background: transparent;
+  font: 400 18px/24px var(--b-mono); color: var(--b-ink);
+}
+.b-composer-field input::placeholder { font-family: var(--b-font); font-size: 16px; color: var(--b-muted); opacity: 1; }
+.ui-buttonc.b-composer-go { --h: 40px; --radius: 10px; flex: none; }
+.b-composer-preview {
+  min-height: 0; padding: 0 20px 12px; overflow-x: auto; overflow-y: hidden; font-size: 17px; color: var(--b-ink);
+}
+.b-composer-preview:empty { padding-bottom: 4px; }
+.b-composer-preview math { font-family: var(--b-math); }
+.b-composer-preview.is-invalid { font-size: var(--b-fs-sm); color: var(--b-text); }
+.b-composer-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3);
+  padding: 6px 10px 6px 12px; box-shadow: inset 0 1px 0 var(--b-line);
+}
+.b-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+.b-keys-group { display: flex; gap: 2px; }
+.b-keys-group + .b-keys-group { margin-left: 4px; padding-left: 6px; box-shadow: inset 1px 0 0 var(--b-line); }
+.b-key {
+  min-width: 32px; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); background: none;
+  font: 400 15px/1 var(--b-math); color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-key:hover { background: var(--b-wash); } }
+.b-key:active { background: var(--b-fill); }
+.b-key:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-digits { display: flex; flex: none; align-items: center; gap: var(--b-s2); font-size: var(--b-fs-sm); color: var(--b-text); }
+
+/* ---------- Working ---------- */
+.b-calc-status { display: flex; align-items: center; justify-content: center; gap: var(--b-s3); }
+
+/* ---------- Examples in the empty state ---------- */
+.b-calc-suggest { display: grid; gap: var(--b-s3); margin-top: var(--b-s2); }
+.b-calc-suggest > .ui-segc { justify-self: center; }
+.b-code { padding: 1px 6px; border-radius: 5px; background: var(--b-fill); font: 12.5px/18px var(--b-mono); color: var(--b-ink); overflow-wrap: anywhere; }
+
+/* ---------- Results ---------- */
+.b-calc-results { display: grid; gap: var(--b-s2); container-type: inline-size; transition: opacity var(--b-normal) ease; }
+.b-calc-results[aria-busy="true"] { opacity: 0.5; }
+.b-calc-query { display: flex; align-items: flex-start; gap: var(--b-s3); padding: 8px 4px 6px; }
+.b-calc-query-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.b-calc-query-label { font-size: var(--b-fs-sm); font-weight: 500; color: var(--b-text); }
+.b-calc-query .b-pod-math { font-size: 22px; }
+.b-calc-query-note { margin: 0; font-size: var(--b-fs-sm); color: var(--b-text); }
+
+.b-pod {
+  position: relative; display: grid; gap: 2px; min-width: 0; padding: 12px 16px 14px;
+  border-radius: var(--b-r-xl); background: var(--b-card); box-shadow: var(--b-shadow);
+}
+.b-pod-head { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); min-height: 28px; }
+/* the action bar (Message Actions) is a container as wide as its parent: one button here, so one button wide */
+:is(.b-pod-head, .b-calc-query) > .ui-mac { flex: none; width: 32px; }
+.b-pod-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; color: var(--b-text); }
+.b-pod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding: 6px 0; }
+.b-pod-row + .b-pod-row { box-shadow: inset 0 1px 0 var(--b-line); }
+.b-pod-math { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: 18px; color: var(--b-strong); }
+.b-pod-math math { font-family: var(--b-math); }
+.b-pod-long { min-width: 0; font: 13px/20px var(--b-mono); overflow-wrap: anywhere; color: var(--b-strong); }
+.b-pod-row-note { padding: 1px 8px; border-radius: 6px; background: var(--b-fill); font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
+.b-pod-note { margin: 4px 0 0; font-size: var(--b-fs-sm); color: var(--b-text); }
+.ui-buttonc.b-pod-more { justify-self: start; margin-top: 6px; }
+/* The answer: a line in the accent colour and larger type */
+.b-pod.is-primary { padding: 14px 20px 16px; box-shadow: inset 3px 0 0 var(--b-accent), var(--b-shadow-hover); }
+.b-pod.is-primary .b-pod-head h3 { color: var(--b-accent-ink); }
+.b-pod.is-primary .b-pod-math { font-size: 26px; }
+.b-pod.is-error { display: flex; padding: 12px 16px; background: var(--b-danger-bg); box-shadow: inset 0 0 0 1px var(--b-danger-line); color: var(--b-ink); }
+.b-pod.is-error p { margin: 0; }
+.b-pod-skeleton { gap: 10px; }
+/* Wide enough: the other cards read like a ledger, the title on the left */
+@container (min-width: 640px) {
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) {
+    grid-template-columns: minmax(140px, 190px) minmax(0, 1fr) auto; column-gap: 20px; align-items: start; padding: 6px 12px 6px 18px;
+  }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head { display: contents; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head h3 { grid-column: 1; grid-row: 1 / span 30; padding-top: 10px; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head .ui-mac { grid-column: 3; grid-row: 1; margin-top: 4px; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) > :not(.b-pod-head) { grid-column: 2; }
+}
+
+/* ---------- Plots in results ---------- */
+.b-cplot { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 6px; }
+.b-cplot-stage {
+  position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 240px; max-height: 440px; overflow: hidden;
+  border-radius: var(--b-r-lg); background: var(--plot-bg); box-shadow: inset 0 0 0 1px var(--b-line-strong);
+}
+.b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
+.b-cplot-canvas.grabbing { cursor: grabbing; }
+.b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-accent); }
+.b-cplot-tools {
+  position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 2px; padding: 3px;
+  border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-float);
+  opacity: 0; translate: 0 -4px; transition: opacity var(--b-normal) ease, translate var(--b-normal) var(--b-ease);
+}
+.b-cplot-stage:hover .b-cplot-tools, .b-cplot-stage:focus-within .b-cplot-tools { opacity: 1; translate: 0 0; }
+@media (hover: none) { .b-cplot-tools { opacity: 1; translate: 0 0; } }
+.b-cplot-tools .ui-buttonc { --h: 28px; }
+.b-cplot-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--b-line-strong); }
+.b-cplot-tip {
+  position: absolute; z-index: 1; display: grid; gap: 2px; max-width: min(320px, 70%); padding: 6px 10px; pointer-events: none;
+  border-left: 3px solid var(--b-line-strong); border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-float);
+  font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
+}
+.b-cplot-tip .row { display: flex; align-items: center; gap: 6px; }
+.b-cplot-tip .row:not(.head)::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.b-cplot-tip .head { color: var(--b-text); }
+.b-cplot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.b-cplot-legend { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.b-cplot-key {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm);
+  background: none; font: 400 var(--b-fs-sm)/16px var(--b-font); color: var(--b-ink);
+}
+button.b-cplot-key { cursor: pointer; transition: background-color var(--b-fast) ease, opacity var(--b-fast) ease; }
+@media (hover: hover) { button.b-cplot-key:hover { background: var(--b-wash); } }
+button.b-cplot-key[aria-pressed="false"] { color: var(--b-muted); }
+button.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.35; }
+button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-sw { flex: none; width: 16px; height: 3px; border-radius: 2px; background: var(--c); }
+.b-sw.is-dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.b-sw.is-dot { width: 8px; height: 8px; border-radius: 50%; }
+.b-sw.is-area { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: inset 0 0 0 1.5px var(--c); }
+.b-cplot-points { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.b-cplot-points button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 10px; border: 0; border-radius: var(--b-r-full);
+  background: var(--b-wash); box-shadow: inset 0 0 0 1px var(--b-line); font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums;
+  color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-cplot-points button:hover { background: var(--b-fill); } }
+.b-cplot-points button:focus-visible { outline: 2px solid var(--b-focus); outline-offset: 1px; }
+.b-pt { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+
+/* ---------- Side panel: history and examples ---------- */
+.b-history { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.b-history-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; margin: 0; padding: 4px 8px 4px 6px; border: 0;
+  border-radius: var(--b-r-md); background: none; text-align: start; color: var(--b-ink); cursor: pointer;
+  transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-history-row:hover { background: var(--b-wash); } }
+.b-history-row:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-history-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 6px; background: var(--b-fill); color: var(--b-icon); }
+.b-history-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 12.5px/18px var(--b-mono); }
+.b-history-go { flex: none; display: grid; color: var(--b-icon); opacity: 0; transition: opacity var(--b-fast) ease; }
+.b-history-row:hover .b-history-go, .b-history-row:focus-visible .b-history-go { opacity: 1; }
+
+.b-empty { display: grid; justify-items: center; gap: var(--b-s2); padding: var(--b-s4) var(--b-s2); text-align: center; }
+.b-empty p { margin: 0; font-size: var(--b-fs-md); color: var(--b-text); }
+.b-empty-art { width: 96px; height: 64px; fill: var(--b-wash); stroke: var(--b-faint); stroke-width: 1.5; stroke-linecap: round; }
+
+.b-examples { display: grid; gap: 2px; padding: 2px 0 2px 24px; }
+.b-example {
+  display: grid; gap: 1px; margin: 0; padding: 6px 8px; border: 0; border-radius: var(--b-r-sm); background: none;
+  text-align: start; color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-example:hover { background: var(--b-wash); } }
+.b-example:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-example-label { font-size: var(--b-fs-sm); color: var(--b-text); }
+.b-example-query { font: 12.5px/18px var(--b-mono); overflow-wrap: anywhere; }
+
+.b-syntax { width: calc(100% - 16px); margin: 4px 8px 0; border-collapse: collapse; }
+.b-syntax td { padding: 6px 0; vertical-align: top; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-text); box-shadow: inset 0 -1px 0 var(--b-line); }
+.b-syntax td:first-child { padding-right: 8px; color: var(--b-ink); }
+.b-syntax code, .b-hint code { padding: 0 4px; border-radius: 4px; background: var(--b-fill); font: 12px/18px var(--b-mono); color: var(--b-ink); }
+
+/* ---------- Phones ---------- */
+@media (max-width: 767px) {
+  #calc.calc { order: -1; overflow: visible; }
+  .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
+  .b-calc-hero { padding-top: 8px; }
+  .b-calc-hero h2 { font-size: 20px; }
+  .b-composer-field { padding-left: 14px; }
+  .b-composer-field input { font-size: 17px; height: 48px; }
+  .b-composer-preview { padding: 0 14px 10px; }
+  /* one scrolling row of symbols instead of wrapped ones */
+  .b-composer-bar { flex-wrap: wrap; padding-left: 6px; }
+  .b-keys { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent); }
+  .b-key { flex: none; height: 40px; min-width: 40px; }
+  .b-digits { margin-left: auto; }
+  .b-pod { padding: 10px 12px 12px; }
+  .b-pod.is-primary { padding: 12px 14px 14px; }
+}
+@media (pointer: coarse) {
+  .b-key { height: 44px; min-width: 44px; }
+  .b-history-row, .b-example { min-height: 44px; }
+  .b-cplot-tools .ui-buttonc { --h: 40px; }
+  button.b-cplot-key, .b-cplot-points button { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b-composer, .b-calc-results, .b-cplot-tools, .b-history-go { transition: none; }
+}
+
+/* Block MathML centres itself; here a formula starts at the left like the text around it */
+:is(.b-pod-math, .b-composer-preview) math[display="block"] { width: fit-content; max-width: none; margin: 0; }
+/* the examples never need a scroll of their own (the component's documented variable) */
+.b-calc-suggest .ui-tpc { --ui-tpc-max-height: none; }

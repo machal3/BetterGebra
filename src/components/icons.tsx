@@ -84,3 +84,8 @@ export const IconChevronDown = make('ChevronDown', <path d="m7 10 5 5 5-5" />);
 export const IconAlert = make('Alert', <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4h.01" /></>);
 export const IconEye = make('Eye', <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>);
 export const IconEyeOff = make('EyeOff', <path d="M3 3l18 18M10.6 5.6A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.6-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" />);
+export const IconHistory = make('History', <><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" /><path d="M4.5 4.5v4h4M12 8v4.5l3 1.8" /></>);
+export const IconOpen = make('Open', <path d="M10 5H7a2.5 2.5 0 0 0-2.5 2.5v9.5A2.5 2.5 0 0 0 7 19.5h9.5A2.5 2.5 0 0 0 19 17v-3M14 4.5h5.5V10M19.5 4.5l-8 8" />);
+/** Snapping the readout to the grid: a grid with a point on a node. */
+export const IconSnap = make('Snap', <><path d="M4 9h16M4 15h16M9 4v16M15 4v16" strokeWidth={1.1} /><circle cx="15" cy="9" r="2.6" fill="currentColor" stroke="none" /></>);
+export const IconStop = make('Stop', <rect x="7" y="7" width="10" height="10" rx="2" />);

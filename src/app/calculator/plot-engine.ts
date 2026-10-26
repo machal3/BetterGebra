@@ -2,17 +2,18 @@
  * The calculator's plots, drawn by the same code as Wykresy and Geometria: viewport, grid, axes and exact curve
  * tracing. Curves the graph panel can read are retraced at every zoom; the rest are drawn from the worker's samples.
  * Drag to move, Ctrl + wheel, a pinch or the buttons to zoom, hover to read values; "Otwórz w Wykresach" hands the
- * curves to the full graph panel.
+ * curves to the full graph panel. This module draws and handles the canvas; the card around it (toolbar, legend,
+ * points) is the React component CalcPlot, which drives it through the handle mountPlot returns.
  */
-import type { Handoff, Mark, PanelMode, Plot, Series } from '../cas/engine';
-import { format, piLabel } from '../format';
-import { compile, type RealFunction } from '../math';
-import { compileRow, type ConditionSet } from '../model';
-import { LABEL, dot, drawAxes, drawGrid, readTheme, traceCurve, type AxesOptions, type Theme } from '../render/plot2d';
-import { paintCondition } from '../render/sets';
-import { Viewport, axisSteps, panned, zoomed } from '../render/viewport';
-import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../state';
-import { $, FI, h, toast } from './dom';
+import type { Handoff, Mark, PanelMode, Plot, Series } from '../../cas/engine';
+import { format, piLabel } from '../../format';
+import { compile, type RealFunction } from '../../math';
+import { compileRow, type ConditionSet } from '../../model';
+import { LABEL, dot, drawAxes, drawGrid, readTheme, traceCurve, type AxesOptions, type Theme } from '../../render/plot2d';
+import { paintCondition } from '../../render/sets';
+import { Viewport, axisSteps, panned, zoomed } from '../../render/viewport';
+import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../../state';
+import { toast } from '../../ui/dom';
 
 /** Every plot on the page redraws when the theme changes; plots no longer in the page drop out. */
 const live = new Set<() => void>();
@@ -20,16 +21,16 @@ export function redrawCalcPlots(): void {
   for (const draw of live) draw();
 }
 
-const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
+export const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
 // Only the major grid lines: a card is small, and the minor ones turned it grey.
 const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: false, halo: false });
 /** Where each mode of the graph panel lives, for the button and the toast. */
-const PANEL: Record<PanelMode, { to: string; name: string }> = { graph: { to: 'Wykresach', name: 'Wykresy' }, complex: { to: 'Zespolonych', name: 'Zespolone' } };
+export const PANEL: Record<PanelMode, { to: string; name: string }> = { graph: { to: 'Wykresach', name: 'Wykresy' }, complex: { to: 'Zespolonych', name: 'Zespolone' } };
 /** A function row as the graph panel keeps it, for compiling a region the way Wykresy does. */
 const row = (expression: string, c: string): FnState => ({ id: -1, expression, color: c, visible: true, from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2, dash: '' });
 
 /** What goes to the graph panel: the plot's own hand-off, or else its curves y = f(x) to Wykresy. */
-function handoff(p: Plot): Handoff {
+export function handoff(p: Plot): Handoff {
   return p.open ?? { mode: 'graph', rows: p.series.flatMap((s, i) => (s.expr ? [{ expr: s.expr, series: i, color: s.color ?? i, dash: s.dash, faint: s.faint }] : [])) };
 }
 /** Points a curve's analysis found: on the plot they show only their coordinates, the list below names them. */
@@ -40,14 +41,14 @@ const num = (v: number) => format(v, 4).replace(/^-/, '−');
 const SNAP_STORE = 'bettergebra.calc.snap', SNAP_PX = 8;
 let snapOn = true;
 try { snapOn = localStorage.getItem(SNAP_STORE) !== '0'; } catch { /* on by default */ }
-const SNAP_ICON = '<svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h14M3 12.5h14M7.5 3v14M12.5 3v14" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12.5" cy="7.5" r="2.4"/></svg>';
-function toggleSnap(): void {
+const snapListeners = new Set<() => void>();
+export const snapping = { get: () => snapOn, subscribe: (l: () => void) => { snapListeners.add(l); return () => { snapListeners.delete(l); }; } };
+export function toggleSnap(): void {
   snapOn = !snapOn;
   try { localStorage.setItem(SNAP_STORE, snapOn ? '1' : '0'); } catch { /* just don't remember */ }
-  for (const b of document.querySelectorAll('.cplot-snap')) b.setAttribute('aria-pressed', String(snapOn));
+  for (const l of snapListeners) l();
   redrawCalcPlots();
 }
-const OPEN = `<svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4a2 2 0 0 0-2 2v8c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2v-2.5a.5.5 0 0 1 1 0V14a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h2.5a.5.5 0 0 1 0 1zm5-.5c0-.28.22-.5.5-.5h5c.28 0 .5.22.5.5v5a.5.5 0 0 1-1 0V4.7l-6.15 6.15a.5.5 0 0 1-.7-.7L15.29 4H11.5a.5.5 0 0 1-.5-.5"/></svg>`;
 
 /** The view showing x and y ranges on a W × H canvas; with equal axes the shorter side grows. */
 function fit(x: [number, number], y: [number, number], W: number, H: number, equal: boolean): View {
@@ -71,28 +72,22 @@ function interpolate(segs: number[][]): RealFunction {
   };
 }
 
-export function plotView(p: Plot): HTMLElement {
-  const canvas = h('canvas', { class: 'cplot-canvas', tabindex: 0, role: 'img', 'aria-label': `Wykres: ${p.series.map(s => s.label).join('; ') || 'dane'}. Przeciągnij, aby przesunąć; Ctrl + kółko lub plus i minus przybliżają, 0 przywraca widok.` });
-  const tip = h('div', { class: 'cplot-tip', hidden: true });
-  const btn = (icon: string, title: string, run: () => void) => {
-    const b = h('button', { type: 'button', class: 'icon-button small', title, 'aria-label': title, html: icon });
-    b.addEventListener('click', run);
-    return b;
-  };
-  const png = btn(FI.download, 'Zapisz wykres jako PNG', () => canvas.toBlob(blob => {
-    if (!blob) { toast('Nie udało się zapisać obrazu.'); return; }
-    const url = URL.createObjectURL(blob), a = document.createElement('a');
-    a.href = url; a.download = 'bettergebra-kalkulator.png'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'image/png'));
-  const snapButton = btn(SNAP_ICON, 'Przyciąganie do siatki: odczyt trzyma się linii siatki i miejsc, gdzie krzywa je przecina', toggleSnap);
-  snapButton.classList.add('cplot-snap');
-  snapButton.setAttribute('aria-pressed', String(snapOn));
-  const stage = h('div', { class: 'cplot-stage' }, canvas, tip,
-    h('div', { class: 'cplot-zoom', role: 'toolbar', 'aria-label': 'Widok wykresu' },
-      btn(FI.zoomIn, 'Przybliż  Ctrl + kółko', () => zoom(0.7)), btn(FI.zoomOut, 'Oddal', () => zoom(1 / 0.7)), btn(FI.reset, 'Przywróć widok', () => reset()),
-      h('span', { class: 'cplot-sep', 'aria-hidden': 'true' }), snapButton, png));
+/** What the card around a plot can ask of it. */
+export interface PlotHandle {
+  zoom(factor: number): void;
+  reset(): void;
+  /** Shows or hides a series; returns whether it is shown now. */
+  toggle(series: number): boolean;
+  /** Lights a point up while it is pointed at in the list (null: none). */
+  focus(mark: Mark | null): void;
+  center(mark: Mark): void;
+  /** Hands the plot to the graph panel (see openInGraphs). */
+  open(): void;
+  png(): void;
+  destroy(): void;
+}
 
+export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement, tip: HTMLElement): PlotHandle {
   const ctx = canvas.getContext('2d')!;
   const hidden = new Set<number>();
   // y = f(x) of each series: the exact function when the graph panel reads it, else the samples
@@ -107,42 +102,7 @@ export function plotView(p: Plot): HTMLElement {
   const xUnit: AxisUnit = p.xUnit ?? 'num';
   let W = 0, H = 0, view: View | null = null, home: View | null = null, pointer: { x: number; y: number } | null = null;
   const vp = () => new Viewport(view!, W, H);
-
-  // --- Legend and actions ---
-  const legend = h('div', { class: 'cplot-legend' });
-  p.series.forEach((s, i) => {
-    if (!s.label) return;
-    const b = h('button', { type: 'button', 'aria-pressed': 'true', title: 'Pokaż lub ukryj', style: `--c: ${color(s.color ?? i)}` },
-      h('span', { class: `sw${s.dash ? ' dash' : ''}${s.style && s.style !== 'line' ? ' dot' : ''}`, 'aria-hidden': 'true' }), s.label);
-    b.addEventListener('click', () => { if (hidden.has(i)) hidden.delete(i); else hidden.add(i); b.setAttribute('aria-pressed', String(!hidden.has(i))); draw(); });
-    legend.append(b);
-  });
-  for (const f of p.fills) legend.append(h('span', { class: 'cplot-key', style: `--c: ${color(0)}; --c2: ${color(1)}` }, h('span', { class: 'sw area', 'aria-hidden': 'true' }), f.label));
-  for (const s of p.shapes) if (!s.open) legend.append(h('span', { class: 'cplot-key', style: `--c: ${color(s.color ?? 0)}` }, h('span', { class: `sw ${s.fill ? 'area' : 'dash'}`, 'aria-hidden': 'true' }), s.label));
-  if (p.bars.length) legend.append(h('span', { class: 'cplot-key', style: `--c: ${color(0)}` }, h('span', { class: 'sw area', 'aria-hidden': 'true' }), 'liczba wartości w przedziale'));
-
-  const foot = h('div', { class: 'cplot-foot' }, legend), out = handoff(p);
-  if (out.rows.length) {
-    const what = { graph: 'wykresy, krzywe, obszary i punkty, z analizą i parametrami', complex: 'funkcję zespoloną, z kolorowaniem płaszczyzny' }[out.mode];
-    const open = h('button', { type: 'button', class: 'cplot-open', title: `Przenieś ${what} do panelu ${PANEL[out.mode].name}`, html: `${OPEN}<span>Otwórz w ${PANEL[out.mode].to}</span>` });
-    open.addEventListener('click', () => openInGraphs(p, out, hidden, vp()));
-    foot.append(open);
-  }
-
-  // The notable points, named in full: hover one to find it on the plot, click to centre on it.
   let focus: Mark | null = null;
-  const listed = p.marks.filter(m => Number.isFinite(m.y) && m.label).slice(0, 24);
-  const points = h('ul', { class: 'cplot-points', 'aria-label': 'Punkty na wykresie' }, ...listed.map(m => {
-    const b = h('button', { type: 'button', style: `--c: ${color(m.color ?? 0)}`, title: 'Pokaż na wykresie' }, h('span', { class: 'pt', 'aria-hidden': 'true' }), m.label);
-    b.addEventListener('pointerenter', () => { focus = m; request(); });
-    b.addEventListener('pointerleave', () => { focus = null; request(); });
-    b.addEventListener('focus', () => { focus = m; request(); });
-    b.addEventListener('blur', () => { focus = null; request(); });
-    b.addEventListener('click', () => { if (view) { const v = vp(); setView(panned(view, W, v.px(m.x) - W / 2, H / 2 - v.py(m.y))); } });
-    return h('li', {}, b);
-  }));
-  const wrap = h('div', { class: 'cplot' }, stage, foot);
-  if (listed.length) wrap.append(points);
 
   // --- Drawing ---
   let frame = 0;
@@ -150,7 +110,7 @@ export function plotView(p: Plot): HTMLElement {
   function draw(): void {
     if (!canvas.isConnected) { live.delete(draw); return; }
     if (!view || !W || !H) return;
-    const v = vp(), theme = readTheme(), css = getComputedStyle(document.documentElement), muted = css.getPropertyValue('--fg3').trim() || theme.axis;
+    const v = vp(), theme = readTheme(), css = getComputedStyle(document.documentElement), muted = css.getPropertyValue('--plot-label').trim() || theme.axis;
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     ctx.fillStyle = theme.bg;
@@ -377,7 +337,13 @@ export function plotView(p: Plot): HTMLElement {
         }
       }
     }
-    tip.replaceChildren(...lines.map((t, k) => h('div', { class: colors[k] ? 'row' : 'row head', style: colors[k] ? `--c: ${colors[k]}` : undefined }, t)));
+    tip.replaceChildren(...lines.map((t, k) => {
+      const el = document.createElement('div');
+      el.className = colors[k] ? 'row' : 'row head';
+      if (colors[k]) el.style.setProperty('--c', colors[k]);
+      el.textContent = t;
+      return el;
+    }));
     tip.style.borderLeftColor = accent || '';
     tip.hidden = false;
     // beside the cursor, flipped at the right and bottom edges
@@ -504,7 +470,23 @@ export function plotView(p: Plot): HTMLElement {
   });
   ro.observe(stage);
   live.add(draw);
-  return wrap;
+  return {
+    zoom: f => zoom(f),
+    reset,
+    toggle(i) { if (hidden.has(i)) hidden.delete(i); else hidden.add(i); draw(); return !hidden.has(i); },
+    focus(m) { focus = m; request(); },
+    center(m) { if (view) { const v = vp(); setView(panned(view, W, v.px(m.x) - W / 2, H / 2 - v.py(m.y))); } },
+    open() { if (view) openInGraphs(p, handoff(p), hidden, vp()); },
+    png() {
+      canvas.toBlob(blob => {
+        if (!blob) { toast('Nie udało się zapisać obrazu.'); return; }
+        const url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = 'bettergebra-kalkulator.png'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }, 'image/png');
+    },
+    destroy() { live.delete(draw); ro.disconnect(); cancelAnimationFrame(frame); },
+  };
 }
 
 /**
@@ -540,7 +522,7 @@ function openInGraphs(p: Plot, out: Handoff, hidden: Set<number>, v: Viewport): 
   if (out.mode === 'complex') { x[0] = -(v.max - v.min) / 2; x[1] = (v.max - v.min) / 2; }
   // the same ranges as here, fitted to the graph panel once it is on screen
   addEventListener('hashchange', () => requestAnimationFrame(() => {
-    const r = $('stage').getBoundingClientRect();
+    const r = document.getElementById('stage')!.getBoundingClientRect();
     if (r.width && r.height) { state.view = fit(x, y, r.width, r.height, equal); commit('view'); }
   }), { once: true });
   location.hash = '#wykresy';

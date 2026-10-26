@@ -9,8 +9,7 @@ import { isDark, systemDark } from './app/theme';
 import { initGeometry, redrawGeometry } from './geometry/panel';
 import { forget } from './model';
 import { addFunction, commit, on, restore, save, state } from './state';
-import { redrawCalcPlots } from './ui/calc-plot';
-import { calculatorFromHash, initCalculator } from './ui/calculator';
+import { redrawCalcPlots } from './app/calculator/plot-engine';
 import { fitY, initCanvasInput } from './ui/canvas-input';
 import { $, initTooltips } from './ui/dom';
 
@@ -40,7 +39,6 @@ function syncPanel(): void {
   document.body.dataset.panel = panelFromHash(hash);
   // a function's settings live in the top layer, outside the panel: they would stay over the next one
   if (document.body.dataset.panel !== 'graphs') document.querySelectorAll<HTMLElement>('[id^="fn-settings-"]:popover-open').forEach(p => p.hidePopover());
-  if (document.body.dataset.panel === 'calculator') calculatorFromHash();
 }
 addEventListener('hashchange', syncPanel);
 
@@ -72,7 +70,6 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) save(
 // --- Start ---
 initCanvasInput(scene);
 initGeometry();
-initCalculator();
 initTooltips();
 syncPanel();
 document.body.dataset.mode = state.mode;
