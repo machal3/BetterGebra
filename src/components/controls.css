@@ -1,0 +1,147 @@
+/* Shared controls (components/controls.tsx). Tokens from styles/tokens.css. */
+
+/* ---------- Section ---------- */
+.b-section + .b-section { margin-top: var(--b-s6); }
+.b-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); min-height: 28px; margin: 0 0 var(--b-s2); }
+.b-section-head h2 { margin: 0; font-size: var(--b-fs-md); font-weight: 600; color: var(--b-strong); letter-spacing: -0.005em; }
+.b-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px;
+  background: var(--b-fill); font-size: var(--b-fs-xs); font-weight: 500; line-height: 16px; font-variant-numeric: tabular-nums; color: var(--b-text);
+}
+.b-kbd {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px;
+  background: var(--b-card); box-shadow: 0 0 0 0.5px var(--b-line-strong), 0 1px 0 var(--b-line-strong);
+  font: 500 11px/1 var(--b-font); color: var(--b-text);
+}
+.b-hint { margin: 0; font-size: var(--b-fs-md); line-height: 20px; color: var(--b-text); }
+.b-hint code, .b-code {
+  padding: 1px 5px; border-radius: 5px; background: var(--b-fill); font: 12px/18px var(--b-mono); color: var(--b-ink); white-space: nowrap;
+}
+
+/* ---------- Error ---------- */
+.b-error { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-danger); }
+.b-error svg { flex: none; margin-top: 1px; }
+.b-error:empty { display: none; }
+
+/* ---------- Field ---------- */
+.b-field {
+  box-sizing: border-box; width: 100%; min-width: 0; height: 32px; margin: 0; padding: 0 10px;
+  border: 0; border-radius: var(--b-r-sm); outline: none;
+  background: var(--b-card); box-shadow: inset 0 0 0 1px var(--b-field-line);
+  font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);
+  transition: box-shadow var(--b-fast) ease, background-color var(--b-fast) ease;
+}
+.b-field--mono { font-family: var(--b-mono); font-size: 13px; }
+.b-field::placeholder { color: var(--b-muted); opacity: 1; }
+@media (hover: hover) { .b-field:hover:not(:focus) { box-shadow: inset 0 0 0 1px var(--b-text); } }
+.b-field:focus { box-shadow: inset 0 0 0 1px var(--b-accent), 0 0 0 3px var(--b-focus); }
+.b-field[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--b-danger); }
+.b-field[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 1px var(--b-danger), 0 0 0 3px var(--b-danger-line); }
+.b-field:disabled { opacity: 0.5; cursor: not-allowed; }
+/* number fields without the spinner arrows: values are typed, the slider is next to them */
+.b-field[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.b-field[type="number"]::-webkit-inner-spin-button, .b-field[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ---------- Switch row ---------- */
+.b-switch {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3); width: 100%; min-height: 36px;
+  margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); background: none;
+  font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
+  transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-switch:hover { background: var(--b-wash); } }
+.b-switch:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-switch-track {
+  position: relative; flex: none; width: 32px; height: 18px; border-radius: 9px; background: var(--b-control-off);
+  transition: background-color var(--b-normal) var(--b-ease);
+}
+.b-switch-thumb {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+  transition: transform var(--b-slow) var(--b-ease-glide);
+}
+.b-switch[aria-checked="true"] .b-switch-track { background: var(--b-accent); }
+.b-switch[aria-checked="true"] .b-switch-thumb { transform: translateX(14px); }
+
+/* ---------- Slider ---------- */
+.b-slider {
+  --p: 0.5; --z: 0.5;
+  -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer;
+}
+.b-slider::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--b-slider-track) calc(min(var(--p), var(--z)) * 100%), var(--b-accent) calc(min(var(--p), var(--z)) * 100%), var(--b-accent) calc(max(var(--p), var(--z)) * 100%), var(--b-slider-track) calc(max(var(--p), var(--z)) * 100%));
+}
+.b-slider::-moz-range-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--b-slider-track) calc(min(var(--p), var(--z)) * 100%), var(--b-accent) calc(min(var(--p), var(--z)) * 100%), var(--b-accent) calc(max(var(--p), var(--z)) * 100%), var(--b-slider-track) calc(max(var(--p), var(--z)) * 100%));
+}
+.b-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 0; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform var(--b-fast) ease;
+}
+.b-slider::-moz-range-thumb {
+  width: 16px; height: 16px; border: 0; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.b-slider:active::-webkit-slider-thumb { transform: scale(1.1); }
+.b-slider:focus-visible { outline: none; }
+.b-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--b-focus), 0 1px 3px rgba(0, 0, 0, 0.25); }
+.b-slider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--b-focus), 0 1px 3px rgba(0, 0, 0, 0.25); }
+
+/* ---------- Disclosure (Filter Menu group anatomy) ---------- */
+.b-disclosure + .b-disclosure { margin-top: 2px; }
+.b-disclosure-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm);
+  background: none; font: 500 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
+  transition: background-color 140ms ease;
+}
+@media (hover: hover) { .b-disclosure-head:hover { background: var(--b-wash); transition-duration: var(--b-fast); } }
+.b-disclosure-head:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-disclosure-chevron { flex: none; color: var(--b-icon); transform: rotate(-90deg); transition: transform 260ms var(--b-ease); }
+.b-disclosure[data-open] .b-disclosure-chevron { transform: none; }
+.b-disclosure-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.b-disclosure-aside { flex: none; font-size: var(--b-fs-sm); font-weight: 400; color: var(--b-muted); font-variant-numeric: tabular-nums; }
+.b-disclosure-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms var(--b-ease); }
+.b-disclosure[data-open] .b-disclosure-panel { grid-template-rows: 1fr; }
+.b-disclosure-inner { min-height: 0; overflow: hidden; opacity: 0; transition: opacity 220ms ease; }
+.b-disclosure[data-open] .b-disclosure-inner { opacity: 1; padding-bottom: 6px; }
+
+/* ---------- Popover surface ---------- */
+.b-popover {
+  position: fixed; inset: auto; box-sizing: border-box; margin: 0; padding: 0; border: 0; border-radius: var(--b-r-xl);
+  background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-float);
+  font: 400 var(--b-fs-md)/20px var(--b-font);
+  max-height: calc(100dvh - 16px); overflow: auto; overscroll-behavior: contain;
+}
+.b-popover:popover-open { animation: b-pop-in var(--b-normal) var(--b-ease); }
+@keyframes b-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.b-popover-title { margin: 0; padding: 12px 16px 6px; font-size: 15px; font-weight: 500; line-height: 24px; color: var(--b-strong); }
+/* Phones: a sheet from the bottom edge, above the bottom bar */
+@media (max-width: 767px) {
+  .b-popover {
+    left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto !important; max-height: 80dvh;
+    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-bottom: env(safe-area-inset-bottom);
+  }
+  .b-popover:popover-open { animation: b-sheet-in var(--b-slow) var(--b-ease); }
+  .b-popover::backdrop { background: var(--b-backdrop); }
+}
+@keyframes b-sheet-in { from { transform: translateY(24px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .b-switch-thumb, .b-switch-track, .b-disclosure-chevron, .b-disclosure-panel, .b-disclosure-inner, .b-field { transition: none; }
+  .b-popover:popover-open { animation: none; }
+}
+@media (pointer: coarse) {
+  .b-switch { min-height: 44px; }
+  .b-field { height: 40px; font-size: 16px; }
+  .b-disclosure-head { height: 44px; }
+}
+
+/* Affect UI segmented control (clean), tray: in dark mode the raised pill a step lighter, so the picked option
+   stands out from its track (the component's documented variable) */
+:root[data-theme="dark"] .ui-segc { --ui-segc-card: #3a3a3f; }
+
+/* Affect UI buttons (clean): icons a step darker than the component's default, for 4:1 on white and on dark */
+:root .ui-buttonc { --ui-btnc-icon: var(--b-icon); }

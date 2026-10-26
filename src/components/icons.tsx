@@ -57,3 +57,30 @@ export const IconSun = make('Sun', <>
 </>);
 export const IconMoon = make('Moon', <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />);
 export const IconArrowRight = make('ArrowRight', <path d="M5 12h14M13 6l6 6-6 6" />);
+export const IconPlus = make('Plus', <path d="M12 5v14M5 12h14" />);
+export const IconClose = make('Close', <path d="M6 6l12 12M18 6 6 18" />);
+export const IconTrash = make('Trash', <>
+  <path d="M4 7h16M9.5 7V5.2c0-.66.54-1.2 1.2-1.2h2.6c.66 0 1.2.54 1.2 1.2V7" />
+  <path d="M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7M10 11v5M14 11v5" />
+</>);
+export const IconSliders = make('Sliders', <path d="M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4" />);
+export const IconCopy = make('Copy', <>
+  <rect x="8" y="8" width="12" height="12" rx="2.5" />
+  <path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8" />
+</>);
+export const IconSearch = make('Search', <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></>);
+export const IconZoomIn = make('ZoomIn', <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4M11 8.5v5M8.5 11h5" /></>);
+export const IconZoomOut = make('ZoomOut', <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4M8.5 11h5" /></>);
+/** Fit y: a frame with arrows along the vertical. */
+export const IconFitY = make('FitY', <path d="M9 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20H9M17 4v16M14.5 6.5 17 4l2.5 2.5M14.5 17.5 17 20l2.5-2.5" />);
+/** Equal axes: "1:1" in a frame. */
+export const IconRatio = make('Ratio', <>
+  <rect x="3" y="5" width="18" height="14" rx="2.5" />
+  <path d="M7.5 9.5 9 8.5v7M15.5 9.5l1.5-1M17 8.5v7M12 10.6h.01M12 13.4h.01" />
+</>);
+export const IconReset = make('Reset', <><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" /><path d="M4.5 4.5v4h4" /></>);
+export const IconDownload = make('Download', <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />);
+export const IconChevronDown = make('ChevronDown', <path d="m7 10 5 5 5-5" />);
+export const IconAlert = make('Alert', <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4h.01" /></>);
+export const IconEye = make('Eye', <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>);
+export const IconEyeOff = make('EyeOff', <path d="M3 3l18 18M10.6 5.6A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.6-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" />);

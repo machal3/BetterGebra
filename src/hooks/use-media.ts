@@ -9,3 +9,6 @@ export function useMedia(query: string): boolean {
   }, [query]);
   return useSyncExternalStore(subscribe, () => matchMedia(query).matches);
 }
+
+/** Phones: panels become sheets, the mode switch moves to the bottom. */
+export const PHONE = '(max-width: 767px)';

@@ -34,7 +34,10 @@
   /* Lines and fills */
   --b-line: rgba(0, 0, 0, 0.06);
   --b-line-strong: rgba(0, 0, 0, 0.12);
-  --b-field-line: rgba(0, 0, 0, 0.16);
+  /* 3:1 against the card (WCAG 1.4.11): field edges and switches that are off */
+  --b-field-line: rgba(0, 0, 0, 0.42);
+  --b-control-off: rgba(0, 0, 0, 0.42);
+  --b-slider-track: rgba(0, 0, 0, 0.16);
   --b-wash: rgba(0, 0, 0, 0.03);
   --b-fill: rgba(0, 0, 0, 0.06);
   --b-track: rgba(0, 0, 0, 0.04);
@@ -120,7 +123,9 @@
 
   --b-line: rgba(255, 255, 255, 0.08);
   --b-line-strong: rgba(255, 255, 255, 0.14);
-  --b-field-line: rgba(255, 255, 255, 0.18);
+  --b-field-line: rgba(255, 255, 255, 0.36);
+  --b-control-off: rgba(255, 255, 255, 0.4);
+  --b-slider-track: rgba(255, 255, 255, 0.2);
   --b-wash: rgba(255, 255, 255, 0.04);
   --b-fill: rgba(255, 255, 255, 0.08);
   --b-track: rgba(255, 255, 255, 0.05);
