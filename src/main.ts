@@ -3,6 +3,8 @@ import './styles/app.css';
 import { StrictMode, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
+import { panelFromHash } from './app/navigation';
+import { isDark, systemDark } from './app/theme';
 import { AnalysisClient } from './analysis/client';
 import type { AnalysisResult } from './analysis/compute';
 import { format } from './format';
@@ -11,7 +13,7 @@ import { initGeometry, redrawGeometry } from './geometry/panel';
 import { forget } from './model';
 import { Scene } from './render/scene';
 import { fits } from './render/viewport';
-import { addFunction, commit, on, restore, save, state, type AxisUnit, type Mode } from './state';
+import { addFunction, commit, on, restore, save, state, type AxisUnit } from './state';
 import { initAnalysisPanel, renderAnalysis, syncPanelVisibility } from './ui/analysis-panel';
 import { redrawCalcPlots } from './ui/calc-plot';
 import { calculatorFromHash, initCalculator } from './ui/calculator';
@@ -49,56 +51,23 @@ function requestAnalysis(): void {
 }
 
 // --- Theme ---
-const systemDark = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(): void {
-  const dark = state.theme ? state.theme === 'dark' : systemDark.matches;
+  const dark = isDark();
   // Always resolved: the Affect UI components follow data-theme, not the system preference.
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  $('theme-button').setAttribute('aria-label', dark ? 'Jasny motyw' : 'Ciemny motyw');
-  $('theme-button').title = dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw';
+  // the browser chrome takes the colour of the top bar
+  for (const m of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) { m.removeAttribute('media'); m.content = dark ? '#161618' : '#ffffff'; }
   scene.refreshTheme();
   redrawGeometry();
   redrawCalcPlots();
 }
 systemDark.addEventListener('change', applyTheme);
-$('theme-button').addEventListener('click', () => {
-  const dark = state.theme ? state.theme === 'dark' : systemDark.matches;
-  state.theme = dark ? 'light' : 'dark';
-  commit('theme');
-});
-
-// --- Modes ---
-// The navigation rail holds the four graph modes and the geometry panel; the current one gets aria-current.
-const navItems = [...document.querySelectorAll<HTMLAnchorElement>('#modes a')];
-const TITLES: Record<Mode, string> = { graph: 'Wykresy', complex: 'Zespolone' };
-function syncModes(): void {
-  const panel = document.body.dataset.panel;
-  for (const a of navItems) {
-    const current = panel === 'graphs' ? a.dataset.mode === state.mode : a.dataset.panel === panel;
-    if (current) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-  }
-  document.body.dataset.mode = state.mode;
-  $('pane-title').textContent = panel === 'geometry' ? 'Geometria' : panel === 'calculator' ? 'Kalkulator' : TITLES[state.mode];
-}
-$('modes').addEventListener('click', e => {
-  const mode = (e.target as Element).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
-  // The link itself switches to the graphs panel through the hash.
-  if (!mode || mode === state.mode) return;
-  state.mode = mode;
-  // The complex plane needs equal axes.
-  if (mode === 'complex') state.view = { ...state.view, ratio: 1 };
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    $('plot').animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
-  }
-  commit('mode', 'view');
-});
 
 // --- Panels: home | graphs | geometry | calculator (the hash keeps the choice across reloads) ---
 function syncPanel(): void {
   const hash = location.hash;
   // #kalkulator?q=… opens the calculator with that question (links to a result)
-  document.body.dataset.panel = hash.startsWith('#kalkulator') ? 'calculator' : ({ '#wykresy': 'graphs', '#geometria': 'geometry' } as Record<string, string>)[hash] ?? 'home';
-  syncModes();
+  document.body.dataset.panel = panelFromHash(hash);
   // a function's settings live in the top layer, outside the panel: they would stay over the next one
   if (document.body.dataset.panel !== 'graphs') document.querySelectorAll<HTMLElement>('[id^="fn-settings-"]:popover-open').forEach(p => p.hidePopover());
   if (document.body.dataset.panel === 'calculator') calculatorFromHash();
@@ -149,7 +118,6 @@ $('export').addEventListener('click', async () => {
 
 // --- Help & global keys ---
 const help = $<HTMLDialogElement>('help');
-$('help-button').addEventListener('click', () => help.showModal());
 help.addEventListener('click', e => { if (e.target === help) help.close(); }); // click on the backdrop
 document.addEventListener('keydown', e => {
   const t = e.target as HTMLElement;
@@ -163,7 +131,7 @@ document.addEventListener('keydown', e => {
 on(['list', 'expr', 'active', 'mode', 'style'], () => syncList());
 on(['list', 'expr', 'mode'], () => { forget(new Set(state.functions.map(f => f.id))); syncParameters(); });
 on(['list', 'expr', 'active', 'mode', 'style', 'params', 'view', 'toggles'], topics => {
-  if (topics.has('mode')) syncModes();
+  if (topics.has('mode')) document.body.dataset.mode = state.mode;
   if (topics.has('view') || topics.has('mode')) syncRange();
   scene.request();
   // Grid, axes and snapping don't change the analysis.
@@ -184,7 +152,7 @@ initGeometry();
 initCalculator();
 initTooltips();
 syncPanel();
-syncModes();
+document.body.dataset.mode = state.mode;
 syncToggles();
 syncPanelVisibility();
 applyTheme();

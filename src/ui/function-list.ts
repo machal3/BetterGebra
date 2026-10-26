@@ -175,7 +175,7 @@ function createRow(f: FnState): Row {
 
 /** Next to the button: to the right of the sidebar on wide screens, below it otherwise; always inside the window. */
 function placeSettings(pop: HTMLElement, anchor: HTMLElement): void {
-  if (matchMedia('(max-width: 760px)').matches) { pop.style.left = pop.style.top = ''; return; } // bottom sheet in CSS
+  if (matchMedia('(max-width: 767px)').matches) { pop.style.left = pop.style.top = ''; return; } // bottom sheet in CSS
   const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight, gap = 8;
   const edge = anchor.closest('.sidebar')?.getBoundingClientRect().right ?? r.right;
   const right = edge + gap + w <= innerWidth - gap;

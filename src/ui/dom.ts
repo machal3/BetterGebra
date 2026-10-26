@@ -97,7 +97,7 @@ export function initTooltips(): void {
       const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), gap = 8;
       // Beside a vertical toolbar, otherwise above the control (below when there is no room).
       let x = r.left + (r.width - t.width) / 2, y = r.top - t.height - gap;
-      if (el.closest('[aria-orientation="vertical"]') && innerWidth > 760) { x = r.left - t.width - gap; y = r.top + (r.height - t.height) / 2; }
+      if (el.closest('[aria-orientation="vertical"]') && innerWidth >= 768) { x = r.left - t.width - gap; y = r.top + (r.height - t.height) / 2; }
       else if (y < 4) y = r.bottom + gap;
       tip.style.left = `${Math.max(4, Math.min(x, innerWidth - t.width - 4))}px`;
       tip.style.top = `${Math.max(4, Math.min(y, innerHeight - t.height - 4))}px`;

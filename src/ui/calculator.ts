@@ -124,7 +124,9 @@ export function calculatorFromHash(): void {
   let q: string | null = null;
   if (m) { try { q = decodeURIComponent(m[1]); } catch { q = null; } }
   if (q && q !== input.value) { input.value = q; preview(); compute(q); return; }
-  if (matchMedia('(min-width: 761px)').matches) input.focus();
+  // not while the mode switch is walked with the arrow keys: focus stays on its tabs
+  const walking = document.activeElement?.matches('[role="tab"]:focus-visible');
+  if (matchMedia('(min-width: 768px)').matches && !walking) input.focus();
 }
 
 function insertAtCursor(input: HTMLInputElement, text: string): void {

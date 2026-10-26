@@ -8,7 +8,11 @@ export default defineConfig({
   // "@/components/ui/…" as the shadcn CLI writes the Affect UI imports
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: { port: 5173 },
-  build: { target: 'es2022' },
+  build: {
+    target: 'es2022',
+    // React in a chunk of its own: it changes far less often than the app, so browsers keep it cached
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }] } } },
+  },
   worker: { format: 'es' },
   test: { include: ['tests/**/*.test.{js,ts}'] },
 });

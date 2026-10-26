@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#f0f0f0" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161618" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Bettergebra — kalkulator wykresów funkcji, płaszczyzny zespolonej i zbiorów liczb zespolonych.">
   <title>Bettergebra</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f6cbd'/%3E%3Cpath d='M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230060e2'/%3E%3Cpath d='M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
   <script>
     // Theme before first paint, so a dark-mode reload doesn't flash light. Always resolved to light or dark:
     // the Affect UI components switch on data-theme, not on the system preference.
@@ -19,68 +19,10 @@
   </script>
 </head>
 <body>
-  <main class="home" aria-labelledby="home-title">
-    <h1 id="home-title" class="logo">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
-      <span>Bettergebra</span>
-    </h1>
-    <p class="home-lead">Co chcesz dziś robić?</p>
-    <nav class="home-choices" aria-label="Wybierz część">
-      <a href="#wykresy">
-        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg></span>
-        <b>Wykresy</b>
-        <span>Funkcje, trygonometria, liczby zespolone i zbiory</span>
-      </a>
-      <a href="#geometria">
-        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span>
-        <b>Geometria</b>
-        <span>Punkty, proste, okręgi i konstrukcje</span>
-      </a>
-      <a href="#kalkulator">
-        <span class="home-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg></span>
-        <b>Kalkulator</b>
-        <span>Wyniki dokładne, równania, pochodne, całki, macierze</span>
-      </a>
-    </nav>
-  </main>
+  <div id="root"></div>
 
   <div class="app">
-    <nav class="rail" aria-label="Nawigacja">
-      <a class="rail-logo logo" href="#" aria-label="Bettergebra — strona główna" title="Strona główna">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14"/></svg>
-      </a>
-      <div id="modes" class="rail-items">
-        <a class="rail-item" href="#wykresy" data-mode="graph" title="Wykresy — funkcje y = f(x), krzywe i obszary w x, y, zbiory na płaszczyźnie zespolonej">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4c1.6 10 4.2 15 8 15s6.4-5 8-15"/></svg>
-          <span>Wykresy</span>
-        </a>
-        <a class="rail-item" href="#wykresy" data-mode="complex" title="Zespolone — kolorowanie wartości f(z)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17"/><circle cx="16" cy="8" r="1.7" class="fill"/></svg>
-          <span>Zespolone</span>
-        </a>
-        <a class="rail-item" href="#geometria" data-panel="geometry" title="Geometria — punkty, proste, okręgi i konstrukcje">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
-          <span>Geometria</span>
-        </a>
-        <a class="rail-item" href="#kalkulator" data-panel="calculator" title="Kalkulator — obliczenia dokładne i symboliczne">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="3" width="15" height="18" rx="2.5"/><path d="M8 7.5h8M8.5 12h1.5M14 12h1.5M8.5 16h1.5M14 16h1.5"/></svg>
-          <span>Kalkulator</span>
-        </a>
-      </div>
-    </nav>
-
-    <aside class="sidebar" aria-labelledby="pane-title">
-      <header class="pane-head">
-        <a class="pane-home icon-button" href="#" aria-label="Strona główna" title="Strona główna"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M9 2.39a1.5 1.5 0 0 1 2 0l5.5 4.94c.32.28.5.69.5 1.12v7.05c0 .83-.67 1.5-1.5 1.5H13a1.5 1.5 0 0 1-1.5-1.5V12a.5.5 0 0 0-.5-.5H9a.5.5 0 0 0-.5.5v3.5c0 .83-.67 1.5-1.5 1.5H4.5A1.5 1.5 0 0 1 3 15.5V8.45c0-.43.18-.84.5-1.12zm1.33.74a.5.5 0 0 0-.66 0l-5.5 4.94a.5.5 0 0 0-.17.38v7.05c0 .28.22.5.5.5H7a.5.5 0 0 0 .5-.5V12c0-.83.67-1.5 1.5-1.5h2c.83 0 1.5.67 1.5 1.5v3.5c0 .28.22.5.5.5h2.5a.5.5 0 0 0 .5-.5V8.45a.5.5 0 0 0-.17-.38z"/></svg></a>
-        <h1 id="pane-title" class="pane-title">Wykresy</h1>
-        <div class="pane-actions">
-          <button id="help-button" class="icon-button" type="button" aria-label="Pomoc i skróty" title="Pomoc i skróty  ?"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14m0 10.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5m0-8a2.5 2.5 0 0 1 1.65 4.38l-.15.12-.22.17-.09.07-.16.15c-.33.36-.53.85-.53 1.61a.5.5 0 0 1-1 0 3.2 3.2 0 0 1 1.16-2.62l.25-.19.12-.1A1.5 1.5 0 0 0 10 6.5c-.83 0-1.5.67-1.5 1.5a.5.5 0 0 1-1 0A2.5 2.5 0 0 1 10 5.5"/></svg></button>
-          <button id="theme-button" class="icon-button" type="button" aria-label="Zmień motyw" title="Zmień motyw">
-            <span class="when-light"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 13.5A6.98 6.98 0 0 1 4 14.39c2.83-1.09 4.56-2.42 5.6-4.4 1.04-2 1.33-4.16.75-6.9q1.36.17 2.58.87a7 7 0 0 1 2.55 9.54M5.45 16.92A7.98 7.98 0 1 0 9.88 2.04a.6.6 0 0 0-.61.73c.69 2.82.43 4.88-.55 6.76-.94 1.78-2.55 3.03-5.55 4.1a.6.6 0 0 0-.3.9 8 8 0 0 0 2.59 2.39"/></svg></span><span class="when-dark"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2c.28 0 .5.22.5.5v1a.5.5 0 0 1-1 0v-1c0-.28.22-.5.5-.5m0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8m0-1a3 3 0 1 1 0-6 3 3 0 0 1 0 6m7.5-2.5a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1zM10 16c.28 0 .5.22.5.5v1a.5.5 0 0 1-1 0v-1c0-.28.22-.5.5-.5m-6.5-5.5a.5.5 0 0 0 0-1H2.46a.5.5 0 0 0 0 1zm.65-6.35c.2-.2.5-.2.7 0l1 1a.5.5 0 1 1-.7.7l-1-1a.5.5 0 0 1 0-.7m.7 11.7a.5.5 0 0 1-.7-.7l1-1a.5.5 0 0 1 .7.7zm11-11.7a.5.5 0 0 0-.7 0l-1 1a.5.5 0 0 0 .7.7l1-1a.5.5 0 0 0 0-.7m-.7 11.7a.5.5 0 0 0 .7-.7l-1-1a.5.5 0 0 0-.7.7z"/></svg></span>
-          </button>
-        </div>
-      </header>
-
+    <aside class="sidebar" aria-label="Panel boczny">
       <div id="graphs-body" class="sidebar-body">
         <section class="section" aria-labelledby="functions-title">
           <div class="section-head">
@@ -378,7 +320,6 @@
     </form>
   </dialog>
 
-  <div id="root"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
   <script type="module" src="/src/main.ts"></script>
