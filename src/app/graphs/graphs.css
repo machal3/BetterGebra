@@ -108,17 +108,6 @@
 
 /* ---------- Canvas ---------- */
 #plot:focus-visible { box-shadow: inset 0 0 0 2px var(--b-accent); }
-.b-toolbar {
-  position: absolute; z-index: 3; top: var(--b-s3); right: var(--b-s3);
-  display: flex; flex-direction: column; padding: 4px; border-radius: var(--b-r-xl);
-  background: var(--b-raised); box-shadow: var(--b-shadow-float);
-}
-.b-tool-group { display: flex; flex-direction: column; gap: 2px; }
-.b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 1px 0 var(--b-line); }
-.b-toolbar .ui-buttonc { --h: 32px; color: var(--b-ink); }
-.ui-buttonc.b-tool-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--b-fill); color: var(--b-accent-ink); }
-.b-tool-text { display: block; font: italic 17px/1 var(--b-math); }
-
 .b-caption {
   position: absolute; z-index: 1; right: var(--b-s3); bottom: 10px; margin: 0; padding: 2px 8px; border-radius: var(--b-r-sm);
   background: color-mix(in srgb, var(--plot-bg) 85%, transparent); pointer-events: none;
@@ -164,7 +153,6 @@
 
 /* ---------- Phones: the tools stay a column on the right; the cards keep clear of it ---------- */
 @media (max-width: 767px) {
-  .b-toolbar { top: 8px; right: 8px; }
   .b-caption { display: none; }
   .b-analysis { left: 8px; right: 64px; bottom: 8px; width: auto; max-height: calc(100% - 16px); }
   /* the name above its value: the numbers get the whole width */
@@ -172,14 +160,11 @@
   .b-ledger dt { font-size: var(--b-fs-sm); }
   .b-rowset-pop, .b-view { width: auto; }
 }
-/* a short canvas (a phone on its side): the column scrolls rather than leaving it */
-.b-toolbar { max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none; }
 @media (pointer: coarse) {
   .b-fn-swatch { width: 44px; height: 44px; }
   .b-fn .ui-buttonc { --h: 44px; }
   .b-fn-field { height: 44px; }
   .b-fn-note { margin-left: 56px; }
-  .b-toolbar .ui-buttonc { --h: 44px; }
   .b-color { width: 36px; height: 36px; }
 }
 @media (prefers-reduced-motion: reduce) {

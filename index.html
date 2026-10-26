@@ -25,31 +25,7 @@
     <aside class="sidebar" aria-label="Panel boczny">
       <div id="graphs-body" class="sidebar-body"></div>
 
-      <div id="geo-side" class="geo-side">
-        <div class="geo-tabs" role="tablist" aria-label="Panel geometrii">
-          <button id="geo-tab-create" type="button" role="tab" aria-selected="true" aria-controls="geo-create">Tworzenie</button>
-          <button id="geo-tab-objects" type="button" role="tab" aria-selected="false" aria-controls="geo-objects" tabindex="-1">Obiekty <span id="geo-count" class="count"></span></button>
-        </div>
-        <div id="geo-create" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-create">
-          <input id="geo-search" class="geo-search" type="search" spellcheck="false" autocomplete="off" aria-label="Szukaj narzędzia" placeholder="Szukaj narzędzia…">
-          <p id="geo-search-empty" class="hint geo-search-empty" hidden>Nie ma takiego narzędzia.</p>
-          <div id="geo-tools" class="geo-tools"></div>
-        </div>
-        <div id="geo-objects" class="sidebar-body" role="tabpanel" aria-labelledby="geo-tab-objects" hidden>
-          <form id="geo-input-form" class="geo-input-form">
-            <input id="geo-input" type="text" spellcheck="false" autocomplete="off" aria-label="Definicja obiektu" placeholder="np. A = (1; 2), Okrąg(A; 3), y = 2x + 1">
-            <button class="text-button primary" type="submit">Dodaj</button>
-          </form>
-          <p id="geo-input-error" class="error" role="alert"></p>
-          <details class="geo-commands">
-            <summary>Polecenia i sposoby definiowania</summary>
-            <ul id="geo-reference" class="geo-reference"></ul>
-          </details>
-          <p id="geo-empty" class="hint">Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>Tworzenie</b>.</p>
-          <ol id="geo-list" class="geo-list"></ol>
-        </div>
-      </div>
-
+      <div id="geo-side" class="sidebar-body geo-side"></div>
       <div id="calc-side" class="sidebar-body calc-side"></div>
     </aside>
 
@@ -62,65 +38,7 @@
     <main id="calc" class="calc" aria-label="Kalkulator"></main>
 
     <main id="geometry" class="stage geometry" aria-label="Geometria">
-      <canvas id="geo-canvas" aria-label="Rysunek geometryczny. Wybierz narzędzie w panelu bocznym i klikaj na płaszczyźnie."></canvas>
-      <p id="geo-hint" class="geo-hint" aria-live="polite"></p>
-      <section id="geo-inspect" class="geo-inspect" aria-label="Zaznaczony obiekt" hidden>
-        <div class="geo-inspect-head">
-          <span id="geo-coords-name" class="geo-coords-name"></span>
-          <button id="geo-inspect-close" class="icon-button small" type="button" aria-label="Zamknij" title="Zamknij  Esc"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07z"/></svg></button>
-        </div>
-        <form id="geo-coords" class="geo-coords" aria-label="Współrzędne punktu" onsubmit="return false">
-          <label>x <input id="geo-x" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
-          <label>y <input id="geo-y" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
-          <p id="geo-coords-note" class="geo-coords-note"></p>
-          <p id="geo-coords-error" class="error" role="alert"></p>
-        </form>
-        <div id="geo-style" class="geo-style">
-          <div class="geo-style-row"><span>Kolor</span><div id="geo-colors" class="geo-colors" role="group" aria-label="Kolor"></div></div>
-          <label class="geo-style-row" id="geo-width-row"><span id="geo-width-label">Grubość</span><input id="geo-width" type="range" min="1" max="8" step="0.5"><output id="geo-width-out"></output></label>
-          <div class="geo-style-row" id="geo-dash-row"><span>Linia</span>
-            <div class="geo-seg" role="group" aria-label="Styl linii" data-key="dash">
-              <button type="button" data-value="" aria-label="Ciągła" title="Ciągła"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/></svg></button>
-              <button type="button" data-value="dashed" aria-label="Kreskowana" title="Kreskowana"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18" stroke-dasharray="5 3.5"/></svg></button>
-              <button type="button" data-value="dotted" aria-label="Kropkowana" title="Kropkowana"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18" stroke-width="2.4" stroke-dasharray="0.1 4.5"/></svg></button>
-            </div>
-          </div>
-          <div class="geo-style-row" id="geo-shape-row"><span>Kształt</span>
-            <div class="geo-seg" role="group" aria-label="Kształt punktu" data-key="shape">
-              <button type="button" data-value="" aria-label="Kropka" title="Kropka"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" class="fill"/></svg></button>
-              <button type="button" data-value="ring" aria-label="Pierścień" title="Pierścień"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg></button>
-              <button type="button" data-value="cross" aria-label="Krzyżyk" title="Krzyżyk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
-            </div>
-          </div>
-          <label class="geo-style-row" id="geo-fill-row"><span>Wypełnienie</span><input id="geo-fill" type="range" min="0" max="1" step="0.05"><output id="geo-fill-out"></output></label>
-          <label class="geo-style-row"><span>Etykieta</span>
-            <select id="geo-label">
-              <option value="">Automatycznie</option>
-              <option value="name">Nazwa</option>
-              <option value="value">Nazwa i wartość</option>
-              <option value="none">Brak</option>
-            </select>
-          </label>
-          <button id="geo-style-reset" class="geo-style-reset" type="button">Przywróć domyślny wygląd</button>
-        </div>
-      </section>
-      <div class="toolbar" role="toolbar" aria-label="Narzędzia rysunku" aria-orientation="vertical">
-        <div class="tool-group">
-          <button id="geo-undo" type="button" aria-label="Cofnij" title="Cofnij  Ctrl+Z"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.5a.5.5 0 0 0-1 0v4.9c0 .33.27.6.6.6h4.9a.5.5 0 0 0 0-1H5.9l3.48-3.02a4 4 0 0 1 5.25 6.04l-8.17 7.1a.5.5 0 0 0 .65.76l8.17-7.1a5 5 0 0 0-6.56-7.55L5 6.46z"/></svg></button>
-          <button id="geo-redo" type="button" aria-label="Ponów" title="Ponów  Ctrl+Y"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15 2.5a.5.5 0 0 1 1 0v4.9a.6.6 0 0 1-.6.6h-4.9a.5.5 0 0 1 0-1h3.6l-3.48-3.02a4 4 0 1 0-5.24 6.04l8.17 7.1a.5.5 0 1 1-.66.76l-8.17-7.1a5 5 0 1 1 6.56-7.55L15 6.46z"/></svg></button>
-        </div>
-        <div class="tool-group">
-          <button id="geo-zoom-in" type="button" aria-label="Przybliż" title="Przybliż"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 5.5c.28 0 .5.22.5.5v2h2a.5.5 0 0 1 0 1H9v2a.5.5 0 0 1-1 0V9H6a.5.5 0 0 1 0-1h2V6c0-.28.22-.5.5-.5m0-3.5a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
-          <button id="geo-zoom-out" type="button" aria-label="Oddal" title="Oddal"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 8a.5.5 0 0 1 0 1H6a.5.5 0 0 1 0-1zM8.5 2a6.5 6.5 0 0 1 4.94 10.73l3.41 3.42a.5.5 0 0 1-.63.76l-.07-.06-3.42-3.41A6.5 6.5 0 1 1 8.5 2m0 1a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11"/></svg></button>
-          <button id="geo-reset" type="button" aria-label="Przywróć widok" title="Przywróć widok"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10A6 6 0 0 0 5.53 6H7.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 1 0v1.6a7 7 0 1 1-1.98 4.36.5.5 0 0 1 1 .08L4 10a6 6 0 0 0 12 0"/></svg></button>
-        </div>
-        <div class="tool-group">
-          <button id="geo-grid" type="button" aria-pressed="false" aria-label="Kratka" title="Kratka"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 11c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4A1.5 1.5 0 0 1 2 16.5v-4c0-.83.67-1.5 1.5-1.5zm9 0c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4a1.5 1.5 0 0 1-1.5-1.5v-4c0-.83.67-1.5 1.5-1.5zm-9 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m9 0h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m-9-10C8.33 2 9 2.67 9 3.5v4C9 8.33 8.33 9 7.5 9h-4A1.5 1.5 0 0 1 2 7.5v-4C2 2.67 2.67 2 3.5 2zm9 0c.83 0 1.5.67 1.5 1.5v4c0 .83-.67 1.5-1.5 1.5h-4A1.5 1.5 0 0 1 11 7.5v-4c0-.83.67-1.5 1.5-1.5zm-9 1h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5m9 0h-4a.5.5 0 0 0-.5.5v4c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5"/></svg></button>
-          <button id="geo-axes" type="button" aria-pressed="false" aria-label="Układ współrzędnych" title="Układ współrzędnych"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 2.5v13h13M2.75 4.25 4.5 2.5l1.75 1.75M15.75 13.75l1.75 1.75-1.75 1.75"/></svg></button>
-          <button id="geo-export" type="button" aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 17a.5.5 0 0 1 .09 1H4.5a.5.5 0 0 1-.09-1H15.5M10 2a.5.5 0 0 1 .5.41V14.3l3.64-3.65a.5.5 0 0 1 .64-.06l.07.06c.17.17.2.44.06.63l-.06.07-4.5 4.5a.5.5 0 0 1-.25.14L10 16a.5.5 0 0 1-.4-.2l-4.46-4.45a.5.5 0 0 1 .64-.76l.07.06 3.65 3.64V2.5c0-.27.22-.5.5-.5"/></svg></button>
-          <button id="geo-clear" type="button" aria-label="Wyczyść rysunek" title="Wyczyść rysunek"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 4h3a1.5 1.5 0 0 0-3 0m-1 0a2.5 2.5 0 0 1 5 0h5a.5.5 0 0 1 0 1h-1.05l-1.2 10.34A3 3 0 0 1 12.27 18H7.73a3 3 0 0 1-2.98-2.66L3.55 5H2.5a.5.5 0 0 1 0-1zM5.74 15.23A2 2 0 0 0 7.73 17h4.54a2 2 0 0 0 1.99-1.77L15.44 5H4.56zM8.5 7.5c.28 0 .5.22.5.5v6a.5.5 0 0 1-1 0V8c0-.28.22-.5.5-.5M12 8a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/></svg></button>
-        </div>
-      </div>
+      <canvas id="geo-canvas" aria-label="Rysunek geometryczny. Wybierz narzędzie na palecie albo w panelu Tworzenie i klikaj na płaszczyźnie."></canvas>
     </main>
   </div>
 
@@ -168,17 +86,6 @@
     </div>
   </dialog>
 
-  <dialog id="geo-ask" class="geo-ask" aria-labelledby="geo-ask-label">
-    <form method="dialog">
-      <label id="geo-ask-label" for="geo-ask-input"></label>
-      <input id="geo-ask-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false">
-      <p id="geo-ask-error" class="error" role="alert"></p>
-      <div class="setting-actions">
-        <button id="geo-ask-cancel" class="text-button" type="button">Anuluj</button>
-        <button class="text-button primary" value="ok">OK</button>
-      </div>
-    </form>
-  </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>

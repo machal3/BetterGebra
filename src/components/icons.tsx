@@ -89,3 +89,9 @@ export const IconOpen = make('Open', <path d="M10 5H7a2.5 2.5 0 0 0-2.5 2.5v9.5A
 /** Snapping the readout to the grid: a grid with a point on a node. */
 export const IconSnap = make('Snap', <><path d="M4 9h16M4 15h16M9 4v16M15 4v16" strokeWidth={1.1} /><circle cx="15" cy="9" r="2.6" fill="currentColor" stroke="none" /></>);
 export const IconStop = make('Stop', <rect x="7" y="7" width="10" height="10" rx="2" />);
+export const IconUndo = make('Undo', <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />);
+export const IconRedo = make('Redo', <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />);
+export const IconGrid = make('Grid', <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M4 12h16M12 4v16" /></>);
+export const IconAxes = make('Axes', <path d="M5.5 3.5v15h15M3.5 5.5l2-2 2 2M18.5 16.5l2 2-2 2" />);
+export const IconStar = make('Star', <path d="m12 3.8 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8z" />);
+export const IconTools = make('Tools', <><rect x="4" y="4" width="6.5" height="6.5" rx="1.6" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" /><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" /><path d="M16.75 13.5v6.5M13.5 16.75H20" /></>);

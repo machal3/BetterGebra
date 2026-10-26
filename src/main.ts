@@ -6,7 +6,7 @@ import { App } from './app/App';
 import { rangeChanged, requestAnalysis, scene } from './app/graph-runtime';
 import { panelFromHash } from './app/navigation';
 import { isDark, systemDark } from './app/theme';
-import { initGeometry, redrawGeometry } from './geometry/panel';
+import { initGeometry, redrawGeometry } from './geometry/controller';
 import { forget } from './model';
 import { addFunction, commit, on, restore, save, state } from './state';
 import { redrawCalcPlots } from './app/calculator/plot-engine';

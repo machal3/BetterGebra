@@ -145,3 +145,24 @@
 
 /* Affect UI buttons (clean): icons a step darker than the component's default, for 4:1 on white and on dark */
 :root .ui-buttonc { --ui-btnc-icon: var(--b-icon); }
+
+/* ---------- Toolbar over a canvas (Wykresy, Geometria): a column on the right ---------- */
+.b-toolbar {
+  position: absolute; z-index: 3; top: var(--b-s3); right: var(--b-s3);
+  display: flex; flex-direction: column; padding: 4px; border-radius: var(--b-r-xl);
+  background: var(--b-raised); box-shadow: var(--b-shadow-float);
+}
+.b-tool-group { display: flex; flex-direction: column; gap: 2px; }
+.b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 1px 0 var(--b-line); }
+.b-toolbar .ui-buttonc { --h: 32px; color: var(--b-ink); }
+.ui-buttonc.b-tool-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--b-fill); color: var(--b-accent-ink); }
+.b-tool-text { display: block; font: italic 17px/1 var(--b-math); }
+/* a short canvas (a phone on its side): the column scrolls rather than leaving it */
+.b-toolbar { max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none; }
+@media (max-width: 767px) { .b-toolbar { top: 8px; right: 8px; } }
+@media (pointer: coarse) { .b-toolbar .ui-buttonc { --h: 44px; } }
+
+/* ---------- Empty state: a quiet drawing and a sentence ---------- */
+.b-empty { display: grid; justify-items: center; gap: var(--b-s2); padding: var(--b-s4) var(--b-s2); text-align: center; }
+.b-empty p { margin: 0; font-size: var(--b-fs-md); color: var(--b-text); }
+.b-empty-art { width: 96px; height: 64px; fill: var(--b-wash); stroke: var(--b-faint); stroke-width: 1.5; stroke-linecap: round; }

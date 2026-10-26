@@ -1,14 +1,17 @@
 /**
- * The Geometry panel: a drawing board in the spirit of GeoGebra Geometry. Pick a tool, click points (or the empty
+ * The Geometry board: a drawing board in the spirit of GeoGebra Geometry. Pick a tool, click points (or the empty
  * plane, which makes them); drag with "Przesuń" and everything built on the dragged points follows.
+ * This module owns the construction, the canvas, the pointer, undo and saving; the panel around it (tools, object
+ * list, inspector, value dialog, toolbar) is React (app/geometry), which reads it through geoStore and acts through
+ * the functions exported here.
  */
 import { format } from '../format';
 import { constant } from '../math';
 import { LABEL, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
 import { Viewport, minorOf, panned, tick, zoomed } from '../render/viewport';
 import type { View } from '../state';
-import { $, FI, ICONS, h, icon, toast } from '../ui/dom';
-import { REFERENCE, angle as angleValue, definition, parseInput, type Parsed } from './commands';
+import { toast } from '../ui/dom';
+import { angle as angleValue, parseInput, type Parsed } from './commands';
 import {
   compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, nextName, pointOn, primed, project, topoSort,
   type Def, type Draft, type GeoObject, type Kind, type Line, type Pt, type Shape, type Style,
@@ -20,7 +23,7 @@ const FITS: Record<Slot, (s: Shape) => boolean> = {
   region: isRegion, pointOrLine: s => isPoint(s) || isLine(s), any: s => s.kind !== 'measure',
 };
 
-interface Ask {
+export interface Ask {
   label: string;
   initial: string;
   /** Read as an angle: 40 means 40°, π/4 means π/4; the value passed on is in radians. */
@@ -30,7 +33,7 @@ interface Ask {
   /** Builds from the picked ids and the value; returns the id to select. */
   run: (ids: number[], v: number) => number | undefined;
 }
-interface Tool {
+export interface Tool {
   label: string;
   hint: string;
   /** What to pick, in any order a click allows; a click on empty plane fills the next point slot. */
@@ -52,7 +55,7 @@ const image = (def: Def, value?: number) => ([obj, by]: number[]): Draft[] => {
 };
 const imageOf = (def: Def) => (ids: number[], v: number) => add(image(def, v)(ids)).at(-1);
 
-const TOOLS = {
+export const TOOLS = {
   move: { label: 'Przesuń', hint: 'Przeciągnij punkt lub figurę. Tło przesuwa widok.' },
   hide: { label: 'Pokaż / ukryj', hint: 'Kliknij obiekt, aby go ukryć lub pokazać. Ukryte widać tu półprzezroczyste.' },
   delete: { label: 'Usuń', hint: 'Kliknij obiekt, aby go usunąć z zależnymi.' },
@@ -129,20 +132,21 @@ const TOOLS = {
     ask: { label: 'Skala jednokładności k', initial: '2', check: v => Number.isFinite(v) && v !== 0 ? null : 'Skala musi być różna od zera.', run: imageOf('dilate') },
   },
 } satisfies Record<string, Tool>;
-type ToolId = keyof typeof TOOLS;
-const toolOf = (id: ToolId): Tool => TOOLS[id];
+export type ToolId = keyof typeof TOOLS;
+export const toolOf = (id: ToolId): Tool => TOOLS[id];
 
 /** Icons in two tones: what the tool starts from in grey, hollow points for the picks, what it makes in the accent. */
+const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 const pt = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="1.9" class="pt"/>`;
 const made = (x: number, y: number, r = 2.2) => `<circle cx="${x}" cy="${y}" r="${r}" class="fill acc"/>`;
 const acc = (paths: string) => `<g class="acc">${paths}</g>`;
 const filled = (d: string) => `<path d="${d}" class="soft"/><path d="${d}"/>`;
 const thin = 'stroke-width="0.9"', dash = 'stroke-dasharray="2 2.4"';
 const TRIANGLE = '<path d="M12 4 3.5 19.5h17z"/>', WEDGE = 'M4 19h7A7 7 0 0 0 8.52 13.65z';
-const ICON: Record<ToolId, string> = {
-  move: FI.cursor,
-  hide: FI.eyeOff,
-  delete: ICONS.trash,
+export const ICON: Record<ToolId, string> = {
+  move: icon('<path d="M6 3.5v15.2l4.1-4.1 2.7 6 2.6-1.1-2.7-6h5.8z"/>'),
+  hide: icon('<path d="M3 3l18 18M10.6 5.6A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.6-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'),
+  delete: icon('<path d="M4 7h16M9.5 7V5.2c0-.66.54-1.2 1.2-1.2h2.6c.66 0 1.2.54 1.2 1.2V7"/><path d="M6.5 7l.8 11.2A2 2 0 0 0 9.3 20h5.4a2 2 0 0 0 2-1.8L17.5 7M10 11v5M14 11v5"/>'),
 
   point: icon(`<circle cx="12" cy="12" r="6.5" class="soft acc"/>${made(12, 12, 2.8)}`),
   intersect: icon(`<path d="M4 6.5 20 17.5M4 17.5 20 6.5"/>${made(12, 12, 2.6)}`),
@@ -194,8 +198,8 @@ const ICON: Record<ToolId, string> = {
  * By kind of object, each tool one way of defining it (a tool may sit in two groups); the favourites come first.
  * [tool, label] names the tool by that way: a circle from "Środek i punkt", "Przez 3 punkty"…
  */
-type GroupEntry = ToolId | [ToolId, string];
-const GROUPS: { name: string; tools: GroupEntry[] }[] = [
+export type GroupEntry = ToolId | [ToolId, string];
+export const GROUPS: { name: string; tools: GroupEntry[] }[] = [
   { name: 'Edycja', tools: ['move', 'hide', 'delete'] },
   { name: 'Punkty', tools: [['point', 'Swobodny / na obiekcie'], 'intersect', ['midpoint', 'Środek odcinka lub okręgu'], ['foot', 'Rzut na prostą']] },
   { name: 'Punkty szczególne trójkąta', tools: ['centroid', 'orthocenter', 'incenter', 'circumcenter'] },
@@ -208,9 +212,7 @@ const GROUPS: { name: string; tools: GroupEntry[] }[] = [
 ];
 
 // --- State ---
-const STORE = 'bettergebra.geometry', TAB_STORE = 'bettergebra.geometry.tab';
-const FAV_STORE = 'bettergebra.geometry.favourites', FAVOURITES = 'Ulubione';
-const STAR = FI.star.replace('class="fi"', 'class="fi off"') + FI.starFilled.replace('class="fi"', 'class="fi on"');
+const STORE = 'bettergebra.geometry';
 const HOME: View = { min: -10, max: 10, cy: 0, ratio: 1 };
 let objects: GeoObject[] = [];
 let shapes = new Map<number, Shape | null>();
@@ -228,6 +230,36 @@ let undoStack: string[] = [], redoStack: string[] = [];
 
 let canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, width = 0, height = 0, frame = 0, slop = 8;
 const vp = () => new Viewport(view, width, height);
+
+// --- What the panel around the board reads ---
+/** A question for a value (length, radius, angle…) the panel shows as a dialog. */
+export interface Asking { ask: Ask; answer: (value: number | null) => void }
+let asking: Asking | null = null;
+let version = 0;
+const listeners = new Set<() => void>();
+let notifying = 0;
+/** Tells the panel something changed; many changes in one frame (a drag) reach it once. */
+function notify(): void {
+  version++;
+  notifying ||= requestAnimationFrame(() => { notifying = 0; for (const l of listeners) l(); });
+}
+export const geoStore = {
+  subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
+  version: () => version,
+  get objects() { return objects; },
+  get shapes() { return shapes; },
+  get selected() { return selected; },
+  get tool() { return tool; },
+  get picking() { return picked.some(v => v !== undefined); },
+  get grid() { return grid; },
+  get axes() { return axes; },
+  get canUndo() { return undoStack.length > 0; },
+  get canRedo() { return redoStack.length > 0; },
+  get asking() { return asking; },
+};
+/** Called when a double-click on a point asks for its coordinates to be typed. */
+let focusCoords: () => void = () => {};
+export const onFocusCoords = (fn: () => void) => { focusCoords = fn; };
 
 /**
  * Adds the drafts (a draft may refer to an earlier one of the batch as −1, −2…). A draft listed in `replace` takes
@@ -252,7 +284,7 @@ function add(drafts: Draft[], replace = new Map<number, GeoObject>()): number[] 
  * Adds an object from its written definition, or redefines one: the named one ("c = Okrąg(A; 3)" when c exists) or
  * `target`. Returns what is wrong, or null.
  */
-function define(text: string, target?: GeoObject): string | null {
+export function define(text: string, target?: GeoObject): string | null {
   let parsed: Parsed;
   try { parsed = parseInput(text, objects); } catch (e) { return e instanceof Error ? e.message : String(e); }
   const { name, drafts, main } = parsed, victim = target ?? objects.find(o => o.name === name);
@@ -462,13 +494,11 @@ function hoverTarget(): { snap?: Snap; id?: number } | null {
 }
 
 // --- Tools ---
-function setTool(id: ToolId): void {
+export function setTool(id: ToolId): void {
   tool = id;
   picked = [];
   selected = null;
   renderList();
-  for (const b of document.querySelectorAll<HTMLElement>('#geo-tools .geo-tool')) b.setAttribute('aria-pressed', String(b.dataset.tool === id));
-  $('geo-hint').innerHTML = `<b>${TOOLS[id].label}</b> ${TOOLS[id].hint}`;
   canvas.dataset.tool = id;
   request();
 }
@@ -532,7 +562,7 @@ async function click(x: number, y: number): Promise<void> {
   update();
 }
 
-function remove(id: number): void {
+export function remove(id: number): void {
   checkpoint();
   const gone = dependents(objects, id);
   objects = objects.filter(o => !gone.has(o.id));
@@ -541,24 +571,19 @@ function remove(id: number): void {
   update();
 }
 
-/** Asks for a number (pi/3 and √2 work too); null when cancelled. */
-function ask({ label, initial, check, angle }: Ask): Promise<number | null> {
-  const dialog = $<HTMLDialogElement>('geo-ask'), form = dialog.querySelector('form')!, input = $<HTMLInputElement>('geo-ask-input'), error = $('geo-ask-error');
-  $('geo-ask-label').textContent = label;
-  input.value = initial;
-  error.textContent = '';
-  let value: number | null = null;
-  const submit = (e: SubmitEvent) => {
-    let v = NaN;
-    try { v = angle ? angleValue(input.value) : constant(input.value); } catch { /* reported below */ }
-    const problem = Number.isNaN(v) ? 'Wpisz liczbę, np. 3, 2,5 albo sqrt(2).' : check(v);
-    if (problem) { e.preventDefault(); error.textContent = problem; input.focus(); return; }
-    value = v;
-  };
-  form.addEventListener('submit', submit);
-  dialog.showModal();
-  input.select();
-  return new Promise(resolve => dialog.addEventListener('close', () => { form.removeEventListener('submit', submit); resolve(value); }, { once: true }));
+/** Asks for a number (pi/3 and √2 work too) in the panel's dialog; null when cancelled. */
+function ask(spec: Ask): Promise<number | null> {
+  return new Promise(resolve => {
+    asking = { ask: spec, answer: value => { asking = null; notify(); resolve(value); } };
+    notify();
+  });
+}
+/** Reads what was typed in the dialog: the value, or what is wrong with it. */
+export function readAsk(spec: Ask, text: string): { value: number } | { problem: string } {
+  let v = NaN;
+  try { v = spec.angle ? angleValue(text) : constant(text); } catch { /* reported below */ }
+  const problem = Number.isNaN(v) ? 'Wpisz liczbę, np. 3, 2,5 albo sqrt(2).' : spec.check(v);
+  return problem ? { problem } : { value: v };
 }
 
 // --- Drawing ---
@@ -589,7 +614,7 @@ const LAYER: Record<Shape['kind'], number> = { polygon: 0, sector: 0, angle: 1, 
 function draw(): void {
   if (!width || !height) return;
   const v = vp(), css = getComputedStyle(document.documentElement), c = (k: string) => css.getPropertyValue(`--${k}`).trim();
-  const theme = readTheme(), ink = c('text'), free = c('accent'), bound = c('muted'), poly = c('geo-polygon'), arc = c('geo-angle');
+  const theme = readTheme(), ink = c('b-ink'), free = c('b-accent'), bound = c('b-text'), poly = c('geo-polygon'), arc = c('geo-angle');
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
   const options = { grid, axes, xUnit: 'num' as const, yUnit: 'num' as const, plane: false, minorGrid: true, halo: false };
@@ -737,69 +762,27 @@ function paint(how: 'fill' | 'stroke', color: string, alpha: number): void {
   ctx.globalAlpha = g;
 }
 
-// --- Object list ---
-function renderList(): void {
-  const names = new Map(objects.map(o => [o.id, o.name])), list = $('geo-list');
-  // Polygon sides stay off the list: the polygon stands for them.
-  const shown = objects.filter(o => o.def !== 'edge');
-  $('geo-count').textContent = shown.length ? String(shown.length) : '';
-  $('geo-empty').hidden = shown.length > 0;
-  list.replaceChildren(...shown.map(o => {
-    const { text, detail } = describe(o, shapes.get(o.id) ?? null, id => names.get(id) ?? '?');
-    const toggle = h('button', { class: 'geo-eye', type: 'button', 'aria-pressed': String(!o.hidden), 'aria-label': `${o.hidden ? 'Pokaż' : 'Ukryj'} ${o.name}`, title: o.hidden ? 'Pokaż' : 'Ukryj' });
-    toggle.addEventListener('click', () => { checkpoint(); o.hidden = !o.hidden; update(); });
-    const gear = h('button', { class: 'icon-button small geo-settings', type: 'button', 'aria-label': `Wygląd ${o.name}`, title: 'Wygląd', html: ICONS.sliders });
-    gear.addEventListener('click', () => { selected = o.id; renderList(); request(); });
-    const del = h('button', { class: 'icon-button small geo-remove', type: 'button', 'aria-label': `Usuń ${o.name}`, title: 'Usuń', html: ICONS.trash });
-    del.addEventListener('click', () => remove(o.id));
-    const value = h('button', { class: 'geo-text', type: 'button', title: detail }, text);
-    value.addEventListener('click', () => { selected = selected === o.id ? null : o.id; renderList(); request(); });
-    const def = h('button', { class: 'geo-def', type: 'button', title: `${detail}. Kliknij, aby zmienić definicję.` }, definition(o, id => names.get(id) ?? '?'));
-    def.addEventListener('click', () => editDefinition(def, o));
-    const c = o.style?.color, tint = c ? `--c: ${c === 'ink' ? 'var(--text)' : c}` : undefined;
-    const li = h('li', { class: `geo-item${o.id === selected ? ' selected' : ''}${o.hidden ? ' hidden-obj' : ''}`, 'data-kind': o.kind, 'data-free': String(o.def === 'free' || o.def === 'on'), style: tint },
-      toggle, h('div', { class: 'geo-body' }, value, def), gear, del);
-    return li;
-  }));
-  syncCoords();
-}
+// --- Panel ---
+/** The panel shows the objects, the selection and the inspector from geoStore; this only tells it to look again. */
+function renderList(): void { notify(); }
 
-// --- Coordinates of the selected point ---
-const coordText = (v: number) => format(v, 8).replace(/^-/, '−');
+/** A coordinate as the inspector shows it. */
+export const coordText = (v: number) => format(v, 8).replace(/^-/, '−');
 
-/** Shows the selected point's x and y; editable for free points and points on a line or circle. */
-function syncCoords(force = false): void {
-  const o = objects.find(o => o.id === selected), s = o && shapes.get(o.id), target = styled();
-  $('geo-inspect').hidden = !target;
-  $('geo-coords-name').textContent = target?.name ?? '';
-  if (target) syncStyle(target);
-  $('geo-coords').hidden = !o || o.kind !== 'point';
-  if (!o || o.kind !== 'point') return;
-  const editable = o.def === 'free' || o.def === 'on', names = new Map(objects.map(o => [o.id, o.name]));
-  for (const [id, v] of [['geo-x', isPoint(s) ? s.x : NaN], ['geo-y', isPoint(s) ? s.y : NaN]] as const) {
-    const input = $<HTMLInputElement>(id);
-    input.disabled = !editable;
-    // Don't overwrite what the user is typing.
-    if (force || document.activeElement !== input) input.value = input.defaultValue = Number.isFinite(v) ? coordText(v) : '—';
-  }
-  $('geo-coords-note').textContent = o.def === 'on' ? `Na ${names.get(o.of[0])}: punkt trafi na najbliższe miejsce obiektu.`
-    : editable ? '' : `Zależny: ${definition(o, id => names.get(id) ?? '?')}. Zmień definicję na liście.`;
-}
-
-/** Moves the selected point to the typed coordinates (a point on a curve: to the nearest place on it). */
-function applyCoords(): void {
-  const o = objects.find(o => o.id === selected), error = $('geo-coords-error');
-  if (!o || (o.def !== 'free' && o.def !== 'on')) return;
+/**
+ * Moves the selected point to typed coordinates (a point on a curve: to the nearest place on it). A field that still
+ * shows the displayed (rounded) value keeps the exact one, so √2 stays √2. Returns what is wrong, or ''.
+ */
+export function applyCoords(xText: string, yText: string, shown: [string, string]): string {
+  const o = objects.find(o => o.id === selected);
+  if (!o || (o.def !== 'free' && o.def !== 'on')) return '';
   const now = shapes.get(o.id);
-  // A field still showing the (rounded) displayed value keeps the exact one: √2 stays √2.
-  const read = (id: string, exact: number) => {
-    const input = $<HTMLInputElement>(id);
-    if (input.value.trim() === input.defaultValue) return exact;
-    try { return constant(input.value); } catch { return NaN; }
+  const read = (text: string, was: string, exact: number) => {
+    if (text.trim() === was) return exact;
+    try { return constant(text); } catch { return NaN; }
   };
-  const x = read('geo-x', isPoint(now) ? now.x : NaN), y = read('geo-y', isPoint(now) ? now.y : NaN);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) { error.textContent = 'Wpisz liczby, np. 2,5, −1 albo sqrt(2).'; return; }
-  error.textContent = '';
+  const x = read(xText, shown[0], isPoint(now) ? now.x : NaN), y = read(yText, shown[1], isPoint(now) ? now.y : NaN);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return 'Wpisz liczby, np. 2,5, −1 albo sqrt(2).';
   const c = shapes.get(o.of[0]), t = o.def === 'on' && isCurve(c) ? project(c, x, y) : undefined;
   // Unchanged (also: leaving a field right after Enter): no redraw, so a click elsewhere isn't lost, and no undo step.
   const same = o.def === 'free' ? o.x === x && o.y === y : t === undefined || t === o.t;
@@ -808,53 +791,35 @@ function applyCoords(): void {
     if (o.def === 'free') { o.x = x; o.y = y; } else o.t = t;
     update();
   }
-  // Show where the point really is (on a curve it may differ from what was typed).
-  syncCoords(true);
+  return '';
 }
 
-function initCoords(): void {
-  for (const id of ['geo-x', 'geo-y']) {
-    const input = $<HTMLInputElement>(id);
-    input.addEventListener('change', applyCoords);
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); applyCoords(); input.select(); }
-      // Back to the shown value first, so leaving the field doesn't apply what was typed.
-      if (e.key === 'Escape') { $('geo-coords-error').textContent = ''; input.value = input.defaultValue; input.blur(); }
-    });
-    input.addEventListener('blur', () => queueMicrotask(syncCoords));
-  }
-  // Double-click a point: select it and type its coordinates.
-  canvas.addEventListener('dblclick', e => {
-    const r = canvas.getBoundingClientRect(), id = hit(e.clientX - r.left, e.clientY - r.top, isPoint);
-    if (id === null) return;
-    selected = id;
-    renderList();
-    request();
-    const x = $<HTMLInputElement>('geo-x');
-    if (!x.disabled) { x.focus(); x.select(); }
-  });
+export function select(id: number | null): void { selected = id; renderList(); request(); }
+export function toggleHidden(id: number): void {
+  const o = objects.find(o => o.id === id);
+  if (o) { checkpoint(); o.hidden = !o.hidden; update(); }
 }
 
 // --- Style of the selected object ---
-const PALETTE: [string, string][] = [
+export const PALETTE: [string, string][] = [
   ['ink', 'Atramentowy'], ['#d13438', 'Czerwony'], ['#ca5010', 'Pomarańczowy'], ['#eaa300', 'Żółty'], ['#107c10', 'Zielony'],
   ['#038387', 'Morski'], ['#0f6cbd', 'Niebieski'], ['#8764b8', 'Fioletowy'], ['#c239b3', 'Różowy'], ['#7a7574', 'Szary'],
 ];
-const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
+export const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
 // Defaults on the Fluent stroke scale: lines take the thick (2px) stroke.
-const DEFAULT_WIDTH = 2;
-const defaultSize = (o: GeoObject) => o.def === 'free' || o.def === 'on' ? 5 : 4;
-const decimal = (v: number) => String(v).replace('.', ',');
+export const DEFAULT_WIDTH = 2;
+export const defaultSize = (o: GeoObject) => o.def === 'free' || o.def === 'on' ? 5 : 4;
+export const decimal = (v: number) => String(v).replace('.', ',');
 
 /** The object the style card edits: the selected one, a polygon's side standing for its polygon. */
-function styled(): GeoObject | undefined {
+export function styled(): GeoObject | undefined {
   const o = objects.find(o => o.id === selected);
   return o?.def === 'edge' ? objects.find(p => p.id === o.of[2]) : o;
 }
 
 let styling = false;
 /** Changes the selected object's look; a slider dragged (`live`) is one undo step until it is let go. */
-function restyle(change: Partial<Style>, live = false): void {
+export function restyle(change: Partial<Style>, live = false): void {
   const o = styled();
   if (!o) return;
   if (!styling) checkpoint();
@@ -865,224 +830,18 @@ function restyle(change: Partial<Style>, live = false): void {
   update();
 }
 
-/** Shows the object's look in the card, with only the settings its kind has. */
-function syncStyle(o: GeoObject): void {
-  const st = o.style ?? {}, point = o.kind === 'point', measure = o.kind === 'measure';
-  const custom = !!st.color && !PALETTE.some(([c]) => c === st.color);
-  for (const b of $('geo-colors').querySelectorAll<HTMLElement>('.geo-swatch')) b.setAttribute('aria-pressed', String(b.dataset.value === (st.color ?? '')));
-  const pick = $<HTMLInputElement>('geo-color');
-  pick.classList.toggle('chosen', custom);
-  if (custom && st.color!.startsWith('#')) pick.value = st.color!;
-  const width = $<HTMLInputElement>('geo-width');
-  $('geo-width-row').hidden = measure;
-  $('geo-width-label').textContent = point ? 'Rozmiar' : 'Grubość';
-  [width.min, width.max] = point ? ['2', '10'] : ['1', '8'];
-  width.value = String(point ? st.size ?? defaultSize(o) : st.width ?? DEFAULT_WIDTH);
-  $('geo-width-out').textContent = decimal(+width.value);
-  $('geo-dash-row').hidden = point || measure;
-  $('geo-shape-row').hidden = !point;
-  $('geo-fill-row').hidden = !FILLED.has(o.kind);
-  const fill = $<HTMLInputElement>('geo-fill');
-  fill.value = String(st.fill ?? (o.kind === 'circle' ? 0 : 0.16));
-  $('geo-fill-out').textContent = `${Math.round(+fill.value * 100)}%`;
-  for (const seg of document.querySelectorAll<HTMLElement>('#geo-style .geo-seg')) {
-    const now = st[seg.dataset.key as 'dash' | 'shape'] ?? '';
-    for (const b of seg.querySelectorAll<HTMLElement>('button')) b.setAttribute('aria-pressed', String(b.dataset.value === now));
-  }
-  $<HTMLSelectElement>('geo-label').value = st.label ?? '';
-  $<HTMLButtonElement>('geo-style-reset').disabled = !o.style;
-}
-
-function initStyle(): void {
-  const colors = $('geo-colors');
-  for (const [c, name] of [['', 'Automatyczny'], ...PALETTE]) {
-    const b = h('button', { type: 'button', class: 'geo-swatch', 'data-value': c, 'aria-label': name, title: name, style: c ? `--swatch: ${c === 'ink' ? 'var(--text)' : c}` : undefined });
-    b.addEventListener('click', () => restyle({ color: c || undefined }));
-    colors.append(b);
-  }
-  const pick = h('input', { id: 'geo-color', type: 'color', class: 'geo-swatch-custom', value: '#0f6cbd', 'aria-label': 'Własny kolor', title: 'Własny kolor' });
-  pick.addEventListener('input', () => restyle({ color: pick.value }, true));
-  colors.append(pick);
-
-  const width = $<HTMLInputElement>('geo-width'), fill = $<HTMLInputElement>('geo-fill');
-  width.addEventListener('input', () => restyle(styled()?.kind === 'point' ? { size: +width.value } : { width: +width.value }, true));
-  fill.addEventListener('input', () => restyle({ fill: +fill.value }, true));
-  for (const input of [width, fill, pick]) input.addEventListener('change', () => { styling = false; });
-  for (const seg of document.querySelectorAll<HTMLElement>('#geo-style .geo-seg')) {
-    for (const b of seg.querySelectorAll<HTMLElement>('button')) b.addEventListener('click', () => restyle({ [seg.dataset.key!]: b.dataset.value || undefined }));
-  }
-  const labels = $<HTMLSelectElement>('geo-label');
-  labels.addEventListener('change', () => restyle({ label: (labels.value || undefined) as Style['label'] }));
-  $('geo-style-reset').addEventListener('click', () => { const o = styled(); if (o?.style) { checkpoint(); delete o.style; update(); } });
-
-  // The settings fold away; whether they are open is remembered.
-  $('geo-inspect-close').addEventListener('click', () => { selected = null; renderList(); request(); });
-}
-
-/** The definition turns into a field: Enter redefines the object, Esc (or leaving) keeps it as it was. */
-function editDefinition(button: HTMLElement, o: GeoObject): void {
-  const input = h('input', { class: 'geo-def-input', type: 'text', value: button.textContent ?? '', spellcheck: 'false', autocomplete: 'off', 'aria-label': `Definicja ${o.name}` });
-  const error = h('p', { class: 'error', role: 'alert' });
-  button.replaceWith(input, error);
-  input.focus();
-  input.select();
-  let done = false;
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { done = true; renderList(); }
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    if (input.value.trim() === button.textContent) { done = true; renderList(); return; }
-    const problem = define(input.value, o);
-    if (problem) error.textContent = problem; else done = true;
-  });
-  input.addEventListener('blur', () => { if (!done) renderList(); });
-}
-
-/** Two panels: making objects (tools) and the objects themselves (input and list). The choice is remembered. */
-function initTabs(): void {
-  const tabs = [$('geo-tab-create'), $('geo-tab-objects')];
-  const show = (tab: HTMLElement, focus = false) => {
-    for (const t of tabs) {
-      const on = t === tab;
-      t.setAttribute('aria-selected', String(on));
-      t.tabIndex = on ? 0 : -1;
-      $(t.getAttribute('aria-controls')!).hidden = !on;
-    }
-    if (focus) tab.focus();
-    try { localStorage.setItem(TAB_STORE, tab.id); } catch { /* just don't remember */ }
-  };
-  let saved: string | null = null;
-  try { saved = localStorage.getItem(TAB_STORE); } catch { /* first tab */ }
-  show(tabs.find(t => t.id === saved) ?? tabs[0]);
-  for (const t of tabs) {
-    t.addEventListener('click', () => show(t));
-    // Arrows, Home and End move between tabs (the WAI-ARIA tabs pattern).
-    t.addEventListener('keydown', e => {
-      const i = tabs.indexOf(t), next = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: tabs.length - 1 }[e.key];
-      if (next === undefined) return;
-      e.preventDefault();
-      show(tabs[(next + tabs.length) % tabs.length], true);
-    });
-  }
-}
-
-function renderTools(): void {
-  let favs: ToolId[] = ['move', 'point', 'segment', 'line', 'polygon', 'circle', 'intersect', 'delete'];
-  try { const saved = JSON.parse(localStorage.getItem(FAV_STORE) ?? 'null'); if (Array.isArray(saved)) favs = saved.filter((id): id is ToolId => id in TOOLS); } catch { /* keep the default */ }
-  const groups = [{ name: FAVOURITES, tools: favs as GroupEntry[] }, ...GROUPS];
-  const saveFavs = (next: ToolId[]) => {
-    try { localStorage.setItem(FAV_STORE, JSON.stringify(next)); } catch { /* just don't remember */ }
-    renderTools();
-  };
-  /** Moves a favourite to where another one stands. */
-  const moveFav = (id: ToolId, to: number) => {
-    const next = favs.filter(f => f !== id);
-    next.splice(Math.max(0, Math.min(to, next.length)), 0, id);
-    saveFavs(next);
-  };
-  let dragged: ToolId | null = null;
-  $('geo-tools').replaceChildren(...groups.map(g => {
-    const grid = h('div', { class: 'geo-tool-grid' }, ...g.tools.map(entry => {
-      const [id, label] = typeof entry === 'string' ? [entry, TOOLS[entry].label] : entry;
-      const fav = favs.includes(id), what = fav ? 'Usuń z ulubionych' : 'Dodaj do ulubionych';
-      const b = h('button', { type: 'button', class: 'geo-tool', 'data-tool': id, 'aria-pressed': String(id === tool), title: `${TOOLS[id].label}: ${TOOLS[id].hint}`, html: ICON[id], 'data-search': plain(`${label} ${TOOLS[id].label} ${g.name}`) }, h('span', {}, label));
-      b.addEventListener('click', () => setTool(id));
-      const star = h('button', { type: 'button', class: 'geo-star', 'aria-pressed': String(fav), 'aria-label': `${what}: ${TOOLS[id].label}`, title: what, html: STAR });
-      star.addEventListener('click', () => {
-        saveFavs(fav ? favs.filter(f => f !== id) : [...favs, id]);
-        // Keep the keyboard where it was: on this star, or the group's first one when it just left the favourites.
-        const group = document.querySelector(`.geo-group[data-name="${g.name}"]`);
-        (group?.querySelector<HTMLElement>(`[data-tool="${id}"] + .geo-star`) ?? $('geo-search')).focus();
-      });
-      const cell = h('div', { class: 'geo-tool-cell' }, b, star);
-      if (g.name !== FAVOURITES) return cell;
-
-      // Favourites are put in order by dragging, or with Alt + arrows from the keyboard.
-      const at = favs.indexOf(id);
-      b.title += ' Przeciągnij albo Alt + strzałki, aby zmienić kolejność.';
-      cell.draggable = true;
-      cell.addEventListener('dragstart', e => {
-        dragged = id;
-        e.dataTransfer!.effectAllowed = 'move';
-        e.dataTransfer!.setData('text/plain', id);
-        requestAnimationFrame(() => cell.classList.add('dragging'));
-      });
-      cell.addEventListener('dragend', () => { dragged = null; cell.classList.remove('dragging'); });
-      cell.addEventListener('dragover', e => {
-        if (!dragged || dragged === id) return;
-        e.preventDefault();
-        cell.classList.add('drop-target');
-      });
-      cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
-      cell.addEventListener('drop', e => {
-        e.preventDefault();
-        if (dragged && dragged !== id) moveFav(dragged, at);
-      });
-      b.addEventListener('keydown', e => {
-        const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
-        if (!e.altKey || !step) return;
-        e.preventDefault();
-        moveFav(id, at + step);
-        document.querySelector<HTMLElement>(`.geo-group[data-name="${FAVOURITES}"] [data-tool="${id}"]`)?.focus();
-      });
-      return cell;
-    }));
-    const body = g.tools.length ? grid : h('p', { class: 'hint geo-fav-empty' }, 'Kliknij gwiazdkę przy narzędziu, aby przypiąć je tutaj.');
-    return h('section', { class: 'geo-group', 'data-name': g.name }, h('h3', {}, h('span', {}, g.name), h('span', { class: 'count' }, String(g.tools.length))), body);
-  }));
-  filterTools();
-}
-
-/** Lower case, without Polish letters: "srodek" finds "Środek". */
-const plain = (s: string) => s.toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/\p{M}/gu, '');
-
-/** Shows the tools whose name has every word typed; the favourites step aside, every tool is in its own group too. */
-function filterTools(): void {
-  const words = plain($<HTMLInputElement>('geo-search').value).split(/\s+/).filter(Boolean);
-  for (const group of document.querySelectorAll<HTMLElement>('.geo-group')) {
-    let shown = 0;
-    for (const cell of group.querySelectorAll<HTMLElement>('.geo-tool-cell')) {
-      cell.hidden = !words.every(w => cell.querySelector<HTMLElement>('.geo-tool')!.dataset.search!.includes(w));
-      if (!cell.hidden) shown++;
-    }
-    group.hidden = words.length > 0 && (group.dataset.name === FAVOURITES || !shown);
-  }
-  $('geo-search-empty').hidden = !words.length || !!document.querySelector('.geo-group:not([hidden])');
-}
+/** A slider or colour picker was let go: the next change is a new undo step. */
+export function endStyling(): void { styling = false; }
+export function resetStyle(): void { const o = styled(); if (o?.style) { checkpoint(); delete o.style; update(); } }
 
 // --- Input ---
 export function initGeometry(): void {
-  canvas = $<HTMLCanvasElement>('geo-canvas');
+  canvas = document.getElementById('geo-canvas') as HTMLCanvasElement;
   ctx = canvas.getContext('2d')!;
   restore();
-  renderTools();
-  initTabs();
-  const search = $<HTMLInputElement>('geo-search');
-  search.addEventListener('input', filterTools);
-  // Enter takes the first tool found.
-  search.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    document.querySelector<HTMLElement>('.geo-group:not([hidden]) .geo-tool-cell:not([hidden]) .geo-tool')?.click();
-  });
   // The save is debounced; closing or reloading the page must not lose the last change.
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
-  const input = $<HTMLInputElement>('geo-input');
-  $('geo-input-form').addEventListener('submit', e => {
-    e.preventDefault();
-    const problem = define(input.value);
-    $('geo-input-error').textContent = problem ?? '';
-    if (!problem) input.value = '';
-  });
-  input.addEventListener('input', () => { $('geo-input-error').textContent = ''; });
-  $('geo-reference').append(...REFERENCE.map(({ usage, what }) => {
-    const b = h('button', { type: 'button', title: 'Wstaw do pola' }, h('code', {}, usage), h('span', {}, what));
-    b.addEventListener('click', () => { input.value = usage.replace('; …', ''); input.focus(); });
-    return h('li', {}, b);
-  }));
-  $('geo-ask-cancel').addEventListener('click', () => $<HTMLDialogElement>('geo-ask').close());
-
   const local = (e: { clientX: number; clientY: number }) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   let down: { x: number; y: number; view: View; moved: boolean; drag: { id: number; grab: { x: number; y: number }; start: Map<number, [number, number]> } | null } | null = null;
 
@@ -1142,8 +901,13 @@ export function initGeometry(): void {
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('lostpointercapture', end);
   canvas.addEventListener('pointerleave', () => { pointer = null; request(); });
-  initCoords();
-  initStyle();
+  // Double-click a point: select it and type its coordinates.
+  canvas.addEventListener('dblclick', e => {
+    const r = canvas.getBoundingClientRect(), id = hit(e.clientX - r.left, e.clientY - r.top, isPoint);
+    if (id === null) return;
+    select(id);
+    focusCoords();
+  });
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
     const p = local(e), delta = e.deltaY * [1, 16, height][e.deltaMode];
@@ -1159,31 +923,7 @@ export function initGeometry(): void {
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected !== null) { e.preventDefault(); remove(selected); }
   });
 
-  $('geo-undo').addEventListener('click', () => travel(undoStack, redoStack));
-  $('geo-redo').addEventListener('click', () => travel(redoStack, undoStack));
-  $('geo-zoom-in').addEventListener('click', () => zoom(0.75));
-  $('geo-zoom-out').addEventListener('click', () => zoom(4 / 3));
-  $('geo-reset').addEventListener('click', () => { view = { ...HOME }; request(); save(); });
-  $('geo-grid').addEventListener('click', () => { grid = !grid; $('geo-grid').setAttribute('aria-pressed', String(grid)); request(); save(); });
-  $('geo-grid').setAttribute('aria-pressed', String(grid));
-  $('geo-axes').addEventListener('click', () => { axes = !axes; $('geo-axes').setAttribute('aria-pressed', String(axes)); request(); save(); });
-  $('geo-axes').setAttribute('aria-pressed', String(axes));
-  $('geo-clear').addEventListener('click', () => {
-    if (!objects.length) return;
-    checkpoint(); objects = []; selected = null; picked = []; update();
-    toast('Rysunek wyczyszczony. Ctrl+Z przywraca.');
-  });
-  $('geo-export').addEventListener('click', () => {
-    draw();
-    canvas.toBlob(blob => {
-      if (!blob) { toast('Nie udało się zapisać obrazu.'); return; }
-      const url = URL.createObjectURL(blob), a = document.createElement('a');
-      a.href = url; a.download = 'bettergebra-geometria.png'; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, 'image/png');
-  });
-
-  const stage = $('geometry');
+  const stage = document.getElementById('geometry')!;
   new ResizeObserver(() => {
     const r = stage.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
     width = r.width; height = r.height;
@@ -1194,6 +934,29 @@ export function initGeometry(): void {
 
   setTool('move');
   update();
+}
+
+// --- The toolbar ---
+export const undo = () => travel(undoStack, redoStack);
+export const redo = () => travel(redoStack, undoStack);
+export const zoomIn = () => zoom(0.75);
+export const zoomOut = () => zoom(4 / 3);
+export function resetView(): void { view = { ...HOME }; request(); save(); }
+export function toggleGrid(): void { grid = !grid; notify(); request(); save(); }
+export function toggleAxes(): void { axes = !axes; notify(); request(); save(); }
+export function clearAll(): void {
+  if (!objects.length) return;
+  checkpoint(); objects = []; selected = null; picked = []; update();
+  toast('Rysunek wyczyszczony. Ctrl+Z przywraca.');
+}
+export function exportPng(): void {
+  draw();
+  canvas.toBlob(blob => {
+    if (!blob) { toast('Nie udało się zapisać obrazu.'); return; }
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = 'bettergebra-geometria.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
 }
 
 function zoom(f: number, x = width / 2, y = height / 2): void {

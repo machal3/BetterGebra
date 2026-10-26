@@ -153,7 +153,7 @@
 }
 
 /* ---------- Base ---------- */
-/* Element rules prefixed with :where(#geometry, …) apply only to the parts not yet moved to React: the React tree (also
+/* Element rules prefixed with :where(#help, …) apply only to the parts not yet moved to React: the React tree (also
    where it renders into the page, as the Wykresy panel does) and the Affect UI components bring their own. */
 *, *::before, *::after { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: var(--stroke1) transparent; }
@@ -166,18 +166,18 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(button, input, select) { font: inherit; color: inherit; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) button { cursor: pointer; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) button:disabled { cursor: not-allowed; color: var(--fg-disabled); }
+:where(#help, #toast, #tooltip) :is(button, input, select) { font: inherit; color: inherit; }
+:where(#help, #toast, #tooltip) button { cursor: pointer; }
+:where(#help, #toast, #tooltip) button:disabled { cursor: not-allowed; color: var(--fg-disabled); }
 /* Fluent focus indicator: 2px outer stroke, 1px inner stroke on buttons and links */
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :focus-visible { outline: 2px solid var(--focus-outer); outline-offset: 0; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(button, a, summary, [role="tab"]):focus-visible { box-shadow: inset 0 0 0 1px var(--focus-inner); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg .fill { fill: currentColor; stroke: none; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg.fi { fill: currentColor; stroke: none; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(code, kbd) { font-family: var(--mono); font-size: 0.92em; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) code { background: var(--n-bg4); border-radius: var(--r-small); padding: 0 4px; }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) kbd {
+:where(#help, #toast, #tooltip) :focus-visible { outline: 2px solid var(--focus-outer); outline-offset: 0; }
+:where(#help, #toast, #tooltip) :is(button, a, summary, [role="tab"]):focus-visible { box-shadow: inset 0 0 0 1px var(--focus-inner); }
+:where(#help, #toast, #tooltip) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+:where(#help, #toast, #tooltip) svg .fill { fill: currentColor; stroke: none; }
+:where(#help, #toast, #tooltip) svg.fi { fill: currentColor; stroke: none; }
+:where(#help, #toast, #tooltip) :is(code, kbd) { font-family: var(--mono); font-size: 0.92em; }
+:where(#help, #toast, #tooltip) code { background: var(--n-bg4); border-radius: var(--r-small); padding: 0 4px; }
+:where(#help, #toast, #tooltip) kbd {
   display: inline-block; min-width: 20px; padding: 0 4px; text-align: center; font: 400 12px/18px var(--mono);
   border: 1px solid var(--stroke1); border-radius: var(--r-small); background: var(--n-bg1); color: var(--fg2);
 }
@@ -215,62 +215,33 @@ math { font-family: var(--math); }
 .text-button.primary:hover { background: var(--brand-bg-hover); }
 .text-button.primary:active { background: var(--brand-bg-pressed); }
 
-/* ---------- Inputs (Fluent Input, outline appearance) ---------- */
-:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select) {
-  width: 100%; min-width: 0; height: 32px; padding: 0 10px; margin: 0;
-  border: 1px solid var(--stroke1); border-bottom-color: var(--stroke-accessible); border-radius: var(--r-medium);
-  background-color: var(--n-bg1); color: var(--fg1); font: var(--body1); outline: none;
-  transition: border-color var(--d-faster) var(--ease), box-shadow var(--d-faster) var(--ease);
-}
-:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):hover {
-  border-color: var(--stroke1-hover); border-bottom-color: var(--stroke-accessible-hover);
-}
-/* Focus: a 2px brand underline instead of an outline */
-:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):focus {
-  outline: none; border-bottom-color: var(--compound-brand); box-shadow: inset 0 -1px 0 var(--compound-brand);
-}
-:is(.geo-coords input, .geo-input-form input, .geo-ask input, .geo-def-input) { font-family: var(--mono); }
-:is(.geo-coords input, .geo-input-form input)[aria-invalid="true"] { border-bottom-color: var(--danger-fg); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input::placeholder { color: var(--fg4); opacity: 1; }
-.geo-coords input:disabled { color: var(--fg-disabled); background-color: transparent; border-color: var(--stroke-disabled); cursor: not-allowed; }
-/* Fluent Select */
-#geo-label {
-  -webkit-appearance: none; appearance: none; padding-right: 28px; cursor: pointer;
-  background-image: var(--select-chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
-}
-/* Fluent SearchBox */
-#geo-search {
-  margin-bottom: 8px; padding-left: 32px;
-  background-image: var(--search-glyph); background-repeat: no-repeat; background-position: 8px 50%; background-size: 20px;
-}
-
 /* ---------- Slider ---------- */
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"] {
+:where(#help, #toast, #tooltip) input[type="range"] {
   --p: 0.5; --z: 0.5;
   -webkit-appearance: none; appearance: none; width: 100%; height: 32px; background: transparent; margin: 0; cursor: pointer;
 }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-webkit-slider-runnable-track {
+:where(#help, #toast, #tooltip) input[type="range"]::-webkit-slider-runnable-track {
   height: 4px; border-radius: var(--r-circular);
   background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
 }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-moz-range-track {
+:where(#help, #toast, #tooltip) input[type="range"]::-moz-range-track {
   height: 4px; border-radius: var(--r-circular);
   background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
 }
 /* Thumb: brand dot inside a neutral ring */
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-webkit-slider-thumb {
+:where(#help, #toast, #tooltip) input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: var(--r-circular);
   background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
 }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-moz-range-thumb {
+:where(#help, #toast, #tooltip) input[type="range"]::-moz-range-thumb {
   width: 20px; height: 20px; border: 0; border-radius: var(--r-circular);
   background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
 }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:hover::-webkit-slider-thumb { background: var(--compound-brand-hover); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:hover::-moz-range-thumb { background: var(--compound-brand-hover); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:active::-webkit-slider-thumb { background: var(--compound-brand-pressed); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:active::-moz-range-thumb { background: var(--compound-brand-pressed); }
-:where(#geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-medium); }
+:where(#help, #toast, #tooltip) input[type="range"]:hover::-webkit-slider-thumb { background: var(--compound-brand-hover); }
+:where(#help, #toast, #tooltip) input[type="range"]:hover::-moz-range-thumb { background: var(--compound-brand-hover); }
+:where(#help, #toast, #tooltip) input[type="range"]:active::-webkit-slider-thumb { background: var(--compound-brand-pressed); }
+:where(#help, #toast, #tooltip) input[type="range"]:active::-moz-range-thumb { background: var(--compound-brand-pressed); }
+:where(#help, #toast, #tooltip) input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-medium); }
 
 /* ---------- Badge (counts) ---------- */
 .count {
@@ -305,33 +276,11 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .section-head h2 { margin: 0; font: var(--body1-strong); color: var(--fg1); }
 .subhead { margin: 0 0 8px; font: var(--body1-strong); color: var(--fg1); }
 
-/* Joined toggle buttons (geometry styles) */
-.geo-seg { display: inline-flex; border: 1px solid var(--stroke1); border-radius: var(--r-medium); overflow: hidden; background: var(--n-bg1); }
-.geo-seg button + button { border-left: 1px solid var(--stroke1); }
-.geo-seg button:hover { background: var(--n-bg1-hover); color: var(--fg1); }
-.geo-seg button[aria-pressed="true"] { background: var(--n-bg1-selected); color: var(--brand-fg1); font-weight: 600; }
-.setting-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-
 /* ---------- Canvas stage ---------- */
 #plot, #hover { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #plot { touch-action: none; cursor: grab; outline: none; }
 #plot.grabbing { cursor: grabbing; }
 #hover { pointer-events: none; }
-
-/* Fluent Toolbar (vertical) on a floating surface; groups split by toolbar dividers */
-.toolbar {
-  position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; padding: 4px;
-  border-radius: var(--r-large); background: var(--n-bg1); box-shadow: var(--shadow8);
-}
-.tool-group { display: flex; flex-direction: column; gap: 2px; }
-.tool-group + .tool-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--stroke2); }
-.tool-group button {
-  width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-medium);
-  background: transparent; color: var(--fg2); transition: background var(--d-faster) var(--ease), color var(--d-faster) var(--ease);
-}
-.tool-group button:hover { background: var(--subtle-hover); color: var(--brand-fg1); }
-.tool-group button:active { background: var(--subtle-pressed); }
-.tool-group button[aria-pressed="true"] { background: var(--subtle-selected); color: var(--brand-fg1); }
 
 /* ---------- Tooltip ---------- */
 .tooltip {
@@ -342,200 +291,14 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .tooltip:popover-open { animation: fade-in var(--d-normal) var(--ease-decelerate); }
 @keyframes fade-in { from { opacity: 0; } }
 
-/* ---------- Geometry stage ---------- */
-#geo-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
-#geo-canvas[data-tool="move"] { cursor: default; }
-#geo-canvas[data-tool="delete"] { cursor: pointer; }
-#geo-canvas.grabbing { cursor: grabbing; }
-/* Fluent MessageBar (info) */
-.geo-hint {
-  position: absolute; top: 12px; left: 12px; max-width: calc(100% - 88px); margin: 0; pointer-events: none;
-  display: flex; gap: 8px; padding: 6px 12px; border: 1px solid var(--stroke2); border-radius: var(--r-medium);
-  background: var(--n-bg3); color: var(--fg1); font: var(--body1);
-}
-.geo-hint::before {
-  content: ""; flex: none; width: 16px; height: 16px; margin-top: 2px; background: var(--fg3);
-  -webkit-mask: var(--icon-info) center / contain no-repeat; mask: var(--icon-info) center / contain no-repeat;
-}
-.geo-hint:empty { display: none; }
-.geo-hint b { font-weight: 600; margin-right: 4px; }
-.geo-inspect {
-  position: absolute; left: 12px; bottom: 12px; display: grid; gap: 8px; max-height: calc(100% - 80px); overflow-y: auto;
-  width: min(336px, calc(100% - 88px)); margin: 0; padding: 12px; border-radius: var(--r-large);
-  background: var(--n-bg1); box-shadow: var(--shadow16); animation: pop-in var(--d-normal) var(--ease-decelerate);
-}
-.geo-inspect-head { display: flex; align-items: center; gap: 8px; }
-.geo-coords-name { font: italic 18px var(--math); color: var(--brand-fg1); min-width: 1.2em; }
-/* Close in the corner, as on a Fluent popover: pulled into the padding so it doesn't push the header down */
-#geo-inspect-close { width: 28px; height: 28px; margin: -6px -6px -6px auto; }
-.geo-coords { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; align-items: center; margin: 0; }
-.geo-coords label { min-width: 0; display: flex; align-items: center; gap: 8px; font: italic 16px var(--math); color: var(--fg2); }
-.geo-coords input { flex: 1; font-style: normal; }
-.geo-coords-note, .geo-coords .error { grid-column: 1 / -1; }
-.geo-coords-note { margin: 0; font: var(--caption1); color: var(--fg3); }
-.geo-coords-note:empty { display: none; }
-.geo-style { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--stroke2); }
-.geo-style-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; align-items: center; gap: 8px; font: var(--body1); color: var(--fg2); }
-.geo-style-row > :nth-child(2):last-child { grid-column: 2 / -1; }
-.geo-style-row output { min-width: 3.2em; text-align: right; font: var(--caption1); font-variant-numeric: tabular-nums; color: var(--fg1); }
-.geo-colors { display: flex; flex-wrap: wrap; gap: 4px; }
-.geo-swatch, .geo-swatch-custom {
-  position: relative; width: 24px; height: 24px; padding: 0; border: 1px solid var(--stroke1); border-radius: var(--r-circular);
-  background: var(--swatch, transparent);
-}
-.geo-swatch:hover { box-shadow: inset 0 0 0 2px var(--n-bg1); border-color: var(--stroke1-hover); }
-/* Automatic: a slashed empty swatch. */
-.geo-swatch:not([style]) { background: linear-gradient(135deg, transparent 45%, var(--fg3) 45% 55%, transparent 55%); }
-.geo-swatch[aria-pressed="true"], .geo-swatch-custom.chosen { border: 2px solid var(--brand-stroke1); box-shadow: inset 0 0 0 2px var(--n-bg1); }
-.geo-swatch-custom { overflow: hidden; cursor: pointer; background: conic-gradient(#d13438, #ca5010, #eaa300, #107c10, #0f6cbd, #8764b8, #c239b3, #d13438); }
-.geo-swatch-custom::-webkit-color-swatch-wrapper { padding: 0; }
-.geo-swatch-custom::-webkit-color-swatch { border: 0; opacity: 0; }
-.geo-swatch-custom::-moz-color-swatch { border: 0; opacity: 0; }
-.geo-swatch-custom.chosen::-webkit-color-swatch { opacity: 1; border-radius: 50%; }
-.geo-swatch-custom.chosen::-moz-color-swatch { opacity: 1; border-radius: 50%; }
-.geo-seg { justify-self: start; }
-.geo-seg button { display: grid; place-items: center; width: 40px; height: 30px; padding: 0; border: 0; background: none; color: var(--fg2); transition: background var(--d-faster) var(--ease); }
-/* Fluent Link */
-.geo-style-reset { justify-self: start; padding: 0; border: 0; background: none; color: var(--brand-fg-link); font: var(--body1); }
-.geo-style-reset:hover:not(:disabled) { color: var(--brand-fg-link-hover); text-decoration: underline; }
-.geo-style-reset:disabled { color: var(--fg-disabled); cursor: not-allowed; }
-
-/* ---------- Geometry pane ---------- */
-.geo-side { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* Fluent TabList: content-width tabs with a 3px brand indicator */
-.geo-tabs { display: flex; margin: 0 6px 8px; }
-.geo-tabs button {
-  position: relative; display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px;
-  border: 0; border-radius: var(--r-medium); background: transparent; color: var(--fg2); font: var(--body1);
-  transition: background var(--d-faster) var(--ease), color var(--d-faster) var(--ease);
-}
-.geo-tabs button::after {
-  content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px; border-radius: var(--r-circular);
-  background: transparent; transition: background var(--d-faster) var(--ease);
-}
-.geo-tabs button:hover { background: var(--subtle-hover); color: var(--fg1); }
-.geo-tabs button:hover::after { background: var(--stroke1-hover); }
-.geo-tabs button:active { background: var(--subtle-pressed); }
-.geo-tabs button[aria-selected="true"] { color: var(--fg1); font-weight: 600; }
-.geo-tabs button[aria-selected="true"]::after { background: var(--compound-brand); }
-.geo-tabs button[aria-selected="true"]:hover::after { background: var(--compound-brand-hover); }
-.geo-search-empty { margin: 8px 0; }
-.geo-tools { display: grid; }
-.geo-group + .geo-group:not([hidden]) { border-top: 1px solid var(--stroke2); }
-.geo-group h3 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 0 8px; font: var(--caption1-strong); color: var(--fg3); }
-.geo-group h3 .count { margin-left: auto; }
-.geo-group[data-name="Ulubione"] h3 { color: var(--brand-fg1); }
-.geo-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 0 12px; }
-.geo-fav-empty { margin: 0 0 12px; }
-.geo-tools svg .soft { fill: currentColor; stroke: none; opacity: 0.18; }
-.geo-tool-cell { position: relative; min-width: 0; border-radius: var(--r-medium); }
-.geo-tool-cell[draggable="true"] .geo-tool { cursor: grab; }
-.geo-tool-cell.dragging { opacity: 0.35; }
-.geo-tool-cell.drop-target { outline: 2px dashed var(--brand-stroke1); outline-offset: 2px; }
-.geo-tool {
-  display: flex; align-items: center; gap: 8px; width: 100%; height: 100%; min-height: 44px; padding: 6px 24px 6px 8px;
-  border: 1px solid var(--stroke1); border-radius: var(--r-medium); background: var(--n-bg1); color: var(--fg1);
-  font: var(--caption1); text-align: left;
-  transition: background var(--d-faster) var(--ease), border-color var(--d-faster) var(--ease), color var(--d-faster) var(--ease);
-}
-.geo-tool svg { flex: none; width: 24px; height: 24px; stroke-width: 1.3; color: var(--fg3); }
-.geo-tool svg.fi { width: 20px; height: 20px; margin: 2px; }
-.geo-tool svg .acc { color: var(--brand-fg1); }
-.geo-tool svg .pt { fill: var(--n-bg1); stroke: currentColor; stroke-width: 1.2; }
-.geo-tool svg .soft { opacity: 0.12; }
-.geo-tool span { min-width: 0; }
-.geo-tool:hover { background: var(--n-bg1-hover); border-color: var(--stroke1-hover); }
-.geo-tool:active { background: var(--n-bg1-pressed); }
-/* Selected tool, as a selected Fluent Nav item: neutral selected background, brand indicator, brand icon, semibold label. */
-.geo-tool { position: relative; }
-.geo-tool[aria-pressed="true"] { background: var(--n-bg1-selected); border-color: var(--stroke1-pressed); color: var(--fg1); font-weight: 600; }
-.geo-tool[aria-pressed="true"]:hover { background: var(--n-bg1-hover); }
-.geo-tool[aria-pressed="true"] svg { color: var(--brand-fg1); }
-.geo-tool[aria-pressed="true"]::before { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: var(--r-circular); background: var(--compound-brand); }
-.geo-star {
-  position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
-  border: 0; border-radius: var(--r-small); background: none; color: var(--fg3); opacity: 0;
-  transition: opacity var(--d-faster) var(--ease), color var(--d-faster) var(--ease);
-}
-.geo-star svg { width: 14px; height: 14px; }
-.geo-star .on, .geo-star[aria-pressed="true"] .off { display: none; }
-.geo-star[aria-pressed="true"] .on { display: block; }
-/* A favourite's star stays, but quiet; it only lights up under the pointer. */
-.geo-star[aria-pressed="true"] { opacity: 0.6; }
-.geo-tool-cell:hover .geo-star, .geo-star:focus-visible { opacity: 1; }
-.geo-star:hover { color: var(--brand-fg1); background: var(--subtle-hover); }
-@media (hover: none) { .geo-star { opacity: 0.6; } }
-
-.geo-input-form { display: flex; gap: 8px; margin-bottom: 4px; }
-.geo-input-form input { flex: 1; }
-.geo-input-form .text-button { min-width: 72px; }
-#geo-input-error { margin: 0 0 8px; }
-/* Disclosure styled like an accordion header */
-.geo-commands { margin: 4px 0 12px; }
-.geo-commands summary {
-  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px; list-style: none; cursor: pointer;
-  border-radius: var(--r-medium); color: var(--fg1); font: var(--body1);
-}
-.geo-commands summary::-webkit-details-marker { display: none; }
-.geo-commands summary::before {
-  content: ""; width: 12px; height: 12px; background: var(--fg2); rotate: -90deg; transition: rotate var(--d-fast) var(--ease);
-  -webkit-mask: var(--icon-chevron) center / contain no-repeat; mask: var(--icon-chevron) center / contain no-repeat;
-}
-.geo-commands[open] summary::before { rotate: 0deg; }
-.geo-commands summary:hover { background: var(--subtle-hover); }
-.geo-reference {
-  list-style: none; margin: 4px 0 0; padding: 4px; display: grid; gap: 2px; max-height: 280px; overflow: auto;
-  border-radius: var(--r-medium); background: var(--n-bg1); box-shadow: var(--shadow4);
-}
-.geo-reference button { display: grid; width: 100%; gap: 2px; padding: 6px 8px; border: 0; border-radius: var(--r-medium); background: transparent; text-align: left; }
-.geo-reference button:hover { background: var(--subtle-hover); }
-.geo-reference button:active { background: var(--subtle-pressed); }
-.geo-reference code { background: none; padding: 0; font-size: 13px; color: var(--fg1); }
-.geo-reference span { font: var(--caption1); color: var(--fg3); }
-
-/* Object list */
-.geo-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-.geo-item {
-  --c: var(--fg1);
-  display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 4px; border-radius: var(--r-medium);
-  background: var(--n-bg1); box-shadow: var(--shadow4); transition: box-shadow var(--d-fast) var(--ease);
-}
-.geo-item:hover { box-shadow: var(--shadow8); }
-.geo-item[data-free="true"] { --c: var(--brand-fg1); }
-.geo-item[data-kind="point"]:not([data-free="true"]) { --c: var(--fg3); }
-.geo-item[data-kind="polygon"] { --c: var(--geo-polygon); }
-.geo-item[data-kind="angle"] { --c: var(--geo-angle); }
-.geo-item { position: relative; }
-.geo-item.selected { background: var(--n-bg1-selected); }
-.geo-item.selected::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: var(--r-circular); background: var(--compound-brand); }
-.geo-eye { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r-medium); background: transparent; display: grid; place-items: center; }
-.geo-eye:hover { background: var(--subtle-hover); }
-.geo-eye::after { content: ""; width: 12px; height: 12px; border-radius: var(--r-circular); background: var(--c); box-shadow: inset 0 0 0 2px var(--c); }
-.geo-eye[aria-pressed="false"]::after { background: transparent; }
-.geo-body { flex: 1; min-width: 0; display: grid; justify-items: start; padding: 4px; }
-.geo-text, .geo-def { max-width: 100%; padding: 0 4px; border: 0; border-radius: var(--r-small); background: transparent; text-align: left; overflow-wrap: anywhere; }
-.geo-text { font: var(--body1); font-variant-numeric: tabular-nums; }
-.geo-def { font: 12px/16px var(--mono); color: var(--fg3); cursor: text; }
-.geo-def:hover { color: var(--fg1); background: var(--subtle-hover); }
-.geo-def-input { font-size: 12px; }
-.geo-body .error { padding: 2px 4px 0; }
-.hidden-obj .geo-text { opacity: 0.55; }
-.geo-remove, .geo-settings { opacity: 0; }
-.geo-item:hover :is(.geo-remove, .geo-settings), .geo-item:focus-within :is(.geo-remove, .geo-settings), .geo-item.selected :is(.geo-remove, .geo-settings) { opacity: 1; }
-.geo-remove:hover { color: var(--danger-fg); }
-
 /* ---------- Dialogs (Fluent Dialog) ---------- */
-.geo-ask, .help {
+.help {
   padding: 24px; border: 1px solid transparent; border-radius: var(--r-xlarge);
   background: var(--n-bg1); color: var(--fg1); box-shadow: var(--shadow64);
 }
-:is(.geo-ask, .help)::backdrop { background: var(--backdrop); }
-:is(.geo-ask, .help)[open] { animation: dialog-in var(--d-gentle) var(--ease-decelerate); }
+.help::backdrop { background: var(--backdrop); }
+.help[open] { animation: dialog-in var(--d-gentle) var(--ease-decelerate); }
 @keyframes dialog-in { from { opacity: 0; transform: scale(0.96); } }
-.geo-ask { width: min(400px, calc(100% - 32px)); }
-.geo-ask form { display: grid; gap: 8px; margin: 0; }
-.geo-ask label { font: var(--subtitle1); margin-bottom: 8px; }
-.geo-ask .setting-actions { margin-top: 16px; }
 
 .help { width: min(640px, calc(100% - 32px)); max-height: min(720px, calc(100% - 32px)); padding: 0; }
 .help-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 8px 24px; background: var(--n-bg1); }
@@ -572,21 +335,12 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   .stage { order: -1; height: 56dvh; min-height: 300px; flex: none; border-bottom: 1px solid var(--stroke2); }
   .sidebar { border-right: 0; }
   .sidebar-body { overflow: visible; }
-  .tool-group { flex-direction: row; }
-  .tool-group + .tool-group { margin: 0 0 0 4px; padding: 0 0 0 4px; border-top: 0; border-left: 1px solid var(--stroke2); }
-  .tool-group button { width: 36px; height: 36px; }
-  .geo-remove, .geo-settings { opacity: 1; }
-  .icon-button, .geo-eye { width: 40px; height: 40px; }
-  #geo-inspect-close { width: 40px; height: 40px; }
+  .icon-button { width: 40px; height: 40px; }
   .help td:first-child { white-space: normal; }
-  .geo-hint { top: 8px; left: 8px; right: 8px; max-width: none; }
-  .geo-inspect { top: 52px; bottom: auto; left: 8px; right: 8px; width: auto; max-height: 55%; }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
 
 @media (forced-colors: active) {
-  .geo-tabs button[aria-selected="true"]::after { background: Highlight; }
-  .geo-item, .toolbar, .geo-inspect, .toast { border: 1px solid CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

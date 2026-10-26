@@ -167,10 +167,6 @@ button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-of
 .b-history-go { flex: none; display: grid; color: var(--b-icon); opacity: 0; transition: opacity var(--b-fast) ease; }
 .b-history-row:hover .b-history-go, .b-history-row:focus-visible .b-history-go { opacity: 1; }
 
-.b-empty { display: grid; justify-items: center; gap: var(--b-s2); padding: var(--b-s4) var(--b-s2); text-align: center; }
-.b-empty p { margin: 0; font-size: var(--b-fs-md); color: var(--b-text); }
-.b-empty-art { width: 96px; height: 64px; fill: var(--b-wash); stroke: var(--b-faint); stroke-width: 1.5; stroke-linecap: round; }
-
 .b-examples { display: grid; gap: 2px; padding: 2px 0 2px 24px; }
 .b-example {
   display: grid; gap: 1px; margin: 0; padding: 6px 8px; border: 0; border-radius: var(--b-r-sm); background: none;
