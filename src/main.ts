@@ -11,7 +11,8 @@ import { forget } from './model';
 import { addFunction, commit, on, restore, save, state } from './state';
 import { redrawCalcPlots } from './app/calculator/plot-engine';
 import { fitY, initCanvasInput } from './ui/canvas-input';
-import { $, initTooltips } from './ui/dom';
+import { initTooltips } from './app/tooltips';
+import { openHelp } from './app/Help';
 
 if (!restore()) {
   addFunction('x^2');
@@ -43,12 +44,10 @@ function syncPanel(): void {
 addEventListener('hashchange', syncPanel);
 
 // --- Help & global keys ---
-const help = $<HTMLDialogElement>('help');
-help.addEventListener('click', e => { if (e.target === help) help.close(); }); // click on the backdrop
 document.addEventListener('keydown', e => {
   const t = e.target as HTMLElement;
-  if (e.ctrlKey || e.metaKey || e.altKey || t.closest('input, textarea, select, [contenteditable]') || help.open || document.body.dataset.panel !== 'graphs') return;
-  if (e.key === '?') { e.preventDefault(); help.showModal(); }
+  if (e.ctrlKey || e.metaKey || e.altKey || t.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]') || document.body.dataset.panel !== 'graphs') return;
+  if (e.key === '?') { e.preventDefault(); openHelp(); }
   else if (e.key === 'b' || e.key === 'B') { state.analysisOpen = !state.analysisOpen; commit('panel'); }
   else if (e.key === 'f' || e.key === 'F') fitY();
 });
@@ -75,7 +74,7 @@ syncPanel();
 document.body.dataset.mode = state.mode;
 applyTheme();
 
-const stage = $('stage');
+const stage = document.getElementById('stage')!;
 new ResizeObserver(() => {
   const r = stage.getBoundingClientRect();
   scene.resize(r.width, r.height);
@@ -85,7 +84,7 @@ new ResizeObserver(() => {
 // MathML and the plot's label fonts may arrive after the first paint.
 document.fonts?.ready.then(() => { scene.request(); redrawGeometry(); });
 
-createRoot($('root')).render(createElement(StrictMode, null, createElement(App)));
+createRoot(document.getElementById('root')!).render(createElement(StrictMode, null, createElement(App)));
 
 // Exposed for debugging in the console.
 Object.assign(window, { bettergebra: { state, scene } });

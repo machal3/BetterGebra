@@ -14,7 +14,7 @@ import { domainText } from '../../format';
 import { expressionMathML, relationMathML } from '../../math';
 import { compiled } from '../../model';
 import { MAX_FUNCTIONS, addFunction, patchFunction, removeFunction, setActive, state, type FnState, type Mode } from '../../state';
-import { toast } from '../../ui/dom';
+import { toast } from '../toast';
 import { RowSettings } from './RowSettings';
 
 const PREFIX: Record<Mode, string> = { graph: 'y =', complex: 'f(z) =' };

@@ -3,7 +3,7 @@ import { compiled } from '../model';
 import type { Scene } from '../render/scene';
 import { fits, panned, zoomed } from '../render/viewport';
 import { DEFAULT_VIEW, TRIG_VIEW, commit, state, type View } from '../state';
-import { $, toast } from './dom';
+import { toast } from '../app/toast';
 
 let scene: Scene;
 let settleTimer = 0;
@@ -48,7 +48,7 @@ export function fitY(): void {
 
 export function initCanvasInput(s: Scene): void {
   scene = s;
-  const canvas = $<HTMLCanvasElement>('plot');
+  const canvas = document.getElementById('plot') as HTMLCanvasElement;
   const local = (e: { clientX: number; clientY: number }) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 
   // Zoom by how far the wheel moved, not per event: a trackpad sends dozens of small events per gesture.

@@ -14,7 +14,7 @@ import { domainText, symbolic } from '../../format';
 import { constant } from '../../math';
 import { compiled } from '../../model';
 import { MAX_FUNCTIONS, PALETTE, addFunction, patchFunction, setActive, state, type Dash, type FnState, type Mode } from '../../state';
-import { toast } from '../../ui/dom';
+import { toast } from '../toast';
 import { removeRow } from './FunctionList';
 
 /** An interval end as typed back into its field: π/2, −√2, 0.75; empty when unbounded. */

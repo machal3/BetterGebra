@@ -156,17 +156,6 @@
 @media (hover: none) { .b-gobj-action { opacity: 1; } }
 @media (hover: hover) { .ui-buttonc.b-gobj-remove:hover { color: var(--b-danger); } }
 
-/* ---------- Dialog (also Pomoc's look) ---------- */
-.b-dialog {
-  width: min(400px, calc(100% - 32px)); margin: auto; padding: 0; border: 0; border-radius: var(--b-r-2xl);
-  background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-float); font: 400 var(--b-fs-body)/20px var(--b-font);
-}
-.b-dialog::backdrop { background: var(--b-backdrop); }
-.b-dialog[open] { animation: b-pop-in var(--b-slow) var(--b-ease); }
-.b-dialog-body { display: grid; gap: var(--b-s2); margin: 0; padding: var(--b-s5); }
-.b-dialog-title { margin-bottom: 4px; font-size: var(--b-fs-lg); font-weight: 600; line-height: 22px; color: var(--b-strong); }
-.b-dialog-actions { display: flex; justify-content: flex-end; gap: var(--b-s2); margin-top: var(--b-s3); }
-
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
   .b-gtop { left: 8px; top: 8px; right: 60px; }
@@ -180,5 +169,5 @@
   .b-gswatch { width: 30px; height: 30px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .b-ginspect, .b-dialog[open] { animation: none; }
+  .b-ginspect { animation: none; }
 }

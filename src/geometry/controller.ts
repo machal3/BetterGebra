@@ -10,7 +10,7 @@ import { constant } from '../math';
 import { LABEL, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
 import { Viewport, minorOf, panned, tick, zoomed } from '../render/viewport';
 import type { View } from '../state';
-import { toast } from '../ui/dom';
+import { toast } from '../app/toast';
 import { angle as angleValue, parseInput, type Parsed } from './commands';
 import {
   compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, nextName, pointOn, primed, project, topoSort,

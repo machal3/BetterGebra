@@ -10,7 +10,7 @@ import { useStore } from '@/hooks/use-store';
 import { CalculatorPanel } from './calculator/CalculatorPanel';
 import { GeometryPanel } from './geometry/GeometryPanel';
 import { GraphsPanel } from './graphs/GraphsPanel';
-import { openHelp } from './help';
+import { openHelp } from './Help';
 import { TITLES, openSection, type Panel, type Section } from './navigation';
 import { toggleTheme, useDark } from './theme';
 

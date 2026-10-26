@@ -153,8 +153,6 @@
 }
 
 /* ---------- Base ---------- */
-/* Element rules prefixed with :where(#help, …) apply only to the parts not yet moved to React: the React tree (also
-   where it renders into the page, as the Wykresy panel does) and the Affect UI components bring their own. */
 *, *::before, *::after { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: var(--stroke1) transparent; }
 html, body { height: 100%; }
@@ -166,21 +164,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-:where(#help, #toast, #tooltip) :is(button, input, select) { font: inherit; color: inherit; }
-:where(#help, #toast, #tooltip) button { cursor: pointer; }
-:where(#help, #toast, #tooltip) button:disabled { cursor: not-allowed; color: var(--fg-disabled); }
 /* Fluent focus indicator: 2px outer stroke, 1px inner stroke on buttons and links */
-:where(#help, #toast, #tooltip) :focus-visible { outline: 2px solid var(--focus-outer); outline-offset: 0; }
-:where(#help, #toast, #tooltip) :is(button, a, summary, [role="tab"]):focus-visible { box-shadow: inset 0 0 0 1px var(--focus-inner); }
-:where(#help, #toast, #tooltip) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-:where(#help, #toast, #tooltip) svg .fill { fill: currentColor; stroke: none; }
-:where(#help, #toast, #tooltip) svg.fi { fill: currentColor; stroke: none; }
-:where(#help, #toast, #tooltip) :is(code, kbd) { font-family: var(--mono); font-size: 0.92em; }
-:where(#help, #toast, #tooltip) code { background: var(--n-bg4); border-radius: var(--r-small); padding: 0 4px; }
-:where(#help, #toast, #tooltip) kbd {
-  display: inline-block; min-width: 20px; padding: 0 4px; text-align: center; font: 400 12px/18px var(--mono);
-  border: 1px solid var(--stroke1); border-radius: var(--r-small); background: var(--n-bg1); color: var(--fg2);
-}
 math { font-family: var(--math); }
 [hidden] { display: none !important; }
 .hint { margin: 0; font: var(--body1); color: var(--fg3); }
@@ -216,32 +200,7 @@ math { font-family: var(--math); }
 .text-button.primary:active { background: var(--brand-bg-pressed); }
 
 /* ---------- Slider ---------- */
-:where(#help, #toast, #tooltip) input[type="range"] {
-  --p: 0.5; --z: 0.5;
-  -webkit-appearance: none; appearance: none; width: 100%; height: 32px; background: transparent; margin: 0; cursor: pointer;
-}
-:where(#help, #toast, #tooltip) input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px; border-radius: var(--r-circular);
-  background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
-}
-:where(#help, #toast, #tooltip) input[type="range"]::-moz-range-track {
-  height: 4px; border-radius: var(--r-circular);
-  background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
-}
 /* Thumb: brand dot inside a neutral ring */
-:where(#help, #toast, #tooltip) input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: var(--r-circular);
-  background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
-}
-:where(#help, #toast, #tooltip) input[type="range"]::-moz-range-thumb {
-  width: 20px; height: 20px; border: 0; border-radius: var(--r-circular);
-  background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
-}
-:where(#help, #toast, #tooltip) input[type="range"]:hover::-webkit-slider-thumb { background: var(--compound-brand-hover); }
-:where(#help, #toast, #tooltip) input[type="range"]:hover::-moz-range-thumb { background: var(--compound-brand-hover); }
-:where(#help, #toast, #tooltip) input[type="range"]:active::-webkit-slider-thumb { background: var(--compound-brand-pressed); }
-:where(#help, #toast, #tooltip) input[type="range"]:active::-moz-range-thumb { background: var(--compound-brand-pressed); }
-:where(#help, #toast, #tooltip) input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-medium); }
 
 /* ---------- Badge (counts) ---------- */
 .count {
@@ -282,52 +241,6 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 #plot.grabbing { cursor: grabbing; }
 #hover { pointer-events: none; }
 
-/* ---------- Tooltip ---------- */
-.tooltip {
-  position: fixed; inset: auto; margin: 0; max-width: 240px; padding: 4px 11px 6px;
-  border: 1px solid transparent; border-radius: var(--r-medium); background: var(--n-bg1); color: var(--fg1);
-  box-shadow: var(--shadow16); font: var(--caption1); pointer-events: none; white-space: pre-line;
-}
-.tooltip:popover-open { animation: fade-in var(--d-normal) var(--ease-decelerate); }
-@keyframes fade-in { from { opacity: 0; } }
-
-/* ---------- Dialogs (Fluent Dialog) ---------- */
-.help {
-  padding: 24px; border: 1px solid transparent; border-radius: var(--r-xlarge);
-  background: var(--n-bg1); color: var(--fg1); box-shadow: var(--shadow64);
-}
-.help::backdrop { background: var(--backdrop); }
-.help[open] { animation: dialog-in var(--d-gentle) var(--ease-decelerate); }
-@keyframes dialog-in { from { opacity: 0; transform: scale(0.96); } }
-
-.help { width: min(640px, calc(100% - 32px)); max-height: min(720px, calc(100% - 32px)); padding: 0; }
-.help-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 8px 24px; background: var(--n-bg1); }
-.help-head h2 { margin: 0; font: var(--subtitle1); }
-.help-head form { margin: 0; }
-.help-body { padding: 0 24px 24px; display: grid; gap: 20px; }
-.help h3 { margin: 0 0 8px; font: var(--subtitle2); color: var(--fg1); }
-.help table { width: 100%; border-collapse: collapse; }
-.help td { padding: 8px 0; border-bottom: 1px solid var(--stroke2); vertical-align: top; }
-.help td:first-child { padding-right: 16px; white-space: nowrap; }
-.help td:last-child { color: var(--fg2); }
-.plain { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
-
-/* ---------- Toast ---------- */
-.toast {
-  position: fixed; left: 50%; bottom: 16px; z-index: 10; translate: -50% 8px; opacity: 0; pointer-events: none;
-  display: flex; align-items: center; gap: 8px; max-width: min(400px, calc(100% - 32px)); padding: 12px;
-  border-radius: var(--r-medium); background: var(--n-bg1); color: var(--fg1); font: var(--body1-strong); box-shadow: var(--shadow8);
-  transition: opacity var(--d-normal) var(--ease), translate var(--d-normal) var(--ease-decelerate);
-}
-.toast::before {
-  content: ""; flex: none; width: 16px; height: 16px; background: var(--brand-fg1);
-  -webkit-mask: var(--icon-info) center / contain no-repeat; mask: var(--icon-info) center / contain no-repeat;
-}
-.toast.visible { opacity: 1; translate: -50% 0; }
-.toast.visible:has(.toast-action) { pointer-events: auto; }
-.toast-action { margin-left: 8px; padding: 0 8px; height: 28px; border: 0; border-radius: var(--r-medium); background: transparent; color: var(--brand-fg-link); font: var(--body1-strong); }
-.toast-action:hover { background: var(--subtle-hover); color: var(--brand-fg-link-hover); }
-
 /* ---------- Small screens: canvas on top, pane below; the bottom bar is in app/shell.css ---------- */
 @media (max-width: 767px) {
   body { overflow: auto; }
@@ -336,12 +249,8 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   .sidebar { border-right: 0; }
   .sidebar-body { overflow: visible; }
   .icon-button { width: 40px; height: 40px; }
-  .help td:first-child { white-space: normal; }
-  .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
 
-@media (forced-colors: active) {
-}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

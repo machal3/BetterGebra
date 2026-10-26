@@ -13,7 +13,7 @@ import { format } from '../../format';
 import { labelDigits } from '../../render/plot2d';
 import { commit, state, type AxisUnit } from '../../state';
 import { equalAxes, fitY, resetView, zoomIn, zoomOut } from '../../ui/canvas-input';
-import { toast } from '../../ui/dom';
+import { toast } from '../toast';
 import { applyRange, exportPng, rangeSubscribe, scene } from '../graph-runtime';
 
 const IconStudy = () => <span className="b-tool-text" aria-hidden="true">f′</span>;

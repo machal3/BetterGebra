@@ -1,0 +1,58 @@
+/* ---------- Dialogs: Pomoc, the geometry value question ---------- */
+.b-dialog {
+  width: min(400px, calc(100% - 32px)); margin: auto; padding: 0; border: 0; border-radius: var(--b-r-2xl);
+  background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-float); font: 400 var(--b-fs-body)/20px var(--b-font);
+}
+.b-dialog::backdrop { background: var(--b-backdrop); }
+.b-dialog[open] { animation: b-pop-in var(--b-slow) var(--b-ease); }
+.b-dialog-body { display: grid; gap: var(--b-s2); margin: 0; padding: var(--b-s5); }
+.b-dialog-title { margin-bottom: 4px; font-size: var(--b-fs-lg); font-weight: 600; line-height: 22px; color: var(--b-strong); }
+.b-dialog-actions { display: flex; justify-content: flex-end; gap: var(--b-s2); margin-top: var(--b-s3); }
+
+
+/* ---------- Pomoc ---------- */
+.b-help { width: min(680px, calc(100% - 32px)); max-height: min(760px, calc(100% - 32px)); display: none; flex-direction: column; overflow: hidden; }
+.b-help[open] { display: flex; }
+.b-help-head { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); padding: 16px 12px 4px 24px; }
+.b-help-head h2 { margin: 0; font-size: var(--b-fs-xl); font-weight: 650; letter-spacing: -0.01em; color: var(--b-strong); }
+.b-help-tabs { padding: 8px 24px 4px; }
+.b-help-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 8px; }
+.b-help-foot { margin: 0; padding: 12px 24px 18px; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-text); box-shadow: inset 0 1px 0 var(--b-line); }
+.b-help h3 { margin: 12px 0 6px; font-size: var(--b-fs-md); font-weight: 600; color: var(--b-strong); }
+.b-help section:first-child h3 { margin-top: 4px; }
+.b-help p { margin: 0; color: var(--b-ink); }
+.b-help-modes { display: grid; gap: 4px; }
+.b-help-table { width: 100%; border-collapse: collapse; }
+.b-help-table td { padding: 8px 0; vertical-align: top; box-shadow: inset 0 -1px 0 var(--b-line); }
+.b-help-table td:first-child { padding-right: 16px; white-space: nowrap; }
+.b-help-table td:last-child { color: var(--b-text); }
+.b-help .b-code { white-space: nowrap; }
+
+/* ---------- Messages (Notification Stack, Clean) ---------- */
+.b-toaster {
+  position: fixed; z-index: 30; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+  width: min(360px, calc(100% - 32px)); pointer-events: none;
+}
+.b-toaster .ui-nsc { pointer-events: auto; }
+.b-toaster .ui-nsc__text:empty { display: none; }
+.b-toaster .ui-nsc__card { box-shadow: var(--b-shadow-float); }
+
+/* ---------- Tooltip ---------- */
+.b-tooltip {
+  position: fixed; inset: auto; margin: 0; max-width: 260px; padding: 4px 9px; border: 0; border-radius: var(--b-r-sm);
+  background: var(--b-solid); color: var(--b-on-solid); box-shadow: var(--b-shadow-float); pointer-events: none;
+  font: 500 var(--b-fs-sm)/16px var(--b-font); white-space: pre-line;
+}
+.b-tooltip:popover-open { animation: b-tip-in var(--b-normal) var(--b-ease); }
+@keyframes b-tip-in { from { opacity: 0; transform: translateY(2px); } }
+
+@media (max-width: 767px) {
+  .b-help { width: 100%; max-width: none; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; }
+  .b-help-head, .b-help-tabs, .b-help-body, .b-help-foot { padding-left: 16px; padding-right: 12px; }
+  .b-help-foot { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .b-help-table td:first-child { white-space: normal; }
+  .b-toaster { left: 8px; right: 8px; width: auto; bottom: calc(var(--b-bottombar-h) + 8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b-dialog[open], .b-tooltip:popover-open { animation: none; }
+}

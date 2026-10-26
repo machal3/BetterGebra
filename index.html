@@ -42,53 +42,6 @@
     </main>
   </div>
 
-  <dialog id="help" class="help" aria-labelledby="help-title">
-    <header class="help-head">
-      <h2 id="help-title">Pomoc</h2>
-      <form method="dialog"><button class="icon-button" aria-label="Zamknij" title="Zamknij"><svg class="fi" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07z"/></svg></button></form>
-    </header>
-    <div class="help-body">
-      <section>
-        <h3>Zapis</h3>
-        <table class="syntax">
-          <tr><td><code>x^2</code>, <code>x²</code>, <code>2x</code>, <code>3(x+1)</code></td><td>potęgi, mnożenie bez znaku</td></tr>
-          <tr><td><code>sqrt(x)</code>, <code>√x</code>, <code>root(3; x)</code>, <code>|x|</code></td><td>pierwiastki, wartość bezwzględna</td></tr>
-          <tr><td><code>sin x</code>, <code>tg x</code>, <code>arcsin x</code>, <code>sin^-1 x</code></td><td>trygonometria (radiany, <code>30°</code> w stopniach)</td></tr>
-          <tr><td><code>ln x</code>, <code>log x</code>, <code>log_2(x)</code>, <code>e^x</code></td><td>logarytmy i wykładnicza</td></tr>
-          <tr><td><code>max(x; 1)</code>, <code>mod(x; 3)</code>, <code>x!</code>, <code>floor x</code></td><td>argumenty oddziel średnikiem</td></tr>
-          <tr><td><code>pi</code>, <code>π</code>, <code>e</code>, <code>tau</code>, <code>phi</code></td><td>stałe</td></tr>
-          <tr><td><code>a·sin(b·x)</code></td><td>inne litery to parametry z suwakiem</td></tr>
-        </table>
-      </section>
-      <section>
-        <h3>Tryby</h3>
-        <ul class="plain">
-          <li><b>Zespolone</b>: <code>z^2 + 1</code>. Kolor to argument f(z), ciemny punkt to zero, jasny to biegun.</li>
-          <li><b>Geometria</b>: wybierz narzędzie i klikaj — puste miejsce tworzy punkt, kliknięcie linii kładzie punkt na niej. Narzędziem <b>Przesuń</b> przeciągasz punkty, a zależne obiekty podążają za nimi. Współrzędne zaznaczonego punktu (lub dwukrotnie klikniętego) wpiszesz w okienku x, y. Każdy obiekt ma definicję, np. <code>Okrąg(A; B; C)</code> — kliknij ją na liście, aby ją zmienić, albo wpisz nową w polu nad listą (<code>c = Okrąg(A; 3)</code>, <code>y = 2x + 1</code>). <kbd>Ctrl</kbd>+<kbd>Z</kbd> cofa, <kbd>Delete</kbd> usuwa zaznaczony obiekt, <kbd>Esc</kbd> przerywa.</li>
-          <li><b>Kalkulator</b>: wpisz wyrażenie, równanie albo polecenie (np. <code>całka x^2 sin x dx</code>, <code>granica sin(x)/x przy x->0</code>, <code>rozłóż x^4 − 1</code>). Wyniki są dokładne; postać dziesiętną liczy się w arytmetyce dowolnej precyzji i pokazuje tylko pewne cyfry. Zmienne traktowane są jako rzeczywiste. Obliczenia trwające dłużej niż 20 s są przerywane.</li>
-          <li><b>Wykresy</b>: obok funkcji <code>y = f(x)</code> każdy wiersz może być zbiorem. Warunki i równania w <i>x</i> i <i>y</i> to krzywe i obszary: <code>x^2 + y^2 = 25</code>, <code>y &gt; x^2</code>, <code>x = 2</code>. Z <code>z</code> albo <code>i</code> — zbiory liczb zespolonych: <code>|z - 1| &lt;= 2</code>, <code>1 &lt; Re z &lt; 3</code>, <code>z^2 = -1</code>, krzywe i obszary <code>t + 2i</code>, <code>a + bi</code> (zakres niewiadomych w ustawieniach wiersza).</li>
-        </ul>
-      </section>
-      <section>
-        <h3>Skróty</h3>
-        <table class="keys">
-          <tr><td><kbd>Enter</kbd></td><td>nowa funkcja pod ostatnią</td></tr>
-          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>poprzednia / następna funkcja</td></tr>
-          <tr><td><kbd>Backspace</kbd></td><td>w pustym polu usuwa funkcję</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>koniec edycji</td></tr>
-          <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>przesuwanie wykresu (gdy aktywny)</td></tr>
-          <tr><td><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></td><td>przybliż, oddal, przywróć widok</td></tr>
-          <tr><td><kbd>Shift</kbd> + kółko</td><td>skaluje tylko oś y (<kbd>Alt</kbd>: tylko x)</td></tr>
-          <tr><td><kbd>F</kbd> <kbd>B</kbd> <kbd>?</kbd></td><td>dopasuj y, badanie funkcji, ta pomoc</td></tr>
-        </table>
-      </section>
-      <p class="hint">Miejsca zerowe i przecięcia są szukane numerycznie w widocznym zakresie. Wartość bez znaku ≈ jest udowodniona w arytmetyce dokładnej. Stan zapisuje się w przeglądarce.</p>
-    </div>
-  </dialog>
-
-
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

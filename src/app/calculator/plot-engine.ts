@@ -13,7 +13,7 @@ import { LABEL, dot, drawAxes, drawGrid, readTheme, traceCurve, type AxesOptions
 import { paintCondition } from '../../render/sets';
 import { Viewport, axisSteps, panned, zoomed } from '../../render/viewport';
 import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../../state';
-import { toast } from '../../ui/dom';
+import { toast } from '../toast';
 
 /** Every plot on the page redraws when the theme changes; plots no longer in the page drop out. */
 const live = new Set<() => void>();
