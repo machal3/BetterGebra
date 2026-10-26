@@ -1,8 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /*
+ * Bettergebra: Polish labels; a notice dropped by the parent slides away like a dismissed one.
+ *
  * Notification Stack (clean style) – notices stacked behind each other, in a single self-contained file.
  * One white card per notice with hairline shadows instead of borders, Inter at 13/15px, quiet line art.
  * Only the front card can be read; the others peek out below it. Dismissing the front card slides it away and
@@ -40,7 +42,9 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
   const [given, setGiven] = useState(notices);
   if (notices !== given) {
     setGiven(notices);
-    setItems(notices.filter((n) => !removed.current.has(n.id)));
+    // Bettergebra: a notice the parent drops (a toast whose time is up) stays until it has slid away, see below
+    const kept = new Set(notices.map((n) => n.id));
+    setItems([...notices.filter((n) => !removed.current.has(n.id)), ...items.filter((n) => !kept.has(n.id) && !removed.current.has(n.id))]);
   }
   const [heights, setHeights] = useState<Record<string, number>>({});
   const refs = useRef(new Map<string, HTMLElement>());
@@ -76,6 +80,21 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
     }, 320);
   };
 
+  // Bettergebra: dropped by the parent → leaves like a dismissed notice (slides away), without calling onDismiss
+  useEffect(() => {
+    const kept = new Set(notices.map((n) => n.id));
+    const dropped = items.filter((n) => !kept.has(n.id) && !leaving.has(n.id) && !removed.current.has(n.id));
+    if (!dropped.length) return;
+    setLeaving((s) => new Set([...s, ...dropped.map((n) => n.id)]));
+    // not cleared when the effect runs again: marking them as leaving runs it again at once
+    window.setTimeout(() => {
+      for (const n of dropped) removed.current.add(n.id);
+      const ids = new Set(dropped.map((n) => n.id));
+      setItems((list) => list.filter((n) => !ids.has(n.id)));
+      setLeaving((s) => new Set([...s].filter((id) => !ids.has(id))));
+    }, 320);
+  }, [notices, items, leaving]);
+
   const front = visible[0] ? heights[visible[0].id] ?? 0 : 0;
 
   return (
@@ -85,7 +104,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
       </style>
       <section
         className={["ui-nsc", className].filter(Boolean).join(" ")}
-        aria-label="Notifications"
+        aria-label="Powiadomienia"
         style={{ height: visible.length ? front + behind * PEEK : 0 }}
       >
         {items.map((notice) => {
@@ -132,7 +151,7 @@ export function NotificationStack({ notices, onDismiss, className }: Notificatio
                   <button
                     type="button"
                     className="ui-nsc__close"
-                    aria-label={`Dismiss ${notice.title}`}
+                    aria-label={`Zamknij: ${notice.title}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       dismiss(notice);
