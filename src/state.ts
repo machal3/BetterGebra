@@ -70,8 +70,11 @@ type Listener = (topics: ReadonlySet<Topic>) => void;
 const listeners: { topics: Set<Topic>; fn: Listener }[] = [];
 let pending = new Set<Topic>();
 
-export function on(topics: Topic[], fn: Listener): void {
-  listeners.push({ topics: new Set(topics), fn });
+/** Subscribes to some topics; returns the way to unsubscribe (React components leave, the old modules never did). */
+export function on(topics: Topic[], fn: Listener): () => void {
+  const entry = { topics: new Set(topics), fn };
+  listeners.push(entry);
+  return () => { const i = listeners.indexOf(entry); if (i >= 0) listeners.splice(i, 1); };
 }
 
 export function commit(...topics: Topic[]): void {
@@ -82,7 +85,8 @@ export function commit(...topics: Topic[]): void {
 function flush(): void {
   const topics = pending;
   pending = new Set();
-  for (const l of listeners) if ([...topics].some(t => l.topics.has(t))) l.fn(topics);
+  // a copy: a listener may unsubscribe (a component unmounting) while the others run
+  for (const l of listeners.slice()) if ([...topics].some(t => l.topics.has(t))) l.fn(topics);
   scheduleSave();
 }
 

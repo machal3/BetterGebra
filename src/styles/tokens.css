@@ -1,0 +1,149 @@
+/*
+ * Design tokens in the visual language of Affect UI (Clean): near-black ink in alpha steps, hairline shadows,
+ * 6–12px radii, short calm motion. Every component built here reads these; the Affect UI files keep their own
+ * --ui-* variables, which hold the same values. Dark mode follows data-theme="dark" on <html>, which main.tsx
+ * always sets (the system preference is resolved there), because that is what the Affect UI components read.
+ */
+@import '@fontsource-variable/inter/index.css';
+
+:root {
+  color-scheme: light;
+  --b-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --b-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --b-math: "Cambria Math", "STIX Two Math", "Latin Modern Math", Cambria, "Times New Roman", serif;
+
+  /* Surfaces */
+  --b-page: #f4f4f5;
+  --b-panel: #ffffff;
+  --b-card: #ffffff;
+  --b-tray: #f0f0f0;
+  --b-raised: #ffffff;
+  --b-code: #fafafa;
+
+  /* Ink */
+  --b-strong: #000000;
+  --b-ink: rgba(0, 0, 0, 0.88);
+  --b-text: rgba(0, 0, 0, 0.61);
+  --b-muted: rgba(0, 0, 0, 0.5);
+  --b-faint: rgba(0, 0, 0, 0.27);
+  --b-icon: rgba(0, 0, 0, 0.55);
+  --b-on-solid: #fcfcfc;
+  --b-solid: rgba(0, 0, 0, 0.88);
+  --b-solid-hover: rgba(0, 0, 0, 0.8);
+
+  /* Lines and fills */
+  --b-line: rgba(0, 0, 0, 0.06);
+  --b-line-strong: rgba(0, 0, 0, 0.12);
+  --b-field-line: rgba(0, 0, 0, 0.16);
+  --b-wash: rgba(0, 0, 0, 0.03);
+  --b-fill: rgba(0, 0, 0, 0.06);
+  --b-track: rgba(0, 0, 0, 0.04);
+
+  /* Accent, status */
+  --b-accent: #0060e2;
+  --b-accent-ink: rgba(0, 96, 226, 0.9);
+  --b-accent-soft: rgba(0, 96, 226, 0.08);
+  --b-focus: rgba(0, 96, 226, 0.35);
+  --b-danger: #d93a2b;
+  --b-danger-bg: rgba(217, 58, 43, 0.06);
+  --b-danger-line: rgba(217, 58, 43, 0.18);
+  --b-ok: #1f8a4c;
+
+  /* Shadows */
+  --b-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 1px -1px rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --b-shadow-hover: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 1px -1px rgba(0, 0, 0, 0.12), 0 1px 3px 0 rgba(0, 0, 0, 0.07);
+  --b-shadow-float: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.08), 0 12px 32px -8px rgba(0, 0, 0, 0.12);
+  --b-backdrop: rgba(0, 0, 0, 0.32);
+
+  /* Radii */
+  --b-r-xs: 4px;
+  --b-r-sm: 6px;
+  --b-r-md: 8px;
+  --b-r-lg: 10px;
+  --b-r-xl: 12px;
+  --b-r-2xl: 16px;
+  --b-r-full: 9999px;
+
+  /* Spacing: one 4px scale */
+  --b-s1: 4px;
+  --b-s2: 8px;
+  --b-s3: 12px;
+  --b-s4: 16px;
+  --b-s5: 20px;
+  --b-s6: 24px;
+  --b-s8: 32px;
+
+  /* Type: 13px controls, 14px body */
+  --b-fs-xs: 11px;
+  --b-fs-sm: 12px;
+  --b-fs-md: 13px;
+  --b-fs-body: 14px;
+  --b-fs-lg: 16px;
+  --b-fs-xl: 20px;
+  --b-fs-2xl: 28px;
+
+  /* Motion: calm, crisp */
+  --b-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --b-ease-glide: cubic-bezier(0.25, 0.9, 0.3, 1);
+  --b-fast: 90ms;
+  --b-normal: 160ms;
+  --b-slow: 220ms;
+
+  /* Canvas (read by the renderers through getComputedStyle) */
+  --plot-bg: #ffffff;
+  --grid-minor: #f1f1f2;
+  --grid-major: #e2e2e5;
+  --axis: #6b6b70;
+  --plot-label: #5c5c63;
+  --geo-polygon: #ca5010;
+  --geo-angle: #107c10;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --b-page: #111113;
+  --b-panel: #161618;
+  --b-card: #1c1c1e;
+  --b-tray: #161618;
+  --b-raised: #232326;
+  --b-code: #212123;
+
+  --b-strong: #ffffff;
+  --b-ink: rgba(255, 255, 255, 0.9);
+  --b-text: rgba(255, 255, 255, 0.62);
+  --b-muted: rgba(255, 255, 255, 0.5);
+  --b-faint: rgba(255, 255, 255, 0.3);
+  --b-icon: rgba(255, 255, 255, 0.55);
+  --b-on-solid: #161618;
+  --b-solid: rgba(255, 255, 255, 0.9);
+  --b-solid-hover: rgba(255, 255, 255, 0.82);
+
+  --b-line: rgba(255, 255, 255, 0.08);
+  --b-line-strong: rgba(255, 255, 255, 0.14);
+  --b-field-line: rgba(255, 255, 255, 0.18);
+  --b-wash: rgba(255, 255, 255, 0.04);
+  --b-fill: rgba(255, 255, 255, 0.08);
+  --b-track: rgba(255, 255, 255, 0.05);
+
+  --b-accent: #4d8dff;
+  --b-accent-ink: #6ea2ff;
+  --b-accent-soft: rgba(77, 141, 255, 0.14);
+  --b-focus: rgba(77, 141, 255, 0.5);
+  --b-danger: #ff7b72;
+  --b-danger-bg: rgba(255, 110, 100, 0.08);
+  --b-danger-line: rgba(255, 110, 100, 0.22);
+  --b-ok: #4cc38a;
+
+  --b-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --b-shadow-hover: 0 0 0 0.5px rgba(255, 255, 255, 0.16), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --b-shadow-float: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  --b-backdrop: rgba(0, 0, 0, 0.55);
+
+  --plot-bg: #161618;
+  --grid-minor: #1e1e21;
+  --grid-major: #2c2c30;
+  --axis: #8f8f96;
+  --plot-label: #a1a1aa;
+  --geo-polygon: #e9835e;
+  --geo-angle: #54b054;
+}

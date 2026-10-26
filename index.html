@@ -9,8 +9,13 @@
   <title>Bettergebra</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f6cbd'/%3E%3Cpath d='M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
   <script>
-    // Theme before first paint, so a dark-mode reload doesn't flash light.
-    try { const t = JSON.parse(localStorage.getItem('bettergebra.v2') || 'null')?.theme; if (t) document.documentElement.dataset.theme = t; } catch {}
+    // Theme before first paint, so a dark-mode reload doesn't flash light. Always resolved to light or dark:
+    // the Affect UI components switch on data-theme, not on the system preference.
+    (() => {
+      let t = null;
+      try { t = JSON.parse(localStorage.getItem('bettergebra.v2') || 'null')?.theme; } catch {}
+      document.documentElement.dataset.theme = t === 'light' || t === 'dark' ? t : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    })();
   </script>
 </head>
 <body>
@@ -373,6 +378,7 @@
     </form>
   </dialog>
 
+  <div id="root"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="tooltip" class="tooltip" role="tooltip" popover="manual"></div>
   <script type="module" src="/src/main.ts"></script>

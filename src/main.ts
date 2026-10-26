@@ -1,4 +1,8 @@
+import './styles/tokens.css';
 import './styles/app.css';
+import { StrictMode, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { App } from './app/App';
 import { AnalysisClient } from './analysis/client';
 import type { AnalysisResult } from './analysis/compute';
 import { format } from './format';
@@ -48,7 +52,8 @@ function requestAnalysis(): void {
 const systemDark = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(): void {
   const dark = state.theme ? state.theme === 'dark' : systemDark.matches;
-  if (state.theme) document.documentElement.dataset.theme = state.theme; else delete document.documentElement.dataset.theme;
+  // Always resolved: the Affect UI components follow data-theme, not the system preference.
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   $('theme-button').setAttribute('aria-label', dark ? 'Jasny motyw' : 'Ciemny motyw');
   $('theme-button').title = dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw';
   scene.refreshTheme();
@@ -193,6 +198,8 @@ new ResizeObserver(() => {
 }).observe(stage);
 // MathML and the plot's label fonts may arrive after the first paint.
 document.fonts?.ready.then(() => { scene.request(); redrawGeometry(); });
+
+createRoot($('root')).render(createElement(StrictMode, null, createElement(App)));
 
 // Exposed for debugging in the console.
 Object.assign(window, { bettergebra: { state, scene } });
