@@ -113,10 +113,9 @@ export function initCanvasInput(s: Scene): void {
     else if (e.key === '-' || e.key === '−') { e.preventDefault(); zoom(4 / 3); }
     else if (e.key === '0') resetView();
   });
-
-  $('zoom-in').addEventListener('click', () => zoom(0.75));
-  $('zoom-out').addEventListener('click', () => zoom(4 / 3));
-  $('fit-view').addEventListener('click', fitY);
-  $('reset-view').addEventListener('click', resetView);
-  $('equal-axes').addEventListener('click', () => setView({ ...state.view, ratio: 1 }));
 }
+
+/** The toolbar's buttons (the keyboard and the wheel use the same steps). */
+export const zoomIn = () => zoom(0.75);
+export const zoomOut = () => zoom(4 / 3);
+export const equalAxes = () => setView({ ...state.view, ratio: 1 });

@@ -121,6 +121,14 @@ export function removeFunction(id: number): void {
   commit('list', 'expr', 'active');
 }
 
+/** Changes some settings of a function and tells the listeners (by default as a change of style). */
+export function patchFunction(id: number, patch: Partial<Omit<FnState, 'id'>>, ...topics: Topic[]): void {
+  const f = fnById(id);
+  if (!f) return;
+  Object.assign(f, patch);
+  commit(...(topics.length ? topics : ['style' as const]));
+}
+
 export function setActive(id: number): void {
   if (state.activeId === id) return;
   state.activeId = id;

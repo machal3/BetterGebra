@@ -11,8 +11,8 @@ export function readTheme(): Theme {
   return { bg: v('plot-bg'), gridMinor: v('grid-minor'), gridMajor: v('grid-major'), axis: v('axis'), label: v('plot-label') };
 }
 
-// Labels use the Fluent type ramp (Caption 1, Segoe UI); names keep the math italic.
-export const LABEL = '12px "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
+// Labels use the interface font (Inter, 12px); names keep the math italic.
+export const LABEL = '12px "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Georgia, serif';
 
 export interface AxesOptions { grid: boolean; axes: boolean; xUnit: AxisUnit; yUnit: AxisUnit; plane: boolean; minorGrid: boolean; halo: boolean }
