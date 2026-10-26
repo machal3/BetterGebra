@@ -1,0 +1,188 @@
+/* Wykresy: function rows, row settings, parameters, the canvas tools, Widok and Badanie. Tokens: styles/tokens.css. */
+
+/* ---------- Function rows ---------- */
+.b-fn-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.b-fn {
+  --c: var(--b-accent);
+  position: relative;
+  border-radius: var(--b-r-lg);
+  background: var(--b-card);
+  box-shadow: var(--b-shadow);
+  transition: box-shadow var(--b-normal) ease;
+}
+@media (hover: hover) { .b-fn:hover { box-shadow: var(--b-shadow-hover); } }
+/* the analysed row: a line in its colour on the left */
+.b-fn::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--c); opacity: 0; transition: opacity var(--b-normal) ease;
+}
+.b-fn.is-active { box-shadow: 0 0 0 1px var(--b-line-strong), var(--b-shadow-hover); }
+.b-fn.is-active::before { opacity: 1; }
+.b-fn.is-invalid { box-shadow: 0 0 0 1px var(--b-danger-line), var(--b-shadow); }
+.b-fn-main { display: flex; align-items: center; gap: 2px; min-height: 48px; padding: 4px 4px 4px 6px; }
+
+/* the colour dot: shows or hides the graph */
+.b-fn-swatch {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0; border: 0;
+  border-radius: var(--b-r-sm); background: none; cursor: pointer; transition: background-color var(--b-fast) ease;
+}
+.b-fn-swatch::after {
+  content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px var(--c);
+  transition: background-color var(--b-normal) ease;
+}
+@media (hover: hover) { .b-fn-swatch:hover { background: var(--b-wash); } }
+.b-fn-swatch:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-fn.is-hidden .b-fn-swatch::after { background: transparent; }
+.b-fn.is-hidden .b-fn-field { opacity: 0.55; }
+
+.b-fn-field { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 40px; cursor: text; }
+.b-fn-prefix { flex: none; padding-left: 4px; font: italic 16px/1 var(--b-math); color: var(--b-text); white-space: nowrap; }
+.b-fn-input {
+  flex: 1; min-width: 0; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); outline: none;
+  background: transparent; font: 400 14px/20px var(--b-mono); color: var(--b-ink);
+  transition: background-color var(--b-fast) ease, box-shadow var(--b-fast) ease;
+}
+.b-fn-input::placeholder { color: var(--b-muted); opacity: 1; }
+@media (hover: hover) { .b-fn-input:hover:not(:focus) { background: var(--b-wash); } }
+.b-fn-input:focus { background: var(--b-card); box-shadow: inset 0 0 0 1px var(--b-accent), 0 0 0 3px var(--b-focus); }
+.b-fn-input[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 1px var(--b-danger), 0 0 0 3px var(--b-danger-line); }
+/* A finished formula is typeset; the transparent field lies over it, so a click still lands in the field */
+.b-fn-math {
+  flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap;
+  font-size: 17px; color: var(--b-ink); pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.b-fn-math math { font-family: var(--b-math); font-size: 1em; }
+.b-fn.is-typeset .b-fn-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+
+/* settings and delete: quiet until the row is pointed at, focused or analysed */
+.b-fn-action { opacity: 0; transition: opacity var(--b-normal) ease, background-color 140ms ease, color 140ms ease; }
+.b-fn:hover .b-fn-action, .b-fn:focus-within .b-fn-action, .b-fn.is-active .b-fn-action, .b-fn-action.is-open { opacity: 1; }
+.ui-buttonc.b-fn-action.is-open { background: var(--b-fill); color: var(--b-strong); }
+@media (hover: hover) { .ui-buttonc.b-fn-remove:hover { color: var(--b-danger); } }
+@media (hover: none) { .b-fn-action { opacity: 1; } }
+
+.b-fn-note { margin: -4px 12px 8px 46px; font-size: var(--b-fs-sm); line-height: 16px; }
+.b-fn-domain { color: var(--b-text); font-variant-numeric: tabular-nums; }
+
+.ui-buttonc.b-fn-add { --h: 36px; width: 100%; margin-top: var(--b-s2); justify-content: flex-start; color: var(--b-ink); }
+.b-fn-add .ui-buttonc__label { flex: 1; text-align: start; }
+.b-fn-add .ui-buttonc__icon:first-child { color: var(--b-accent); }
+.b-fn-add .ui-buttonc__icon:last-child { width: auto; height: auto; }
+
+/* ---------- Row settings (popover; a bottom sheet on phones) ---------- */
+.b-rowset-pop { width: 344px; }
+.b-rowset-pop::before { content: ""; display: block; height: 3px; background: var(--c); border-radius: var(--b-r-xl) var(--b-r-xl) 0 0; }
+.b-rowset { display: grid; gap: var(--b-s5); padding: var(--b-s4); }
+.b-rowset-group { display: grid; gap: var(--b-s2); }
+.b-rowset-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-s2); }
+.b-rowset-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 600; color: var(--b-strong); }
+.b-rowset-preview { font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
+.b-interval { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--b-s2); }
+.b-interval > label { color: var(--b-text); }
+.b-brackets { font-family: var(--b-math); }
+.b-brackets .ui-segc__label { font-size: 15px; }
+.b-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.b-color {
+  position: relative; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 50%; overflow: hidden;
+  background: var(--sw); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); cursor: pointer;
+  transition: box-shadow var(--b-normal) var(--b-ease), transform var(--b-fast) ease;
+}
+.b-color:active { transform: scale(0.94); }
+.b-color[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--b-raised), 0 0 0 4px var(--sw); }
+.b-color:focus-visible, .b-color--custom:focus-within { outline: 2px solid var(--b-focus); outline-offset: 3px; }
+.b-color--custom { background: conic-gradient(#d13438, #ca5010, #eaa300, #107c10, #0f6cbd, #8764b8, #c239b3, #d13438); }
+.b-color--custom input { position: absolute; inset: -8px; width: 44px; height: 44px; opacity: 0; cursor: pointer; }
+.b-width { display: grid; grid-template-columns: 1fr 76px; gap: var(--b-s3); align-items: center; margin-top: 4px; }
+.b-rowset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-s2); }
+
+/* ---------- Parameters ---------- */
+.b-params { display: grid; gap: 6px; }
+.b-param {
+  display: grid; grid-template-columns: 44px 1fr 80px; gap: var(--b-s3); align-items: center;
+  padding: 6px 8px 6px 12px; border-radius: var(--b-r-lg); background: var(--b-card); box-shadow: var(--b-shadow);
+}
+.b-param-name { font: 16px var(--b-math); color: var(--b-ink); white-space: nowrap; }
+.b-param-error { grid-column: 1 / -1; padding-bottom: 2px; }
+
+/* ---------- Canvas ---------- */
+#plot:focus-visible { box-shadow: inset 0 0 0 2px var(--b-accent); }
+.b-toolbar {
+  position: absolute; z-index: 3; top: var(--b-s3); right: var(--b-s3);
+  display: flex; flex-direction: column; padding: 4px; border-radius: var(--b-r-xl);
+  background: var(--b-raised); box-shadow: var(--b-shadow-float);
+}
+.b-tool-group { display: flex; flex-direction: column; gap: 2px; }
+.b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 1px 0 var(--b-line); }
+.b-toolbar .ui-buttonc { --h: 32px; color: var(--b-ink); }
+.ui-buttonc.b-tool-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--b-fill); color: var(--b-accent-ink); }
+.b-tool-text { display: block; font: italic 17px/1 var(--b-math); }
+
+.b-caption {
+  position: absolute; z-index: 1; right: var(--b-s3); bottom: 10px; margin: 0; padding: 2px 8px; border-radius: var(--b-r-sm);
+  background: color-mix(in srgb, var(--plot-bg) 85%, transparent); pointer-events: none;
+  font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-text); white-space: pre;
+}
+/* the hover readout drawn by the renderer */
+#readout.readout {
+  padding: 4px 10px 6px 12px; border-radius: var(--b-r-md); background: var(--b-raised);
+  box-shadow: inset 3px 0 0 var(--c), var(--b-shadow-float);
+  font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
+}
+
+/* ---------- Widok ---------- */
+.b-view { width: 312px; }
+.b-view-body { padding: 0 8px 8px; }
+.b-view-row { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3); min-height: 36px; padding: 0 8px; }
+.b-view-range { display: grid; grid-template-columns: 14px 1fr 8px 1fr; gap: var(--b-s2); align-items: center; padding: 4px 8px; }
+.b-view-range > span { color: var(--b-text); text-align: center; }
+.b-view-range > span:nth-child(5n + 1) { font: italic 15px var(--b-math); color: var(--b-ink); }
+.b-view-error { padding: 4px 8px 0; }
+
+/* ---------- Badanie ---------- */
+.b-analysis {
+  position: absolute; z-index: 3; left: var(--b-s3); bottom: var(--b-s3);
+  width: min(380px, calc(100% - 88px)); max-height: calc(100% - 24px); overflow: auto; overscroll-behavior: contain;
+  padding: 6px 6px 8px; border-radius: var(--b-r-xl); background: var(--b-raised); box-shadow: var(--b-shadow-float);
+  font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);
+  animation: b-pop-in var(--b-slow) var(--b-ease);
+}
+.b-analysis-head { display: flex; align-items: center; gap: var(--b-s3); padding: 4px 4px 6px 10px; }
+.b-analysis-head h2 { margin: 0; font-size: 15px; font-weight: 500; color: var(--b-strong); }
+.b-analysis-target {
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; padding-left: 8px; border-left: 3px solid var(--c); font-size: 15px;
+}
+.b-muted { color: var(--b-text); }
+.b-ledger { display: grid; margin: 0; padding: 0 10px; }
+.b-ledger > div { display: grid; grid-template-columns: 112px 1fr; gap: var(--b-s3); padding: 8px 0; box-shadow: inset 0 1px 0 var(--b-line); }
+.b-ledger dt { color: var(--b-text); }
+.b-ledger dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.b-ledger math, .b-analysis-target math, #readout math { font-family: var(--b-math); font-size: 1.12em; }
+.b-analysis-foot { margin: 0; padding: 2px 10px 6px; font-size: var(--b-fs-sm); color: var(--b-text); text-align: end; }
+.ui-src.b-analysis-rec { max-width: none; margin-top: 2px; }
+
+/* ---------- Phones: the tools stay a column on the right; the cards keep clear of it ---------- */
+@media (max-width: 767px) {
+  .b-toolbar { top: 8px; right: 8px; }
+  .b-caption { display: none; }
+  .b-analysis { left: 8px; right: 64px; bottom: 8px; width: auto; max-height: calc(100% - 16px); }
+  /* the name above its value: the numbers get the whole width */
+  .b-ledger > div { grid-template-columns: 1fr; gap: 2px; }
+  .b-ledger dt { font-size: var(--b-fs-sm); }
+  .b-rowset-pop, .b-view { width: auto; }
+}
+/* a short canvas (a phone on its side): the column scrolls rather than leaving it */
+.b-toolbar { max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none; }
+@media (pointer: coarse) {
+  .b-fn-swatch { width: 44px; height: 44px; }
+  .b-fn .ui-buttonc { --h: 44px; }
+  .b-fn-field { height: 44px; }
+  .b-fn-note { margin-left: 56px; }
+  .b-toolbar .ui-buttonc { --h: 44px; }
+  .b-color { width: 36px; height: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b-analysis { animation: none; }
+  .b-fn, .b-fn::before, .b-fn-action, .b-color, .b-fn-swatch::after { transition: none; }
+}

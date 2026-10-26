@@ -5,13 +5,12 @@
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
 import { IconCalculator, IconComplex, IconGeometry, IconGraph, IconHelp, IconMoon, IconSun } from '@/components/icons';
-import { useMedia } from '@/hooks/use-media';
+import { PHONE, useMedia } from '@/hooks/use-media';
 import { useStore } from '@/hooks/use-store';
+import { GraphsPanel } from './graphs/GraphsPanel';
 import { openHelp } from './help';
 import { TITLES, openSection, type Panel, type Section } from './navigation';
 import { toggleTheme, useDark } from './theme';
-
-export const PHONE = '(max-width: 767px)';
 
 /** The rounded square with a curve, also the favicon. */
 export function Logo({ size = 28 }: { size?: number }) {
@@ -77,6 +76,7 @@ export function Shell({ panel }: { panel: Exclude<Panel, 'home'> }) {
         </div>
       </header>
       {phone && <nav className="b-bottombar" aria-label="Części aplikacji"><ModeSwitch section={section} bottom /></nav>}
+      <GraphsPanel />
     </>
   );
 }

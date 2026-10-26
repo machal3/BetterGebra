@@ -6,6 +6,7 @@
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
     "react/react-in-jsx-scope": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
     "no-unused-vars": ["error", { "ignoreRestSiblings": true, "argsIgnorePattern": "^_" }]
   },
   "overrides": [

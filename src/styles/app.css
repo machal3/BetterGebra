@@ -105,13 +105,6 @@
   --search-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23616161'%3E%3Cpath d='M8.5 3a5.5 5.5 0 0 1 4.23 9.02l4.12 4.13a.5.5 0 0 1-.63.76l-.07-.06-4.13-4.12A5.5 5.5 0 1 1 8.5 3m0 1a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9'/%3E%3C/svg%3E");
 
   /* Canvas */
-  --plot-bg: #ffffff;
-  --grid-minor: #f5f5f5;
-  --grid-major: #e0e0e0;
-  --axis: #707070;
-  --plot-label: #616161;
-  --geo-polygon: #ca5010;
-  --geo-angle: #107c10;
 }
 
 /* ---------- Dark theme (system preference, or the explicit choice) ---------- */
@@ -132,8 +125,6 @@
     --focus-outer: #ffffff; --focus-inner: #000000;
     --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23adadad'%3E%3Cpath d='M2.15 4.65c.2-.2.5-.2.7 0L6 7.79l3.15-3.14a.5.5 0 1 1 .7.7l-3.5 3.5a.5.5 0 0 1-.7 0l-3.5-3.5a.5.5 0 0 1 0-.7'/%3E%3C/svg%3E");
     --search-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23adadad'%3E%3Cpath d='M8.5 3a5.5 5.5 0 0 1 4.23 9.02l4.12 4.13a.5.5 0 0 1-.63.76l-.07-.06-4.13-4.12A5.5 5.5 0 1 1 8.5 3m0 1a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9'/%3E%3C/svg%3E");
-    --plot-bg: #292929; --grid-minor: #2e2e2e; --grid-major: #3d3d3d; --axis: #999999; --plot-label: #adadad;
-    --geo-polygon: #e9835e; --geo-angle: #54b054;
   }
 }
 :root[data-theme="dark"] {
@@ -152,8 +143,6 @@
   --focus-outer: #ffffff; --focus-inner: #000000;
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%23adadad'%3E%3Cpath d='M2.15 4.65c.2-.2.5-.2.7 0L6 7.79l3.15-3.14a.5.5 0 1 1 .7.7l-3.5 3.5a.5.5 0 0 1-.7 0l-3.5-3.5a.5.5 0 0 1 0-.7'/%3E%3C/svg%3E");
   --search-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23adadad'%3E%3Cpath d='M8.5 3a5.5 5.5 0 0 1 4.23 9.02l4.12 4.13a.5.5 0 0 1-.63.76l-.07-.06-4.13-4.12A5.5 5.5 0 1 1 8.5 3m0 1a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9'/%3E%3C/svg%3E");
-  --plot-bg: #292929; --grid-minor: #2e2e2e; --grid-major: #3d3d3d; --axis: #999999; --plot-label: #adadad;
-  --geo-polygon: #e9835e; --geo-angle: #54b054;
 }
 
 /* Aliases read by the canvas code through getComputedStyle. */
@@ -164,8 +153,8 @@
 }
 
 /* ---------- Base ---------- */
-/* Element rules prefixed with :where(body > :not(#root)) apply to the old page only: the React tree and the Affect UI
-   components bring their own. */
+/* Element rules prefixed with :where(#calc, …) apply only to the parts not yet moved to React: the React tree (also
+   where it renders into the page, as the Wykresy panel does) and the Affect UI components bring their own. */
 *, *::before, *::after { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: var(--stroke1) transparent; }
 html, body { height: 100%; }
@@ -177,18 +166,18 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-:where(body > :not(#root)) :is(button, input, select) { font: inherit; color: inherit; }
-:where(body > :not(#root)) button { cursor: pointer; }
-:where(body > :not(#root)) button:disabled { cursor: not-allowed; color: var(--fg-disabled); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(button, input, select) { font: inherit; color: inherit; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) button { cursor: pointer; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) button:disabled { cursor: not-allowed; color: var(--fg-disabled); }
 /* Fluent focus indicator: 2px outer stroke, 1px inner stroke on buttons and links */
-:where(body > :not(#root)) :focus-visible { outline: 2px solid var(--focus-outer); outline-offset: 0; }
-:where(body > :not(#root)) :is(button, a, summary, [role="tab"]):focus-visible { box-shadow: inset 0 0 0 1px var(--focus-inner); }
-:where(body > :not(#root)) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-:where(body > :not(#root)) svg .fill { fill: currentColor; stroke: none; }
-:where(body > :not(#root)) svg.fi { fill: currentColor; stroke: none; }
-:where(body > :not(#root)) :is(code, kbd) { font-family: var(--mono); font-size: 0.92em; }
-:where(body > :not(#root)) code { background: var(--n-bg4); border-radius: var(--r-small); padding: 0 4px; }
-:where(body > :not(#root)) kbd {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :focus-visible { outline: 2px solid var(--focus-outer); outline-offset: 0; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(button, a, summary, [role="tab"]):focus-visible { box-shadow: inset 0 0 0 1px var(--focus-inner); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg .fill { fill: currentColor; stroke: none; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) svg.fi { fill: currentColor; stroke: none; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) :is(code, kbd) { font-family: var(--mono); font-size: 0.92em; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) code { background: var(--n-bg4); border-radius: var(--r-small); padding: 0 4px; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) kbd {
   display: inline-block; min-width: 20px; padding: 0 4px; text-align: center; font: 400 12px/18px var(--mono);
   border: 1px solid var(--stroke1); border-radius: var(--r-small); background: var(--n-bg1); color: var(--fg2);
 }
@@ -227,28 +216,25 @@ math { font-family: var(--math); }
 .text-button.primary:active { background: var(--brand-bg-pressed); }
 
 /* ---------- Inputs (Fluent Input, outline appearance) ---------- */
-:is(.interval input[type="text"], .range-grid input, .width-row input[type="number"], .parameter input[type="number"],
-    .geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select) {
+:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select) {
   width: 100%; min-width: 0; height: 32px; padding: 0 10px; margin: 0;
   border: 1px solid var(--stroke1); border-bottom-color: var(--stroke-accessible); border-radius: var(--r-medium);
   background-color: var(--n-bg1); color: var(--fg1); font: var(--body1); outline: none;
   transition: border-color var(--d-faster) var(--ease), box-shadow var(--d-faster) var(--ease);
 }
-:is(.interval input[type="text"], .range-grid input, .width-row input[type="number"], .parameter input[type="number"],
-    .geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):hover {
+:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):hover {
   border-color: var(--stroke1-hover); border-bottom-color: var(--stroke-accessible-hover);
 }
 /* Focus: a 2px brand underline instead of an outline */
-:is(.interval input[type="text"], .range-grid input, .width-row input[type="number"], .parameter input[type="number"],
-    .geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):focus {
+:is(.geo-coords input, .geo-search, .geo-input-form input, .geo-ask input, .geo-def-input, .geo-style-row select):focus {
   outline: none; border-bottom-color: var(--compound-brand); box-shadow: inset 0 -1px 0 var(--compound-brand);
 }
-:is(.interval input, .range-grid input, .width-row input, .parameter input[type="number"], .geo-coords input, .geo-input-form input, .geo-ask input, .geo-def-input) { font-family: var(--mono); }
-:is(.interval input, .geo-coords input, .geo-input-form input)[aria-invalid="true"] { border-bottom-color: var(--danger-fg); }
-:where(body > :not(#root)) input::placeholder { color: var(--fg4); opacity: 1; }
+:is(.geo-coords input, .geo-input-form input, .geo-ask input, .geo-def-input) { font-family: var(--mono); }
+:is(.geo-coords input, .geo-input-form input)[aria-invalid="true"] { border-bottom-color: var(--danger-fg); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input::placeholder { color: var(--fg4); opacity: 1; }
 .geo-coords input:disabled { color: var(--fg-disabled); background-color: transparent; border-color: var(--stroke-disabled); cursor: not-allowed; }
 /* Fluent Select */
-#geo-label, #x-unit, #y-unit {
+#geo-label {
   -webkit-appearance: none; appearance: none; padding-right: 28px; cursor: pointer;
   background-image: var(--select-chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
 }
@@ -259,51 +245,32 @@ math { font-family: var(--math); }
 }
 
 /* ---------- Slider ---------- */
-:where(body > :not(#root)) input[type="range"] {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"] {
   --p: 0.5; --z: 0.5;
   -webkit-appearance: none; appearance: none; width: 100%; height: 32px; background: transparent; margin: 0; cursor: pointer;
 }
-:where(body > :not(#root)) input[type="range"]::-webkit-slider-runnable-track {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-webkit-slider-runnable-track {
   height: 4px; border-radius: var(--r-circular);
   background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
 }
-:where(body > :not(#root)) input[type="range"]::-moz-range-track {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-moz-range-track {
   height: 4px; border-radius: var(--r-circular);
   background: linear-gradient(to right, var(--stroke-accessible) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(min(var(--p), var(--z)) * 100%), var(--compound-brand) calc(max(var(--p), var(--z)) * 100%), var(--stroke-accessible) calc(max(var(--p), var(--z)) * 100%));
 }
 /* Thumb: brand dot inside a neutral ring */
-:where(body > :not(#root)) input[type="range"]::-webkit-slider-thumb {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border: 0; border-radius: var(--r-circular);
   background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
 }
-:where(body > :not(#root)) input[type="range"]::-moz-range-thumb {
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]::-moz-range-thumb {
   width: 20px; height: 20px; border: 0; border-radius: var(--r-circular);
   background: var(--compound-brand); box-shadow: inset 0 0 0 4px var(--n-bg1), 0 0 0 1px var(--stroke1);
 }
-:where(body > :not(#root)) input[type="range"]:hover::-webkit-slider-thumb { background: var(--compound-brand-hover); }
-:where(body > :not(#root)) input[type="range"]:hover::-moz-range-thumb { background: var(--compound-brand-hover); }
-:where(body > :not(#root)) input[type="range"]:active::-webkit-slider-thumb { background: var(--compound-brand-pressed); }
-:where(body > :not(#root)) input[type="range"]:active::-moz-range-thumb { background: var(--compound-brand-pressed); }
-:where(body > :not(#root)) input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-medium); }
-
-/* ---------- Switch ---------- */
-.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; cursor: pointer; font: var(--body1); }
-.switch input {
-  -webkit-appearance: none; appearance: none; position: relative; flex: none; width: 40px; height: 20px; margin: 0;
-  border: 1px solid var(--stroke-accessible); border-radius: var(--r-circular); background: transparent; cursor: pointer;
-  transition: background var(--d-normal) var(--ease), border-color var(--d-normal) var(--ease);
-}
-.switch input::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: var(--r-circular);
-  background: var(--fg3); transition: transform var(--d-normal) var(--ease), background var(--d-normal) var(--ease);
-}
-.switch input:hover { border-color: var(--stroke-accessible-hover); }
-.switch input:hover::after { background: var(--fg2); }
-.switch input:checked { background: var(--compound-brand); border-color: transparent; }
-.switch input:checked:hover { background: var(--compound-brand-hover); }
-.switch input:checked:active { background: var(--compound-brand-pressed); }
-.switch input:checked::after { background: var(--fg-on-brand); transform: translateX(20px); }
-.switch input:focus-visible { outline-offset: 2px; }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:hover::-webkit-slider-thumb { background: var(--compound-brand-hover); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:hover::-moz-range-thumb { background: var(--compound-brand-hover); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:active::-webkit-slider-thumb { background: var(--compound-brand-pressed); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:active::-moz-range-thumb { background: var(--compound-brand-pressed); }
+:where(#calc, #calc-side, #geometry, #geo-side, #help, #geo-ask, #toast, #tooltip) input[type="range"]:focus-visible { outline-offset: 2px; border-radius: var(--r-medium); }
 
 /* ---------- Badge (counts) ---------- */
 .count {
@@ -338,123 +305,17 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .section-head h2 { margin: 0; font: var(--body1-strong); color: var(--fg1); }
 .subhead { margin: 0 0 8px; font: var(--body1-strong); color: var(--fg1); }
 
-/* ---------- Function cards ---------- */
-.function-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.fn-card {
-  --c: var(--brand-fg1);
-  position: relative; border-radius: var(--r-medium); background: var(--n-bg1); box-shadow: var(--shadow4);
-  transition: box-shadow var(--d-fast) var(--ease);
-}
-.fn-card:hover { box-shadow: var(--shadow8); }
-.fn-card::before {
-  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: var(--r-circular);
-  background: var(--c); opacity: 0; transition: opacity var(--d-fast) var(--ease);
-}
-.fn-card.active { box-shadow: 0 0 0 1px var(--stroke1), var(--shadow8); }
-.fn-card.active::before { opacity: 1; }
-.fn-card.invalid { box-shadow: 0 0 0 1px var(--danger-border), var(--shadow4); }
-.fn-main { display: flex; align-items: center; gap: 2px; padding: 4px 4px 4px 6px; }
-.fn-swatch {
-  flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r-medium); background: transparent;
-  display: grid; place-items: center; transition: background var(--d-faster) var(--ease);
-}
-.fn-swatch:hover { background: var(--subtle-hover); }
-.fn-swatch::after {
-  content: ""; width: 14px; height: 14px; border-radius: var(--r-circular); background: var(--c);
-  box-shadow: inset 0 0 0 2px var(--c); transition: background var(--d-fast) var(--ease);
-}
-.hidden-fn .fn-swatch::after { background: transparent; }
-.hidden-fn .fn-field { opacity: 0.55; }
-.fn-field { position: relative; flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; gap: 6px; cursor: text; }
-.fn-prefix { flex: none; font: italic 16px var(--math); color: var(--fg3); }
-.fn-input {
-  flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 0; border-radius: var(--r-medium); background: transparent;
-  font: 14px/20px var(--mono); outline: none;
-}
-.fn-input::placeholder { color: var(--fg4); }
-.fn-input:hover { background: var(--subtle-hover); }
-.fn-input:focus { background: var(--n-bg1); box-shadow: inset 0 0 0 1px var(--stroke1), inset 0 -2px 0 var(--compound-brand); }
-.fn-math {
-  flex: 1; min-width: 0; display: none; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap; font-size: 17px; pointer-events: none;
-  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
-}
-/* Finished formula: typeset, with the (invisible) input laid over it so a click still lands in the field. */
-.fn-card.typeset .fn-math { display: flex; }
-.fn-card.typeset .fn-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
-.fn-field math { font-size: 1em; }
-.fn-more, .fn-remove { opacity: 0; }
-.fn-card:hover :is(.fn-more, .fn-remove), .fn-card:focus-within :is(.fn-more, .fn-remove), .fn-card.active :is(.fn-more, .fn-remove), .fn-more.open { opacity: 1; }
-.fn-more.open { background: var(--subtle-selected); color: var(--brand-fg1); }
-.fn-remove:hover { color: var(--danger-fg); }
-.fn-error, .fn-domain { margin: -4px 12px 8px 46px; }
-.fn-domain { font: var(--caption1); font-variant-numeric: tabular-nums; color: var(--fg3); }
-.fn-error:empty, .fn-domain:empty { display: none; }
-
-/* Function settings: Fluent Popover, placed by JS next to its button */
-.popover.fn-settings { position: fixed; inset: auto; width: 320px; max-height: calc(100dvh - 16px); overflow: auto; }
-.fn-settings:popover-open { display: grid; gap: 16px; animation: pop-in var(--d-normal) var(--ease-decelerate); }
-.setting-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.domain-preview { font: var(--caption1); font-variant-numeric: tabular-nums; color: var(--fg3); }
-.interval { display: grid; grid-template-columns: auto 1fr auto auto 1fr auto; align-items: center; gap: 8px; }
-.interval > label { font: var(--body1); color: var(--fg2); }
-/* Joined toggle-button groups */
-.brackets, .dashes, .geo-seg {
-  display: inline-flex; border: 1px solid var(--stroke1); border-radius: var(--r-medium); overflow: hidden; background: var(--n-bg1);
-}
-.brackets label {
-  position: relative; width: 32px; height: 30px; display: grid; place-items: center;
-  font: 16px var(--math); color: var(--fg2); cursor: pointer; transition: background var(--d-faster) var(--ease);
-}
-.brackets label + label, .dashes label + label, .geo-seg button + button { border-left: 1px solid var(--stroke1); }
-.brackets input, .dashes input { position: absolute; opacity: 0; pointer-events: none; }
-.brackets label:hover, .dashes label:hover, .geo-seg button:hover { background: var(--n-bg1-hover); color: var(--fg1); }
-/* Checked toggle buttons: neutral selected background with brand foreground (Fluent subtle ToggleButton, checked) */
-.brackets label:has(input:checked), .dashes label:has(input:checked), .geo-seg button[aria-pressed="true"] { background: var(--n-bg1-selected); color: var(--brand-fg1); font-weight: 600; }
-.brackets label:has(input:disabled) { cursor: not-allowed; color: var(--fg-disabled); }
-.brackets label:has(input:focus-visible), .dashes label:has(input:focus-visible) { outline: 2px solid var(--focus-outer); outline-offset: -2px; }
-/* Fluent SwatchPicker */
-.colors { display: flex; align-items: center; gap: 8px; }
-.swatches { display: flex; flex-wrap: wrap; gap: 4px; }
-.color, .custom-color {
-  position: relative; width: 28px; height: 28px; padding: 0; border: 1px solid var(--stroke1); border-radius: var(--r-circular);
-  background: var(--sw); transition: box-shadow var(--d-faster) var(--ease);
-}
-.color:hover { box-shadow: inset 0 0 0 2px var(--n-bg1); border-color: var(--stroke1-hover); }
-.color[aria-pressed="true"] { border: 2px solid var(--brand-stroke1); box-shadow: inset 0 0 0 2px var(--n-bg1); }
-.custom-color { overflow: hidden; cursor: pointer; background: conic-gradient(#d13438, #ca5010, #eaa300, #107c10, #0f6cbd, #8764b8, #c239b3, #d13438); }
-.custom-color input { position: absolute; inset: -8px; width: 44px; height: 44px; opacity: 0; cursor: pointer; }
-.dashes { display: flex; margin-bottom: 8px; }
-.dashes label { position: relative; flex: 1; height: 30px; display: grid; place-items: center; cursor: pointer; color: var(--fg2); transition: background var(--d-faster) var(--ease); }
-.dashes svg { width: 48px; height: 12px; stroke-width: 2; }
-.width-row { display: grid; grid-template-columns: 1fr 72px; gap: 12px; align-items: center; }
+/* Joined toggle buttons (geometry styles) */
+.geo-seg { display: inline-flex; border: 1px solid var(--stroke1); border-radius: var(--r-medium); overflow: hidden; background: var(--n-bg1); }
+.geo-seg button + button { border-left: 1px solid var(--stroke1); }
+.geo-seg button:hover { background: var(--n-bg1-hover); color: var(--fg1); }
+.geo-seg button[aria-pressed="true"] { background: var(--n-bg1-selected); color: var(--brand-fg1); font-weight: 600; }
 .setting-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-
-/* Subtle button with a brand icon */
-.add-button {
-  display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; height: 40px; padding: 0 12px;
-  border: 0; border-radius: var(--r-medium); background: transparent; color: var(--fg1); font: var(--body1-strong);
-  transition: background var(--d-faster) var(--ease);
-}
-.add-button svg { color: var(--brand-fg1); }
-.add-button:hover:not(:disabled) { background: var(--subtle-hover); }
-.add-button:active:not(:disabled) { background: var(--subtle-pressed); }
-.add-button:disabled svg { color: inherit; }
-.add-button kbd { margin-left: auto; }
-
-/* ---------- Parameters ---------- */
-.parameter-list { display: grid; gap: 8px; }
-.parameter {
-  display: grid; grid-template-columns: 40px 1fr 80px; gap: 12px; align-items: center;
-  padding: 4px 8px 4px 12px; border-radius: var(--r-medium); background: var(--n-bg1); box-shadow: var(--shadow4);
-}
-.parameter-name { font: 16px var(--math); white-space: nowrap; }
-.parameter .error { grid-column: 1 / -1; padding-bottom: 4px; }
 
 /* ---------- Canvas stage ---------- */
 #plot, #hover { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #plot { touch-action: none; cursor: grab; outline: none; }
 #plot.grabbing { cursor: grabbing; }
-#plot:focus-visible { box-shadow: inset 0 0 0 2px var(--focus-outer), inset 0 0 0 3px var(--focus-inner); }
 #hover { pointer-events: none; }
 
 /* Fluent Toolbar (vertical) on a floating surface; groups split by toolbar dividers */
@@ -471,52 +332,6 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 .tool-group button:hover { background: var(--subtle-hover); color: var(--brand-fg1); }
 .tool-group button:active { background: var(--subtle-pressed); }
 .tool-group button[aria-pressed="true"] { background: var(--subtle-selected); color: var(--brand-fg1); }
-.tool-text.serif { font: italic 18px/1 var(--math); }
-
-.caption {
-  position: absolute; left: 12px; bottom: 8px; margin: 0; pointer-events: none;
-  font: var(--caption1); font-variant-numeric: tabular-nums; color: var(--fg3); white-space: pre;
-}
-.readout {
-  --c: var(--brand-fg1);
-  position: absolute; z-index: 2; pointer-events: none; padding: 4px 10px 6px 12px; border-radius: var(--r-medium);
-  background: var(--n-bg1); box-shadow: inset 3px 0 0 var(--c), var(--shadow16);
-  font: var(--caption1); font-variant-numeric: tabular-nums; white-space: pre; color: var(--fg1);
-}
-.readout math, .ledger math, .analysis-target math { font-size: 1.12em; }
-
-/* ---------- Analysis (floating card) ---------- */
-.analysis {
-  position: absolute; right: 68px; bottom: 12px; width: min(380px, calc(100% - 92px)); max-height: calc(100% - 24px); overflow: auto;
-  padding: 12px 16px; border-radius: var(--r-large); background: var(--n-bg1); box-shadow: var(--shadow16);
-  animation: pop-in var(--d-gentle) var(--ease-decelerate);
-}
-.analysis-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.analysis-head h2 { margin: 0; font: var(--subtitle2); color: var(--fg1); }
-.analysis-target {
-  --c: transparent;
-  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; padding-left: 8px; border-left: 3px solid var(--c); font-size: 15px;
-}
-.ledger { margin: 0; display: grid; }
-.ledger > div { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--stroke2); }
-.ledger dt { font: var(--body1); color: var(--fg3); }
-.ledger dd { margin: 0; font: var(--body1); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.analysis-foot { margin: 4px 0 0; font: var(--caption1); color: var(--fg3); text-align: right; }
-
-/* ---------- Popover (Fluent Popover / flyout) ---------- */
-.popover {
-  margin: 0; padding: 16px; border: 1px solid transparent; border-radius: var(--r-xlarge);
-  background: var(--n-bg1); color: var(--fg1); box-shadow: var(--shadow16);
-}
-.view-panel { position: absolute; inset: auto; top: 12px; right: 64px; width: 288px; }
-.view-panel:popover-open { animation: pop-in var(--d-normal) var(--ease-decelerate); }
-.popover-title { margin: 0 0 8px; font: var(--subtitle2); }
-.view-panel .subhead { margin-top: 12px; }
-.unit-row { margin-top: 8px; }
-.range-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 8px; align-items: center; }
-.range-grid label { font: var(--body1); color: var(--fg2); }
-.view-panel .error { margin-top: 8px; }
-@keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } }
 
 /* ---------- Tooltip ---------- */
 .tooltip {
@@ -1069,21 +884,12 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   .stage { order: -1; height: 56dvh; min-height: 300px; flex: none; border-bottom: 1px solid var(--stroke2); }
   .sidebar { border-right: 0; }
   .sidebar-body { overflow: visible; }
-  .toolbar { top: auto; bottom: 8px; right: 8px; flex-direction: row; max-width: calc(100% - 16px); overflow-x: auto; }
   .tool-group { flex-direction: row; }
   .tool-group + .tool-group { margin: 0 0 0 4px; padding: 0 0 0 4px; border-top: 0; border-left: 1px solid var(--stroke2); }
   .tool-group button { width: 36px; height: 36px; }
-  .caption { display: none; }
-  .analysis { right: 8px; left: 8px; bottom: 60px; width: auto; max-height: calc(100% - 76px); }
-  .view-panel { position: fixed; inset: auto 8px calc(72px + env(safe-area-inset-bottom)) 8px; width: auto; }
-  .fn-more, .fn-remove, .geo-remove, .geo-settings { opacity: 1; }
-  .popover.fn-settings {
-    inset: auto 0 0 0; width: auto; max-height: 75dvh; border-radius: var(--r-xlarge) var(--r-xlarge) 0 0;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-  }
+  .geo-remove, .geo-settings { opacity: 1; }
   .icon-button, .geo-eye { width: 40px; height: 40px; }
   #geo-inspect-close { width: 40px; height: 40px; }
-  .fn-field { height: 44px; }
   .help td:first-child { white-space: normal; }
   .geo-hint { top: 8px; left: 8px; right: 8px; max-width: none; }
   .geo-inspect { top: 52px; bottom: auto; left: 8px; right: 8px; width: auto; max-height: 55%; }
@@ -1112,8 +918,7 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 
 @media (forced-colors: active) {
   .geo-tabs button[aria-selected="true"]::after { background: Highlight; }
-  .fn-card, .parameter, .geo-item, .toolbar, .analysis, .geo-inspect, .toast, .pod, .calc-composer, .calc-tile { border: 1px solid CanvasText; }
-  .switch input:checked { background: Highlight; }
+  .geo-item, .toolbar, .geo-inspect, .toast, .pod, .calc-composer, .calc-tile { border: 1px solid CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {

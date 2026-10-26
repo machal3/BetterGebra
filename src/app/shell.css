@@ -61,6 +61,10 @@ body {
 .b-topbar .b-modes { --ui-seg-tray: var(--b-track); }
 :root[data-theme="dark"] .b-topbar .b-modes { --ui-seg-tray: var(--b-page); }
 
+/* ---------- Side panel (its content moves to React panel by panel) ---------- */
+.sidebar { background: var(--b-panel); border-right: 0; box-shadow: inset -1px 0 0 var(--b-line); }
+.sidebar-body { padding: var(--b-s4) var(--b-s4) var(--b-s6); color: var(--b-ink); font: 400 var(--b-fs-md)/20px var(--b-font); }
+
 /* ---------- Tablet: no wordmark, the switch stays centred ---------- */
 @media (max-width: 1023px) {
   .b-brand-name { display: none; }
