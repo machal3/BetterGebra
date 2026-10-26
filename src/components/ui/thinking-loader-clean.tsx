@@ -30,15 +30,16 @@ export type ThinkingLoaderProps = {
   className?: string;
 };
 
-const DEFAULT_PHASES = ["Thinking", "Searching the web", "Reading sources", "Writing response"];
+// Bettergebra: Polish defaults
+const DEFAULT_PHASES = ["Myślę", "Szukam", "Czytam źródła", "Piszę odpowiedź"];
 const RAYS = Array.from({ length: 8 }, (_, i) => i);
 // 75s reads "1m 15s", a long run "2h 05m" or "3d 4h"
 const took = (s: number) => {
-  if (s < 60) return `${s}s`;
+  if (s < 60) return `${s} s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
+  if (m < 60) return `${m} min ${s % 60} s`;
   const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
+  return h < 24 ? `${h} godz. ${String(m % 60).padStart(2, "0")} min` : `${Math.floor(h / 24)} d ${h % 24} godz.`;
 };
 
 export function ThinkingLoader({
@@ -47,7 +48,7 @@ export function ThinkingLoader({
   phase,
   loop = false,
   done = false,
-  doneLabel = (s) => `Thought for ${took(s)}`,
+  doneLabel = (s) => `Gotowe po ${took(s)}`,
   size = "md",
   variant = "pill",
   className,

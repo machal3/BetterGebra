@@ -147,8 +147,9 @@ const cleanActions = (list: unknown): MessageActionKey[] =>
   Array.isArray(list) ? [...new Set(list)].filter((k): k is MessageActionKey => DEFAULT_ACTIONS.includes(k)) : DEFAULT_ACTIONS;
 /** A whole, finite number or the fallback */
 const whole = (n: unknown, fallback: number) => (typeof n === "number" && Number.isFinite(n) ? Math.floor(n) : fallback);
-const fmt = (n: number) => n.toLocaleString("en-US");
-const DEFAULT_REASONS = ["Not accurate", "Too long", "Didn't follow instructions", "Other"];
+const fmt = (n: number) => n.toLocaleString("pl-PL");
+// Bettergebra: every string in Polish
+const DEFAULT_REASONS = ["Niedokładne", "Za długie", "Nie to, o co chodziło", "Inne"];
 
 export function MessageActions({
   text,
@@ -166,7 +167,7 @@ export function MessageActions({
   speaking,
   speakDuration,
   quiet = true,
-  label = "Message actions",
+  label = "Działania na wyniku",
   className,
 }: MessageActionsProps) {
   const uid = useId();
@@ -196,7 +197,7 @@ export function MessageActions({
     if (next === index) return;
     if (version === undefined) setInner(next);
     onVersionChange?.(next);
-    announce(`Version ${fmt(next + 1)} of ${fmt(count)}`);
+    announce(`Wersja ${fmt(next + 1)} z ${fmt(count)}`);
   };
 
   /* ----- Status line for screen readers ----- */
@@ -218,7 +219,7 @@ export function MessageActions({
     }
     onCopy?.(text);
     setCopied(Date.now());
-    announce("Copied");
+    announce("Skopiowano");
   };
 
   /* ----- Regenerate ----- */
@@ -226,7 +227,7 @@ export function MessageActions({
   const regenerate = () => {
     setSpin((s) => s + 1);
     onRegenerate?.();
-    announce("Regenerating");
+    announce("Liczę ponownie");
   };
 
   /* ----- Feedback ----- */
@@ -239,7 +240,7 @@ export function MessageActions({
     setVote("up");
     setPanel(false);
     onFeedback?.("up");
-    announce("Marked as good response");
+    announce("Oznaczono jako dobry wynik");
   };
   const thumbsDown = () => {
     if (vote === "down") {
@@ -254,13 +255,13 @@ export function MessageActions({
     setReason(null);
     setOther("");
     onFeedback?.("down");
-    announce("Marked as bad response. Tell us what went wrong below");
+    announce("Oznaczono jako zły wynik. Napisz poniżej, co jest nie tak");
   };
   const send = () => {
     if (!reason || sent) return;
-    onFeedback?.("down", reason === "Other" ? other.trim() || "Other" : reason);
+    onFeedback?.("down", reason === "Inne" ? other.trim() || "Inne" : reason);
     setSent(true);
-    announce("Thanks for the feedback");
+    announce("Dziękujemy za opinię");
   };
   useEffect(() => {
     if (!sent) return;
@@ -283,7 +284,7 @@ export function MessageActions({
     const t = window.setTimeout(() => {
       setInnerSpeaking(false);
       onSpeak?.(false);
-      announce("Finished reading");
+      announce("Koniec czytania");
     }, duration);
     return () => window.clearTimeout(t);
     // onSpeak is read when the timer ends – a new function each render must not restart it
@@ -293,7 +294,7 @@ export function MessageActions({
     const next = !playing;
     if (speaking === undefined) setInnerSpeaking(next);
     onSpeak?.(next);
-    announce(next ? "Reading aloud" : "Stopped reading");
+    announce(next ? "Czytam na głos" : "Zatrzymano czytanie");
   };
 
   const active = Boolean(copied) || panel || playing || regenerating;
@@ -336,8 +337,8 @@ export function MessageActions({
     if (key === "copy")
       return button({
         key: "copy",
-        tip: copied ? "Copied" : "Copy",
-        labelText: copied ? "Copied" : "Copy message",
+        tip: copied ? "Skopiowano" : "Kopiuj",
+        labelText: copied ? "Skopiowano" : "Kopiuj jako tekst",
         onClick: copy,
         flash: Boolean(copied),
         extra: { "data-done": copied ? "" : undefined },
@@ -357,8 +358,8 @@ export function MessageActions({
         <span className="ui-mac__regen" key="regenerate">
           {button({
             key: "regenerate",
-            tip: regenerating ? "Writing…" : "Regenerate",
-            labelText: "Regenerate response",
+            tip: regenerating ? "Liczę…" : "Przelicz",
+            labelText: "Przelicz ponownie",
             onClick: regenerate,
             extra: { "data-busy": regenerating ? "" : undefined },
             children: (
@@ -370,18 +371,18 @@ export function MessageActions({
             ),
           })}
           <span className="ui-mac__versions" data-open={count > 1 ? "" : undefined} inert={count < 2}>
-            <span className="ui-mac__versions-clip" role="group" aria-label="Versions">
+            <span className="ui-mac__versions-clip" role="group" aria-label="Wersje">
               <button
                 type="button"
                 className="ui-mac__step"
                 data-dir="prev"
-                aria-label="Previous version"
+                aria-label="Poprzednia wersja"
                 disabled={index === 0}
                 onClick={() => goTo(index - 1)}
               >
                 <Glyph d={icons.next} solid />
               </button>
-              <span className="ui-mac__count" aria-label={`Version ${fmt(index + 1)} of ${fmt(count)}`}>
+              <span className="ui-mac__count" aria-label={`Wersja ${fmt(index + 1)} z ${fmt(count)}`}>
                 <Swap id={String(index)} className="ui-mac__count-now">
                   {fmt(index + 1)}
                 </Swap>
@@ -392,7 +393,7 @@ export function MessageActions({
                 type="button"
                 className="ui-mac__step"
                 data-dir="next"
-                aria-label="Next version"
+                aria-label="Następna wersja"
                 disabled={index >= count - 1}
                 onClick={() => goTo(index + 1)}
               >
@@ -407,8 +408,8 @@ export function MessageActions({
         <Fragment key="feedback">
           {button({
           key: "up",
-          tip: vote === "up" ? "Thanks!" : "Good response",
-          labelText: "Good response",
+          tip: vote === "up" ? "Dziękujemy!" : "Dobry wynik",
+          labelText: "Dobry wynik",
           pressed: vote === "up",
           onClick: thumbsUp,
           children: (
@@ -419,8 +420,8 @@ export function MessageActions({
         })}
         {button({
           key: "down",
-          tip: "Bad response",
-          labelText: "Bad response",
+          tip: "Zły wynik",
+          labelText: "Zły wynik",
           pressed: vote === "down",
           expanded: panel,
           controls: `${uid}-feedback`,
@@ -436,8 +437,8 @@ export function MessageActions({
       );
     return button({
       key: "speak",
-      tip: playing ? "Stop" : "Read aloud",
-      labelText: playing ? "Stop reading" : "Read aloud",
+      tip: playing ? "Zatrzymaj" : "Czytaj na głos",
+      labelText: playing ? "Zatrzymaj czytanie" : "Czytaj na głos",
       pressed: playing,
       onClick: speak,
       children: (
@@ -485,7 +486,7 @@ export function MessageActions({
                 <span id={`${uid}-ask`} className="ui-mac__ask">
                   What went wrong?
                 </span>
-                <button type="button" className="ui-mac__close" aria-label="Close feedback" onClick={closePanel}>
+                <button type="button" className="ui-mac__close" aria-label="Zamknij opinię" onClick={closePanel}>
                   <Glyph d={icons.close} />
                 </button>
               </div>
@@ -516,23 +517,23 @@ export function MessageActions({
                     {sent ? (
                       <>
                         <Glyph d={icons.tick} />
-                        Thanks!
+                        Dziękujemy!
                       </>
                     ) : (
-                      "Send"
+                      "Wyślij"
                     )}
                   </Swap>
                 </button>
               </div>
-              {Array.isArray(reasons) && reasons.includes("Other") && (
-                <div className="ui-mac__fold" data-open={reason === "Other" && !sent ? "" : undefined} inert={reason !== "Other" || sent}>
+              {Array.isArray(reasons) && reasons.includes("Inne") && (
+                <div className="ui-mac__fold" data-open={reason === "Inne" && !sent ? "" : undefined} inert={reason !== "Inne" || sent}>
                   <div className="ui-mac__clip">
                     <input
                       className="ui-mac__input"
                       value={other}
                       placeholder="Tell us more (optional)"
                       dir="auto"
-                      aria-label="What went wrong, in your words"
+                      aria-label="Co jest nie tak, własnymi słowami"
                       onChange={(e) => setOther(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") send();
