@@ -121,13 +121,13 @@
 .b-pod-head { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); min-height: 28px; }
 /* the action bar (Message Actions) is a container as wide as its parent: one button here, so one button wide */
 :is(.b-pod-head, .b-calc-query) > .ui-mac { flex: none; width: 32px; }
-.b-pod-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; color: var(--b-text); }
-.b-pod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding: 6px 0; }
+.b-pod-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; line-height: 20px; color: var(--b-ink); }
+.b-pod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding: 8px 0; }
 .b-pod-row + .b-pod-row { box-shadow: inset 0 1px 0 var(--b-line); }
-.b-pod-math { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: var(--b-fs-math); color: var(--b-strong); }
+.b-pod-math { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: var(--b-fs-math-lg); color: var(--b-strong); }
 .b-pod-math math { font-family: var(--b-math); }
-.b-pod-long { min-width: 0; font: var(--b-fs-md)/20px var(--b-mono); overflow-wrap: anywhere; color: var(--b-strong); }
-.b-pod-row-note { padding: 1px 8px; border-radius: var(--b-r-xs); background: var(--b-fill); font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
+.b-pod-long { min-width: 0; font: var(--b-fs-title)/24px var(--b-mono); overflow-wrap: anywhere; color: var(--b-strong); }
+.b-pod-row-note { padding: 2px 8px; border-radius: var(--b-r-xs); background: var(--b-fill); font-size: var(--b-fs-md); line-height: 20px; color: var(--b-text); font-variant-numeric: tabular-nums; }
 .b-pod-note { margin: 4px 0 0; font-size: var(--b-fs-sm); color: var(--b-text); }
 .ui-buttonc.b-pod-more { justify-self: start; margin-top: 6px; }
 /* The answer: raised above the others, in larger type, its note a footer under a hairline */
@@ -145,12 +145,14 @@
 .b-pod-skeleton { gap: 10px; }
 /* Wide enough: the other cards read like a ledger, the title on the left */
 @container (min-width: 640px) {
+  /* (no row gap: the title spans spare rows, and each would add its gap under the card's content) */
   .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) {
-    grid-template-columns: minmax(140px, 190px) minmax(0, 1fr) auto; column-gap: 20px; align-items: start; padding: 6px 12px 6px 18px;
+    grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) auto; column-gap: 24px; row-gap: 0; align-items: start; padding: 6px 12px 6px 20px;
   }
   .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head { display: contents; }
-  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head h3 { grid-column: 1; grid-row: 1 / span 30; padding-top: 10px; }
-  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head .ui-mac { grid-column: 3; grid-row: 1; margin-top: 4px; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head h3 { grid-column: 1; grid-row: 1 / span 30; padding-top: 16px; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-head .ui-mac { grid-column: 3; grid-row: 1; margin-top: 10px; }
+  .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) .b-pod-row { min-height: 52px; }
   .b-pod:not(.is-wide, .is-primary, .is-error, .b-pod-skeleton) > :not(.b-pod-head) { grid-column: 2; }
 }
 
