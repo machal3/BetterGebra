@@ -190,3 +190,25 @@ Każdy punkt sprawdzam w przeglądarce po etapie, którego dotyczy, i na końcu 
 - [ ] `prefers-reduced-motion`: brak ruchu ozdobnego
 - [ ] axe/Lighthouse: brak błędów krytycznych, kontrast AA
 - [ ] Przeciąganie wykresu i punktów w geometrii bez re-renderów Reacta (profil)
+
+## 10. Etap 2: pełne podporządkowanie Affect UI (2026-10-27)
+
+Zrzuty „przed”: `output/screens/stage2-before/`, „po”: `output/screens/stage2-after/` (4 szerokości × jasny/ciemny × start, Wykresy, Geometria, Kalkulator, wynik).
+
+**Decyzje:** monochrom jak w wersji Clean (zaznaczenie = ciemny chip albo neutralne wypełnienie; kolor tylko dla matematyki i stanów; niebieski wyłącznie w pierścieniu fokusu, jak w samych komponentach) · kanwa na całe okno, panel jako pływająca karta · kanwa też w języku Affect UI · wzory: Cambria Math / zainstalowany STIX Two Math, a w paczce STIX Two Math jako zapas (Noto Sans Math: granice całki i prim nachodzą na znaki; Libertinus Math: nawiasy macierzy się nie rozciągają).
+
+**Co się zmieniło**
+1. Font: pliki Affect UI prosiły o `"Inter"`, a paczka rejestruje `"Inter Variable"` — komponenty rysowały się systemowym krojem. Każdy stos zaczyna się teraz od `"Inter Variable"`.
+2. Tokeny (`styles/tokens.css`) mają wartości plików Clean i spisany kontrakt w nagłówku; `styles/app.css` (Fluent 2) usunięty.
+3. Tylko warianty Clean: przełącznik trybów, ekran startowy i przyciski dialogu geometrii; pliki standardowe usunięte.
+4. Prymitywy (`components/controls.tsx`): pole wg Message Actions, monochromatyczne przełączniki i suwaki, Menu (zamiast `<select>`), ColorPicker (zamiast systemowego okna koloru), Row, Chip, popover/arkusz, dymek jak w Message Actions (380 ms).
+5. Układ: kanwa pod całym oknem, panel jako karta zwijana do nagłówka (`bettergebra.dock`), na telefonie arkusz z uchwytem (podgląd / połowa / całość). Widok opisuje część kanwy obok karty (`Inset` w `render/viewport.ts`); zwinięcie lub przeciągnięcie karty nie przesuwa rysunku, zmiana rozmiaru okna nie zmienia zakresów.
+6. Panele: wagi 400/500, skala rozmiarów (także wzorów), wspólne wiersze i chipy, puste stany w stylu ilustracji Affect UI.
+7. Kanwa: etykiety w Inter 11/500 z tokenów, cichsza siatka, nowa paleta krzywych (każdy kolor ≥ 3:1 na jasnym i ciemnym tle, pary ΔE ≥ 22) i geometrii; zapisane kolory starej palety przechodzą na nowe.
+
+**Dodatkowe punkty checklisty**
+- [ ] Zwinięcie i rozwinięcie panelu wraca do tego samego widoku; zmiana rozmiaru okna nie zmienia zakresów
+- [ ] Przywróć widok, przybliżanie przyciskami i 0 na kanwie celują w środek części obok panelu; etykiety osi nie chowają się pod panelem
+- [ ] Arkusz na telefonie: przeciąganie, przycisk, fokus w polu podnosi arkusz
+- [ ] Menu „Etykieta” i ColorPicker obsługiwane klawiaturą
+- [ ] Stary zapis z kolorami Fluent wczytuje się w nowej palecie

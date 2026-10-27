@@ -43,7 +43,7 @@
 }
 .b-field--mono { font-family: var(--b-mono); }
 .b-field::placeholder { color: var(--b-faint); opacity: 1; }
-@media (hover: hover) { .b-field:hover:not(:focus, :disabled) { box-shadow: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.04); } }
+@media (hover: hover) { .b-field:hover:not(:focus, :disabled) { box-shadow: var(--b-shadow-field-hover); } }
 .b-field:focus { outline: 2px solid var(--b-focus); outline-offset: 1px; }
 .b-field[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--b-danger); }
 .b-field[aria-invalid="true"]:focus { outline-color: var(--b-danger-line); }
@@ -165,7 +165,7 @@
   font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
   transition: box-shadow var(--b-fast) ease;
 }
-@media (hover: hover) { .b-menu-trigger:hover { box-shadow: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.04); } }
+@media (hover: hover) { .b-menu-trigger:hover { box-shadow: var(--b-shadow-field-hover); } }
 .b-menu-value { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .b-menu-chevron { flex: none; color: var(--b-icon); transition: transform var(--b-slow) var(--b-ease); }
 .b-menu-trigger[aria-expanded="true"] .b-menu-chevron { transform: rotate(180deg); }
@@ -197,6 +197,7 @@
 .b-swatch.is-custom[aria-pressed="false"]:focus-visible { outline: 2px solid var(--b-focus); outline-offset: 1px; }
 .b-colorpop { width: 232px; padding: 12px; }
 .b-colorpop:popover-open { display: grid; gap: 12px; }
+/* (the picker's own colours are the colours being picked: black, white and the hues, in either theme) */
 .b-colorpop-area {
   position: relative; height: 136px; border-radius: var(--b-r-sm); cursor: crosshair; touch-action: none;
   background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));

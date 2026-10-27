@@ -21,6 +21,8 @@
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-s2); pointer-events: none;
 }
 .b-gtop > * { pointer-events: auto; }
+/* the folded panel is a pill in the same corner: the palette goes below it */
+@media (min-width: 768px) { body[data-dock="closed"] .b-gtop { top: calc(var(--b-dock-gap) + 44px + var(--b-s2)); } }
 .b-gpalette {
   display: flex; align-items: center; gap: 2px; max-width: 100%; padding: 4px; overflow-x: auto; scrollbar-width: none;
   border-radius: var(--b-r-xl); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
