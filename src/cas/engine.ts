@@ -23,7 +23,7 @@ export { sugar };
 import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from './poly';
 import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, bitLength, gcd as bgcd } from './q';
 import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } from './simplify';
-import { Interval, Sol, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
+import { Interval, Sol, SystemResult, chooseUnknowns, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
 import { product as prodOf, sum as sumOf, ratioHint, numericSum } from './sums';
 import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRow, features, fmt, graphText, implicitPlot, matrixPlot, parametricSeries, plotOf, regionPlot, rootsPlot, sequencePlot, statsPlot, zText } from './plot';
 export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
@@ -583,17 +583,13 @@ function system(items: Node[], env: Env, varsHint: string[] | null): Out {
   return systemFromExprs(exprs, varsHint);
 }
 function systemFromExprs(exprs: Expr[], varsHint: string[] | null): Out {
-  const vs = varsHint ?? variables(add(...exprs.map(e => mul(e, e)))).filter(v => v !== 'k');
+  const chosen = chooseUnknowns(exprs);
+  const vs = varsHint ?? chosen.unknowns;
+  const params = [...new Set(exprs.flatMap(e => variables(e)))].filter(v => !vs.includes(v)).sort();
   if (!vs.length) fail('Układ nie ma niewiadomych.');
-  if (vs.length === 1) {
-    const pods: Pod[] = [];
-    const r = solveSystem(exprs, vs);
-    pods.push(systemPod(r, vs));
-    return { pods };
-  }
   const r = solveSystem(exprs, vs);
-  const pods = [systemPod(r, vs)];
-  if (vs.length === 2) {
+  const pods = systemPods(r, vs, params);
+  if (vs.length === 2 && !params.length) {
     const [vx, vy] = vs.includes('x') && vs.includes('y') ? ['x', 'y'] : vs;
     const pts: [number, number][] = r.kind === 'solutions' ? r.list.flatMap(sol => {
       const z = sol.map(v => safe(() => approx(v)));
@@ -613,19 +609,57 @@ function twoVars(e: Expr): [string, string] {
   if (vs.includes('y')) return [vs.find(v => v !== 'y')!, 'y'];
   return [vs[0], vs[1]];
 }
-function systemPod(r: ReturnType<typeof solveSystem>, vs: string[]): Pod {
-  if (r.kind === 'none') return { title: 'Rozwiązanie', rows: [textRow('Układ jest sprzeczny: brak rozwiązań.')] };
+/** The solution card, the parametric discussion (special values of a parameter) and which letters are which. */
+function systemPods(r: SystemResult, vs: string[], params: string[]): Pod[] {
+  const main = systemPod(r, vs, params);
+  const notes = [main.note];
+  if (params.length) notes.push(`Niewiadome: ${vs.join(', ')}; parametr${params.length > 1 ? 'y' : ''}: ${params.join(', ')}. Inne niewiadome wskażesz tak: solve(…; {${params.slice(0, 2).join(', ')}}).`);
+  const cases = 'cases' in r ? r.cases ?? [] : [];
+  const when = 'when' in r ? r.when : undefined;
+  if (when) {
+    const [p] = variables(when);
+    const W = toText(factorExpr(when).e), alt = toText(factorExpr(neg(when)).e), cond = alt.length < W.length ? alt : W;
+    notes.unshift(cases.length && variables(when).length === 1
+      ? `Dla ${p} ∉ {${cases.map(c => toText(c.at[1])).join('; ')}} (wtedy wyznacznik główny W = ${W} ≠ 0).`
+      : `Gdy ${cond} ≠ 0 (wyznacznik główny układu).`);
+  }
+  main.note = notes.filter(Boolean).join(' ') || undefined;
+  const pods = [main];
+  if (cases.length) {
+    pods.push({
+      title: 'Przypadki szczególne',
+      rows: cases.map(c => {
+        const sub_ = systemPod(c.result, vs, params);
+        const head = `${c.at[0]} = ${toText(c.at[1])}`;
+        const body = c.result.kind === 'none' ? 'układ sprzeczny (brak rozwiązań)'
+          : c.result.kind === 'param' ? `nieskończenie wiele rozwiązań: ${sub_.rows.map(r => r.text).join(', ')}`
+          : sub_.rows.map(r => r.text).join('; ');
+        return textRow(`${head}: ${body}`);
+      }),
+      note: 'Wartości parametru, przy których ogólny wzór nie działa (wyznacznik główny W = 0 albo sprzeczność znika); układ rozwiązany dla nich osobno.',
+    });
+  }
+  return pods;
+}
+function systemPod(r: SystemResult, vs: string[], params: string[] = []): Pod {
+  if (r.kind === 'none') return { title: 'Rozwiązanie', rows: [textRow('Układ jest sprzeczny: brak rozwiązań.')], note: r.note };
   if (r.kind === 'unknown') return { title: 'Rozwiązanie', rows: [textRow(r.note)] };
   if (r.kind === 'param') {
     const rows = vs.map((v, k) => r.free.includes(v) ? { ml: M(`${mi(v)}${mo('∈')}<mi mathvariant="normal">ℝ</mi>`), text: `${v} ∈ ℝ` } : eqRow(mi(v), v, r.values[k]));
-    return { title: 'Rozwiązanie', rows, note: `Nieskończenie wiele rozwiązań (parametr${r.free.length > 1 ? 'y' : ''}: ${r.free.join(', ')}).` };
+    return { title: 'Rozwiązanie', rows, note: [`Nieskończenie wiele rozwiązań (zmienn${r.free.length > 1 ? 'e swobodne' : 'a swobodna'}: ${r.free.join(', ')}).`, r.note].filter(Boolean).join(' ') };
   }
-  const rows = r.list.map(sol => ({
-    ml: M(sol.map((v, k) => `${mi(vs[k])}${mo('=')}${toML(v)}`).join(`${mo(',')}<mspace width="0.6em"/>`)),
-    text: sol.map((v, k) => `${vs[k]} = ${toText(v)}`).join(', '),
-    note: sol.some(v => isConstant(v) && !isNum(v)) ? sol.map((v, k) => (isNum(v) ? '' : `${vs[k]} ${shortApprox(v)}`)).filter(Boolean).join(', ') : undefined,
-  }));
-  return { title: r.list.length > 1 ? 'Rozwiązania' : 'Rozwiązanie', rows };
+  // k is the index of a family of periodic solutions unless it is one of the letters of the system
+  const family = !vs.includes('k') && !params.includes('k') && r.list.some(sol => sol.some(v => !freeOf(v, 'k')));
+  const kML = `${mo(',')}<mspace width="0.6em"/>${mi('k')}${mo('∈')}<mi mathvariant="normal">ℤ</mi>`;
+  const rows = r.list.map(sol => {
+    const fam = family && sol.some(v => !freeOf(v, 'k'));
+    return {
+      ml: M(sol.map((v, k) => `${mi(vs[k])}${mo('=')}${toML(v)}`).join(`${mo(',')}<mspace width="0.6em"/>`) + (fam ? kML : '')),
+      text: sol.map((v, k) => `${vs[k]} = ${toText(v)}`).join(', ') + (fam ? ', k ∈ ℤ' : ''),
+      note: sol.some(v => isConstant(v) && !isNum(v)) ? sol.map((v, k) => (isNum(v) || !isConstant(v) ? '' : `${vs[k]} ${shortApprox(v)}`)).filter(Boolean).join(', ') : undefined,
+    };
+  });
+  return { title: r.list.length > 1 ? 'Rozwiązania' : 'Rozwiązanie', rows, note: r.note };
 }
 
 // --- Matrices and lists ---

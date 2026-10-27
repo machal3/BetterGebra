@@ -178,3 +178,28 @@ test('series: convergence tests, P(k)·r^k, binomial sums, telescoping products'
   expect(card('product(1-1/k^2, k, 2, inf)', 'Iloczyn')).toBe('1/2');
   expect(card('product((k+1)/k, k, 1, n)', 'Iloczyn')).toBe('n + 1');
 });
+
+test('systems: unknowns vs parameters, discussion, fractions, families', () => {
+  const pods = (q: string) => { const r = run(q); if (r.error) throw new Error(r.error); return r.pods; };
+  // x, y are the unknowns; a, b parameters
+  expect(card('x + y = a, x - y = b', 'Rozwiązanie')).toBe('x = (a + b)/2, y = (a − b)/2');
+  expect(card('a x + b y = 1, x - y = 2', 'Rozwiązanie')).toBe('x = (2b + 1)/(a + b), y = (1 − 2a)/(a + b)');
+  expect(pods('a x + b y = 1, x - y = 2')[0].note).toMatch(/Gdy a \+ b ≠ 0/);
+  expect(card('a + b = 3, a - b = 1', 'Rozwiązanie')).toBe('a = 2, b = 1');
+  expect(card('solve({a x + b y = 1, x - y = 2}, {a, b})', 'Rozwiązanie')).toContain('a = ');
+  // the discussion of a parametric system: Cramer, then the values with W = 0
+  expect(card('a x + y = 1, x + a y = 1', 'Rozwiązanie')).toBe('x = 1/(a + 1), y = 1/(a + 1)');
+  expect(card('a x + y = 1, x + a y = 1', 'Przypadki szczególne')).toBe('a = −1: układ sprzeczny (brak rozwiązań) | a = 1: nieskończenie wiele rozwiązań: x = 1 − y, y ∈ ℝ');
+  expect(card('a x + y + z = 1, x + a y + z = 1, x + y + a z = 1', 'Przypadki szczególne')).toMatch(/^a = −2: układ sprzeczny/);
+  expect(card('x + 2y = k, 2x + 4y = 3', 'Przypadki szczególne')).toBe('k = 3/2: nieskończenie wiele rozwiązań: x = 3/2 − 2y, y ∈ ℝ');
+  expect(card('x + y + z = a, x - y = b, y - z = c', 'Rozwiązanie')).toBe('x = (a + 2b + c)/3, y = (a − b + c)/3, z = (a − b − 2c)/3');
+  // nonlinear with parameters, fractions, periodic families
+  expect(card('x^2 + y^2 = r^2, y = x', 'Rozwiązania')).toBe('x = −√2·|r|/2, y = −√2·|r|/2 | x = √2·|r|/2, y = √2·|r|/2');
+  expect(card('1/x + 1/y = 5, 1/x - 1/y = 1', 'Rozwiązanie')).toBe('x = 1/3, y = 1/2');
+  expect(card('sin(x) + y = 1, y = 0', 'Rozwiązanie')).toBe('x = 2kπ + π/2, y = 0, k ∈ ℤ');
+  expect(card('sqrt(x) + sqrt(y) = 5, x - y = 5', 'Rozwiązanie')).toBe('x = 9, y = 4');
+  expect(pods('x^2 + y^2 = 1, x + y = 2')[0].note).toMatch(/Brak rozwiązań rzeczywistych/);
+  // still right without parameters
+  expect(card('x + y + z = 6, x - y + z = 2, 2x + y - z = 1', 'Rozwiązanie')).toBe('x = 1, y = 2, z = 3');
+  expect(card('x + 2y = 3, 2x + 4y = 7', 'Rozwiązanie')).toBe('Układ jest sprzeczny: brak rozwiązań.');
+});

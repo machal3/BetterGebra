@@ -270,6 +270,11 @@ export function pow(b: Expr, e: Expr): Expr {
     if (b.k === '^' && qint(e.v)) return pow(b.b, mul(b.e, e));
     // (x^a)^r = x^(ar) also for fractional r when the base is positive and a real number: (e^2)^(1/2) = e.
     if (b.k === '^' && b.e.k === 'n' && positiveConstant(b.b)) return pow(b.b, mul(b.e, e));
+    // variables are real: √(r²) = |r|, √(x⁴) = x², the even power of a real number is never negative
+    if (b.k === '^' && b.e.k === 'n' && qint(b.e.v) && b.e.v.n % 2n === 0n && qeq(e.v, QHALF) && b.b.k !== 'n' && !hasI(b.b)) {
+      const m = b.e.v.n / 2n;
+      return m % 2n ? pow(fn('abs', b.b), num(m)) : pow(b.b, num(m));
+    }
     if (b.k === '*') {
       if (qint(e.v)) return mul(...b.t.map(f => pow(f, e)));
       // (4x)^(1/2) = 2·x^(1/2): a positive factor comes out of any power.
@@ -345,6 +350,8 @@ function denest(b: Expr, k: 2 | 3): Expr | null {
 const qToNumberLite = (v: Q) => Number(v.n) / Number(v.d);
 const keyOf = (e: Expr) => key(e);
 function expandCube(e: Expr): Expr { return expand(mul(e, e, e)); }
+
+const hasI = (e: Expr): boolean => isSym(e, 'i') || children(e).some(hasI);
 
 /** Numbers > 0 and the constants π and e; used where pulling a factor out of a root is only valid for positives. */
 export function positiveConstant(f: Expr): boolean {

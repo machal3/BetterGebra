@@ -7,14 +7,14 @@
  */
 import {
   E, Expr, MINUS_ONE, ONE, PI, TWO, ZERO, add, children, div, expand, fn, freeOf, isConstant, isFn, isInt, isNum, isSym, isZero, mul, neg, num,
-  numDen, pow, same, sqrt, sub, subst, sym, together, key, variables,
+  mapChildren, numDen, pow, same, sqrt, sub, subst, sym, together, key, variables,
 } from './expr';
 import { compileDouble } from './fast';
 import { approx, evalC, C } from './numeric';
 import { coeffsOf, solvePoly } from './poly';
-import { cancel, expandLog, factorExpr, trigExpand } from './simplify';
+import { cancel, expandLog, factorExpr, simplify, trigExpand } from './simplify';
 import { constSign } from './functions';
-import { rref, nonzero } from './matrix';
+import { det, rref, nonzero } from './matrix';
 import { CasError, Q, fail, q, qsign } from './q';
 import { BZERO, bfDiv, bfFromNumber, bfSub, bfToNumber, top } from './bigfloat';
 import { diff } from './calculus';
@@ -529,73 +529,266 @@ function refineReal(f: Expr, x: string, v: number): C {
 
 // --- Systems ---
 
+/** A value of one parameter (a = 1) and what the system is then. */
+export interface SystemCase { at: [string, Expr]; result: SystemResult }
 export type SystemResult =
-  | { kind: 'solutions'; list: Expr[][]; note?: string }
-  | { kind: 'param'; values: Expr[]; free: string[] }
-  | { kind: 'none' }
+  | { kind: 'solutions'; list: Expr[][]; note?: string; when?: Expr; cases?: SystemCase[]; family?: boolean }
+  | { kind: 'param'; values: Expr[]; free: string[]; note?: string; when?: Expr; cases?: SystemCase[] }
+  | { kind: 'none'; note?: string; cases?: SystemCase[] }
   | { kind: 'unknown'; note: string };
 
-/** Each equation is f = 0. Returns value lists in the order of vars. */
+/** Letters read as unknowns before the others, which are then parameters: x + y = a, x − y = b is solved for x, y. */
+const UNKNOWN_LETTERS = ['x', 'y', 'z', 't', 'u', 'v', 'w'];
+/**
+ * The unknowns of a system written without them: every letter when there are no more letters than equations
+ * (a + b = 3, a − b = 1), else x, y, z, t, u, v, w, topped up from the end of the alphabet when there are fewer of
+ * them than equations. What is left are the parameters.
+ */
+export function chooseUnknowns(eqs: Expr[]): { unknowns: string[]; params: string[] } {
+  const all = [...new Set(eqs.flatMap(e => variables(e)))].sort();
+  if (all.length <= eqs.length) return { unknowns: all, params: [] };
+  const unknowns = all.filter(v => UNKNOWN_LETTERS.includes(v));
+  const others = all.filter(v => !unknowns.includes(v)).sort((a, b) => (a === 'k' ? -1 : b === 'k' ? 1 : a < b ? 1 : -1));
+  while (unknowns.length < eqs.length && others.length) unknowns.push(others.shift()!);
+  return { unknowns: all.filter(v => unknowns.includes(v)), params: all.filter(v => !unknowns.includes(v)) };
+}
+
+/**
+ * Each equation is f = 0; vars are the unknowns, any other letter is a parameter. Returns value lists in the order
+ * of vars. Fractions are cleared (a solution that zeroes a denominator is dropped); a linear system is solved by
+ * elimination, a square one with parameters by Cramer's rule, with the parameter values where the determinant
+ * vanishes discussed apart; a nonlinear one by substitution, by differences of equations, by branches of a
+ * quadratic and, for two polynomial equations in two unknowns, by the resultant.
+ */
 export function solveSystem(eqs: Expr[], vars: string[]): SystemResult {
-  const fs = eqs.map(e => expand(cancel(together(e)))).filter(e => !isZero(e));
-  if (!fs.length) return { kind: 'param', values: vars.map(v => sym(v)), free: vars };
-  // linear?
+  const fs: Expr[] = [], dens: Expr[] = [];
+  for (const e of eqs) {
+    const [N, D] = numDen(cancel(together(e)));
+    if (!vars.every(v => freeOf(D, v)) || !isNum(D)) dens.push(D);
+    const n = expand(N);
+    if (isZero(n)) continue;
+    if (vars.every(v => freeOf(n, v)) && isConstant(n)) return { kind: 'none' };
+    fs.push(n);
+  }
+  // an equation without unknowns (x − y = 2 when solving for a, b) is a condition on the parameters, not one to solve
+  const conditions = fs.filter(f => vars.every(v => freeOf(f, v)));
+  const rest = fs.filter(f => !conditions.includes(f));
+  if (!rest.length) return { kind: 'param', values: vars.map(v => sym(v)), free: vars };
+  const r = linearRows(rest, vars);
+  const res = finish(r ? linearSystem(r, vars) : nonlinear(rest, vars), eqs.filter(e => !conditions.some(c => same(expand(numDen(cancel(together(e)))[0]), c))), dens, vars);
+  if (!conditions.length || res.kind === 'unknown') return res;
+  const note = `Przy warunku ${conditions.map(c => `${textU(c)} = 0`).join(', ')} (to równanie nie zawiera niewiadomych ${vars.join(', ')}).`;
+  return { ...res, note: [note, res.note].filter(Boolean).join(' ') };
+}
+
+/** Rows [a₁ … aₙ | b] of a system linear in vars (coefficients may hold parameters), or null. */
+function linearRows(fs: Expr[], vars: string[]): Expr[][] | null {
   const rows: Expr[][] = [];
-  let linear = true;
   for (const f of fs) {
     const row: Expr[] = [];
     let rest = f;
     for (const v of vars) {
       const c = coeffsOf(rest, v, 1);
-      if (!c || c.length > 2 || (c[1] && vars.some(w => !freeOf(c[1], w)))) { linear = false; break; }
+      if (!c || c.length > 2 || (c[1] && vars.some(w => !freeOf(c[1], w)))) return null;
       row.push(c[1] ?? ZERO);
-      rest = c[0];
+      rest = c[0] ?? ZERO;
     }
-    if (!linear) break;
-    if (vars.some(w => !freeOf(rest, w))) { linear = false; break; }
+    if (vars.some(w => !freeOf(rest, w))) return null;
     row.push(neg(rest));
     rows.push(row);
   }
-  if (linear) return linearSystem(rows, vars);
-  return nonlinear(fs, vars);
+  return rows;
+}
+
+/** Drops solutions that zero a denominator or don't satisfy the equations as written; keeps real ones when there are. */
+function finish(r: SystemResult, eqs: Expr[], dens: Expr[], vars: string[]): SystemResult {
+  if (r.kind === 'none' && r.cases) return r;
+  const withCases = (x: SystemResult): SystemResult => ('cases' in x && x.cases ? { ...x, cases: x.cases.map(c => ({ ...c, result: finish(c.result, eqs.map(e => subst(e, c.at[0], c.at[1])), dens.map(d => subst(d, c.at[0], c.at[1])), vars) })) } : x);
+  if (r.kind === 'param') return withCases({ ...r, values: r.values.map(tidyValue) });
+  if (r.kind !== 'solutions') return withCases(r);
+  const at = (e: Expr, sol: Expr[]) => vars.reduce((acc, v, j) => subst(acc, v, sol[j]), e);
+  const ok = r.list.filter(sol => {
+    try {
+      if (dens.some(d => { const v = at(d, sol); return isConstant(v) ? isNearZero(v) : vanishes(v); })) return false;
+      return eqs.every(e => { const v = at(e, sol); return isConstant(v) ? residualSmall(v) : true; });
+    } catch (err) { if (err instanceof CasError) return false; throw err; }
+  });
+  if (!ok.length) return withCases(r.list.length ? { kind: 'none', note: 'Rozwiązania równań bez mianowników zerują mianownik, więc nie są rozwiązaniami.' } : r);
+  const real = ok.filter(sol => sol.every(v => !isConstant(v) || !freeOf(v, 'k') || isRealValue(v)));
+  const list = (real.length ? real : ok).map(sol => sol.map(v => tidyValue(r.family ? reduceK(v) : v)));
+  const note = [r.note, real.length && real.length < ok.length ? `Pominięto rozwiązania zespolone (${ok.length - real.length}).` : '',
+    !real.length && ok.some(sol => sol.every(v => isConstant(v))) ? 'Brak rozwiązań rzeczywistych; poniżej rozwiązania zespolone.' : ''].filter(Boolean).join(' ') || undefined;
+  return withCases({ ...r, list, note });
+}
+/** The same value with fewer minus signs: (−2b − 1)/(−a − b) = (2b + 1)/(a + b), −(b − a)/2 = (a − b)/2. */
+function tidyValue(e: Expr): Expr {
+  const [n, d] = numDen(e);
+  if (isNum(n) && isNum(d)) return e;
+  const cands = [e, div(n, d)];
+  if (!isNum(d)) { try { cands.push(div(expand(neg(n)), expand(neg(d)))); } catch { /* keep the others */ } }
+  let best = e;
+  for (const c of cands) if (minusSigns(c) < minusSigns(best)) best = c;
+  return best;
+}
+function minusSigns(e: Expr): number {
+  const own = (e.k === 'n' && e.v.n < 0n) || (e.k === '*' && e.t[0].k === 'n' && e.t[0].v.n < 0n) ? 1 : 0;
+  return own + children(e).reduce((s, c) => s + minusSigns(c), 0);
+}
+/** sin(2kπ + a) = sin a, tg(kπ + a) = tg a, … for the integer k of a family of solutions. */
+function reduceK(e: Expr): Expr {
+  if (e.k === 'n' || e.k === 's') return e;
+  const m = mapChildren(e, reduceK);
+  if (m.k !== 'f' || m.a.length !== 1 || !['sin', 'cos', 'tan', 'cot', 'sec', 'csc'].includes(m.n)) return m;
+  const period = m.n === 'tan' || m.n === 'cot' ? 1n : 2n;
+  const terms = m.a[0].k === '+' ? m.a[0].t : [m.a[0]];
+  const kept = terms.filter(t => {
+    const c = coeffsOf(t, 'k', 1);
+    if (!c || c.length !== 2 || !isZero(c[0])) return true;
+    const r = cancel(div(c[1], PI));
+    return !(isInt(r) && r.v.n % period === 0n);
+  });
+  return kept.length === terms.length ? m : fn(m.n, add(...kept));
+}
+function isRealValue(v: Expr): boolean {
+  try { const z = evalC(v, 200); return !z.im.m || top(z.im) < Math.max(top(z.re), 0) - 120; } catch { return false; }
+}
+/** |e| tiny compared with 1 at 300 bits: a solution found to 100 digits passes, a wrong one doesn't. */
+function residualSmall(e: Expr): boolean {
+  if (isZero(e)) return true;
+  try { const z = evalC(e, 300); return Math.max(top(z.re), top(z.im)) < -150; } catch { return false; }
+}
+/**
+ * e ≡ 0 as a function of its letters, tested at generic rational points (k, the index of a family, at integers):
+ * a symbolic solution with parameters is checked like this where it can't be by its value.
+ */
+function vanishes(e: Expr): boolean {
+  if (isZero(e) || isZero(expand(e))) return true;
+  const vs = variables(e);
+  for (let s = 0; s < 4; s++) {
+    const val = (v: string, j: number) => (v === 'k' ? num(s - 2) : num(q(BigInt(1371 + 613 * j + 97 * s), 1000n)));
+    const at = vs.reduce((acc, v, j) => subst(acc, v, val(v, j)), e);
+    try {
+      const z = evalC(at, 300);
+      if (Math.max(top(z.re), top(z.im)) > -200) return false;
+    } catch (err) { if (err instanceof CasError) continue; throw err; }
+  }
+  return true;
 }
 
 function linearSystem(rows: Expr[][], vars: string[]): SystemResult {
   const n = vars.length;
+  const params = [...new Set(rows.flatMap(r => r.flatMap(c => variables(c))))];
+  if (params.length && rows.length === n && n <= 6) {
+    const c = cramer(rows, vars);
+    if (c) return c;
+  }
   const { R, pivots } = rref(rows);
-  if (pivots.includes(n)) return { kind: 'none' };
+  if (pivots.includes(n)) return params.length ? inconsistent(rows, vars) : { kind: 'none' };
   const free = vars.filter((_, j) => !pivots.includes(j));
   const values: Expr[] = vars.map(v => sym(v));
   pivots.forEach((p, i) => {
     let v = R[i][n];
     for (let j = p + 1; j < n; j++) if (!pivots.includes(j) && nonzero(R[i][j])) v = sub(v, mul(R[i][j], sym(vars[j])));
-    values[p] = cancel(together(v));
+    values[p] = simplify(v);
   });
-  if (free.length) return { kind: 'param', values, free };
-  return { kind: 'solutions', list: [values] };
+  const note = params.length ? 'Dla ogólnych wartości parametrów (eliminacja dzieli przez wyrażenia z parametrami).' : undefined;
+  if (free.length) return { kind: 'param', values, free, note };
+  return { kind: 'solutions', list: [values], note };
+}
+
+/**
+ * Elimination said "contradictory", but a parameter on the right may make it consistent: x + 2y = k, 2x + 4y = 3
+ * has no solution unless k = 3/2. Eliminating on the coefficient columns only leaves rows 0 = c(k); with one
+ * parameter the common zeros of those c are solved for, and the system is solved again there.
+ */
+function inconsistent(rows: Expr[][], vars: string[]): SystemResult {
+  const n = vars.length, M = rows.map(r => r.slice());
+  let row = 0;
+  for (let col = 0; col < n && row < M.length; col++) {
+    const p = M.findIndex((r, i) => i >= row && nonzero(r[col]));
+    if (p < 0) continue;
+    [M[p], M[row]] = [M[row], M[p]];
+    for (let i = 0; i < M.length; i++) {
+      if (i === row || !nonzero(M[i][col])) continue;
+      const f = div(M[i][col], M[row][col]);
+      M[i] = M[i].map((v, j) => cancel(together(sub(v, mul(f, M[row][j])))));
+    }
+    row++;
+  }
+  const conds = M.slice(row).map(r => r[n]).filter(nonzero);
+  const ps = [...new Set(conds.flatMap(c => variables(c)))];
+  if (!conds.length || conds.some(c => isConstant(c)) || ps.length !== 1) return { kind: 'none' };
+  const p = ps[0];
+  let zs: SolveResult;
+  try { zs = solveEquation(conds[0], p); } catch (err) { if (err instanceof CasError) return { kind: 'none' }; throw err; }
+  const cases: SystemCase[] = [];
+  if (zs.kind === 'list') {
+    for (const z of zs.sols) {
+      if (!z.exact || z.family || !isRealValue(z.exact) || !conds.every(c => isNearZero(subst(c, p, z.exact!)))) continue;
+      cases.push({ at: [p, z.exact], result: linearSystem(rows.map(r => r.map(c => simplify(subst(c, p, z.exact!)))), vars) });
+    }
+  }
+  return cases.length ? { kind: 'none', cases, note: `Dla ${p} ∉ {${cases.map(c => textU(c.at[1])).join('; ')}}.` } : { kind: 'none' };
+}
+
+/**
+ * Cramer's rule: x_j = W_j/W when W = det A ≠ 0. With one parameter, the values where W = 0 are solved for and the
+ * system is solved again at each of them (no solutions or infinitely many: the discussion of a parametric system).
+ */
+function cramer(rows: Expr[][], vars: string[]): SystemResult | null {
+  const n = vars.length;
+  const A = rows.map(r => r.slice(0, n)), b = rows.map(r => r[n]);
+  let W: Expr;
+  try { W = det(A); } catch (err) { if (err instanceof CasError) return null; throw err; }
+  if (!nonzero(W)) return null;
+  const values = vars.map((_, j) => simplify(div(det(A.map((r, i) => r.map((c, k) => (k === j ? b[i] : c)))), W)));
+  const params = variables(W);
+  const cases: SystemCase[] = [];
+  let when: Expr | undefined = params.length ? W : undefined;
+  if (params.length === 1) {
+    const p = params[0];
+    let zeros: SolveResult;
+    try { zeros = solveEquation(W, p); } catch (err) { if (err instanceof CasError) return { kind: 'solutions', list: [values], when: W }; throw err; }
+    if (zeros.kind === 'list') {
+      for (const s of zeros.sols) {
+        if (!s.exact || s.family || !isRealValue(s.exact)) continue;
+        const sub_ = rows.map(r => r.map(c => simplify(subst(c, p, s.exact!))));
+        cases.push({ at: [p, s.exact], result: linearSystem(sub_, vars) });
+      }
+      // W = k² + 1 never vanishes for a real parameter: no condition to state
+      if (!cases.length && zeros.sols.every(s => s.exact && !s.family && !isRealValue(s.exact))) when = undefined;
+    } else if (zeros.kind === 'none') when = undefined;
+  }
+  return { kind: 'solutions', list: [values], when, cases: cases.length ? cases : undefined };
 }
 
 function nonlinear(fs: Expr[], vars: string[], depth = 0): SystemResult {
   if (depth > 6) return { kind: 'unknown', note: 'Układ jest zbyt złożony.' };
   if (vars.length === 1) {
     // all equations in one unknown: solve the first, keep common solutions
-    const r = solveEquation(fs[0], vars[0]);
+    const x = vars[0];
+    let r: SolveResult;
+    try { r = solveEquation(fs[0], x); } catch (err) { if (err instanceof CasError) return { kind: 'unknown', note: err.message }; throw err; }
     if (r.kind === 'none') return { kind: 'none' };
-    if (r.kind === 'all') return fs.length > 1 ? nonlinear(fs.slice(1), vars, depth + 1) : { kind: 'param', values: [sym(vars[0])], free: vars };
-    const list = r.sols.filter(s => s.exact && !s.family).map(s => [s.exact!]).filter(([v]) => fs.slice(1).every(f => isNearZero(subst(f, vars[0], v))));
-    const approxOnly = r.sols.filter(s => !s.exact && s.approx);
-    if (approxOnly.length) {
-      for (const s of approxOnly) { const v = numFromBF(s.approx!); if (fs.slice(1).every(f => isNearZero(subst(f, vars[0], v)))) list.push([v]); }
+    if (r.kind === 'all') return fs.length > 1 ? nonlinear(fs.slice(1), vars, depth + 1) : { kind: 'param', values: [sym(x)], free: vars };
+    const holds = (v: Expr) => fs.slice(1).every(f => { const g = subst(f, x, v); return isConstant(g) ? isNearZero(g) : vanishes(g); });
+    const list: Expr[][] = [];
+    let numeric = false;
+    for (const s of r.sols) {
+      let v = s.exact ?? (s.approx ? numFromBF(s.approx) : null);
+      if (!v || (s.excludeK && s.excludeK.length)) continue;
+      if (!s.exact) { const e = snap(fs[0], x, v); if (e) v = e; else numeric = true; }
+      if (holds(v)) list.push([v]);
     }
-    return list.length ? { kind: 'solutions', list } : { kind: 'none' };
+    if (list.length) return { kind: 'solutions', list, note: r.numericRange && numeric ? r.note : undefined, family: r.sols.some(s => s.family) };
+    return r.numericRange ? { kind: 'unknown', note: 'Nie znalazłem rozwiązań ani dokładnie, ani numerycznie w przedziale ⟨−50; 50⟩.' } : { kind: 'none' };
   }
-  // an equation linear in some variable with a coefficient free of the others → substitute
+  // an equation linear in some variable with a coefficient free of the unknowns → substitute
   for (let i = 0; i < fs.length; i++) {
     for (const v of vars) {
       const c = coeffsOf(fs[i], v, 1);
-      if (!c || c.length !== 2 || !isConstant(c[1]) || isZero(c[1])) continue;
-      const value = neg(div(c[0], c[1]));
-      return eliminate(fs, vars, i, v, [value], depth);
+      if (!c || c.length !== 2 || isZero(c[1]) || vars.some(w => !freeOf(c[1], w)) || !nonzero(c[1])) continue;
+      return eliminate(fs, vars, i, v, [neg(div(c[0], c[1]))], depth);
     }
   }
   // differences of equations may be linear (two circles)
@@ -604,37 +797,97 @@ function nonlinear(fs: Expr[], vars: string[], depth = 0): SystemResult {
       const d = expand(add(fs[i], mul(sc, fs[j])));
       for (const v of vars) {
         const c = coeffsOf(d, v, 1);
-        if (!c || c.length !== 2 || !isConstant(c[1]) || isZero(c[1])) continue;
-        if (vars.filter(w => w !== v).some(w => !freeOf(c[1], w))) continue;
+        if (!c || c.length !== 2 || isZero(c[1]) || vars.some(w => !freeOf(c[1], w))) continue;
         const nfs = fs.slice(); nfs[j] = d;
         return eliminate(nfs, vars, j, v, [neg(div(c[0], c[1]))], depth);
       }
     }
   }
-  // an equation quadratic in some variable: two branches
+  // an equation quadratic in some variable with a leading coefficient free of the unknowns: two branches
   for (let i = 0; i < fs.length; i++) {
     for (const v of vars) {
       const c = coeffsOf(fs[i], v, 2);
-      if (!c || c.length !== 3 || !isConstant(c[2])) continue;
+      if (!c || c.length !== 3 || vars.some(w => !freeOf(c[2], w))) continue;
       const [cc, b, a] = c;
       const s = sqrt(expand(sub(pow(b, TWO), mul(num(4), a, cc))));
       return eliminate(fs, vars, i, v, [div(sub(neg(b), s), mul(TWO, a)), div(add(neg(b), s), mul(TWO, a))], depth);
     }
   }
+  if (vars.length === 2 && fs.length >= 2) {
+    const r = viaResultant(fs, vars);
+    if (r) return r;
+  }
   return { kind: 'unknown', note: 'Nie umiem rozwiązać tego układu dokładnie.' };
+}
+
+/** A numeric root that is exactly a simple rational (√x + √(x − 5) = 5 at x = 9): that rational, else null. */
+function snap(f: Expr, x: string, v: Expr): Expr | null {
+  const t = approx(v).re;
+  if (!Number.isFinite(t) || Math.abs(t) > 1e9) return null;
+  for (let d = 1; d <= 12; d++) {
+    const c = num(q(BigInt(Math.round(t * d)), BigInt(d)));
+    if (Math.abs(approx(c).re - t) > 1e-12 * Math.max(1, Math.abs(t))) continue;
+    try { const z = evalC(subst(f, x, c), 300); if (Math.max(top(z.re), top(z.im)) < -250) return c; } catch { /* not there */ }
+  }
+  return null;
+}
+
+/**
+ * Two polynomial equations in x and y: the resultant in y is a polynomial in x alone whose roots are the x of every
+ * common solution; each is put back and y solved from the first equation, kept when the others hold too.
+ */
+function viaResultant(fs: Expr[], vars: string[]): SystemResult | null {
+  const [x, y] = vars;
+  const [f, g] = fs;
+  const cf = coeffsOf(f, y, 12), cg = coeffsOf(g, y, 12);
+  if (!cf || !cg || cf.length < 2 || cg.length < 2 || !coeffsOf(f, x, 12) || !coeffsOf(g, x, 12)) return null;
+  const m = cf.length - 1, n = cg.length - 1;
+  if (m + n > 10) return null;
+  const S: Expr[][] = [];
+  for (let i = 0; i < n; i++) S.push(Array.from({ length: m + n }, (_, j) => (j - i >= 0 && j - i <= m ? cf[m - (j - i)] : ZERO)));
+  for (let i = 0; i < m; i++) S.push(Array.from({ length: m + n }, (_, j) => (j - i >= 0 && j - i <= n ? cg[n - (j - i)] : ZERO)));
+  let R: Expr;
+  try { R = expand(det(S)); } catch (err) { if (err instanceof CasError) return null; throw err; }
+  if (isZero(R) || freeOf(R, x)) return null;
+  let rx: SolveResult;
+  try { rx = solveEquation(R, x); } catch (err) { if (err instanceof CasError) return null; throw err; }
+  if (rx.kind !== 'list') return rx.kind === 'none' ? { kind: 'none' } : null;
+  const list: Expr[][] = [];
+  for (const s of rx.sols) {
+    const xv = s.exact ?? (s.approx ? numFromBF(s.approx) : null);
+    if (!xv) continue;
+    const others = fs.map(h => expand(subst(h, x, xv)));
+    const first = others.find(h => !freeOf(h, y));
+    if (!first) continue;
+    let ry: SolveResult;
+    try { ry = solveEquation(first, y); } catch (err) { if (err instanceof CasError) continue; throw err; }
+    if (ry.kind !== 'list') continue;
+    for (const t of ry.sols) {
+      const yv = t.exact ?? (t.approx ? numFromBF(t.approx) : null);
+      if (yv && others.every(h => { const v = subst(h, y, yv); return isConstant(v) ? residualSmall(v) || isNearZero(v) : vanishes(v); })) list.push([xv, yv]);
+    }
+  }
+  const uniq: Expr[][] = [];
+  for (const s of list) if (!uniq.some(u => u.every((e, k) => same(e, s[k]) || nearlySame(e, s[k])))) uniq.push(s);
+  return uniq.length ? { kind: 'solutions', list: uniq } : { kind: 'none' };
 }
 
 /** v = each of `values` from equation i; solve the rest, then fill v back in. */
 function eliminate(fs: Expr[], vars: string[], i: number, v: string, values: Expr[], depth: number): SystemResult {
   const rest = vars.filter(w => w !== v);
   const all: Expr[][] = [];
-  let anyParam = false;
+  let anyParam = false, unknownNote: string | null = null, family = false;
+  const notes: string[] = [];
   for (const value of values) {
-    const others = fs.filter((_, j) => j !== i).map(f => expand(cancel(together(subst(f, v, value))))).filter(f => !isZero(f));
-    if (others.some(f => isConstant(f) && !isZero(f) && !isNearZero(f))) continue;
-    const sub_ = others.filter(f => !isConstant(f));
+    let others: Expr[];
+    try { others = fs.filter((_, j) => j !== i).map(f => expand(numDen(cancel(together(subst(f, v, value))))[0])).filter(f => !isZero(f)); } catch (err) { if (err instanceof CasError) continue; throw err; }
+    // an equation left without unknowns either holds (for every value of the parameters) or rules this branch out
+    if (others.some(f => rest.every(w => freeOf(f, w)) && !(isConstant(f) ? isNearZero(f) : vanishes(f)))) continue;
+    const sub_ = others.filter(f => !rest.every(w => freeOf(f, w)));
     const r = sub_.length ? nonlinear(sub_, rest, depth + 1) : { kind: 'param' as const, values: rest.map(w => sym(w)), free: rest };
     if (r.kind === 'solutions') {
+      if (r.note) notes.push(r.note);
+      if (r.family) family = true;
       for (const sol of r.list) {
         const full: Expr[] = [];
         let vv = value;
@@ -647,12 +900,15 @@ function eliminate(fs: Expr[], vars: string[], i: number, v: string, values: Exp
         all.push(full);
       }
     } else if (r.kind === 'param') anyParam = true;
+    else if (r.kind === 'unknown') unknownNote = r.note;
   }
+  // a branch that couldn't be solved is not a branch without solutions: never claim "none" past it
+  if (unknownNote !== null && !all.length) return { kind: 'unknown', note: unknownNote };
   if (!all.length) return anyParam ? { kind: 'unknown', note: 'Układ ma nieskończenie wiele rozwiązań.' } : { kind: 'none' };
-  // drop duplicates
   const uniq: Expr[][] = [];
   for (const s of all) if (!uniq.some(u => u.every((e, k) => same(e, s[k]) || nearlySame(e, s[k])))) uniq.push(s);
-  return { kind: 'solutions', list: uniq };
+  const note = [...new Set(notes), ...(unknownNote !== null ? ['Części rozwiązań nie udało się wyznaczyć dokładnie; mogą istnieć inne.'] : [])].join(' ') || undefined;
+  return { kind: 'solutions', list: uniq, note, family };
 }
 function nearlySame(a: Expr, b: Expr): boolean {
   if (!isConstant(a) || !isConstant(b)) return false;
