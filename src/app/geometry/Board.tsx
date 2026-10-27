@@ -1,12 +1,14 @@
 /**
  * What floats over the geometry board: the tool's hint, the inspector of the selected object (its coordinates and
- * its look), the toolbar, and the dialog that asks for a length, radius, angle or scale.
+ * its look), the toolbar, and the dialog that asks for a length, radius, angle or scale. On phones the toolbar keeps
+ * undo, redo and zoom, the rest is in the Widok popover (a sheet), and the inspector shows the look on request.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
-import { ColorPicker, ErrorText, Field, Menu, Slider } from '@/components/controls';
-import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
+import { ColorPicker, ErrorText, Field, Menu, Slider, Switch } from '@/components/controls';
+import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconSliders, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
+import { PHONE, useMedia } from '@/hooks/use-media';
 import { definition } from '../../geometry/commands';
 import { isPoint, type Style } from '../../geometry/construct';
 import {
@@ -31,13 +33,38 @@ export function Toolbar() {
       <div className="b-tool-group">
         <Button variant="ghost" icon={<IconZoomIn />} aria-label="Przybliż" title="Przybliż" onClick={zoomIn} />
         <Button variant="ghost" icon={<IconZoomOut />} aria-label="Oddal" title="Oddal" onClick={zoomOut} />
-        <Button variant="ghost" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok" onClick={resetView} />
+        <Button variant="ghost" className="b-tool-wide" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok" onClick={resetView} />
       </div>
-      <div className="b-tool-group">
+      <div className="b-tool-group b-tool-wide">
         <Button variant="ghost" className="b-tool-toggle" icon={<IconGrid />} aria-pressed={geo.grid} aria-label="Kratka" title="Kratka" onClick={toggleGrid} />
         <Button variant="ghost" className="b-tool-toggle" icon={<IconAxes />} aria-pressed={geo.axes} aria-label="Układ współrzędnych" title="Układ współrzędnych" onClick={toggleAxes} />
         <Button variant="ghost" icon={<IconDownload />} aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG" onClick={exportPng} />
         <Button variant="ghost" className="b-gclear" icon={<IconTrash />} aria-label="Wyczyść rysunek" title="Wyczyść rysunek" disabled={!geo.objects.length} onClick={clearAll} />
+      </div>
+    </div>
+  );
+}
+
+/** Kratka, układ, widok, PNG and clearing: a phone's pane bar opens it, as its toolbar has no room for them. */
+export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+  const geo = useGeo(), pop = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = pop.current!, toggled = (e: Event) => onOpenChange((e as ToggleEvent).newState === 'open');
+    el.addEventListener('toggle', toggled);
+    return () => el.removeEventListener('toggle', toggled);
+  }, [onOpenChange]);
+  const close = () => pop.current?.hidePopover();
+  return (
+    <div ref={pop} id="geo-view" className="b-popover b-gview" popover="auto" role="dialog" aria-labelledby="geo-view-title">
+      <h3 id="geo-view-title" className="b-popover-title">Widok</h3>
+      <div className="b-gview-body">
+        <Switch checked={geo.grid} onChange={toggleGrid}>Kratka</Switch>
+        <Switch checked={geo.axes} onChange={toggleAxes}>Układ współrzędnych</Switch>
+        <div className="b-gview-actions">
+          <Button variant="secondary" size="sm" icon={<IconReset />} onClick={() => { resetView(); close(); }}>Przywróć widok</Button>
+          <Button variant="secondary" size="sm" icon={<IconDownload />} onClick={exportPng}>Zapisz PNG</Button>
+          <Button variant="secondary" size="sm" className="b-gclear" icon={<IconTrash />} disabled={!geo.objects.length} onClick={() => { clearAll(); close(); }}>Wyczyść rysunek</Button>
+        </div>
       </div>
     </div>
   );
@@ -171,15 +198,18 @@ function Look() {
 export function Inspector() {
   useGeo();
   const target = styled();
+  // a phone shows the coordinates; the look, which would cover half the board, waits for its button
+  const phone = useMedia(PHONE), [look, setLook] = useState(false);
   if (!target) return null;
   return (
     <section id="geo-inspect" className="b-ginspect" aria-label="Zaznaczony obiekt">
       <header className="b-ginspect-head">
         <span className="b-ginspect-name">{target.name}</span>
+        {phone && <Button variant="ghost" size="sm" className="b-tool-toggle" icon={<IconSliders />} aria-pressed={look} onClick={() => setLook(l => !l)}>Wygląd</Button>}
         <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij" title="Zamknij  Esc" onClick={() => select(null)} />
       </header>
       <Coordinates />
-      <Look />
+      {(!phone || look) && <Look />}
     </section>
   );
 }

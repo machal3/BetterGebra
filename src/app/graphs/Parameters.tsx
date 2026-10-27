@@ -10,6 +10,7 @@ import { useTopics } from '@/hooks/use-store';
 import { compiled } from '../../model';
 import { commit, state } from '../../state';
 import { settle } from '../../ui/canvas-input';
+import { useShown } from '../Dock';
 
 function fitSlider(slider: HTMLInputElement, value: number): void {
   slider.min = String(Math.min(-10, Math.floor(value)));
@@ -69,9 +70,13 @@ function ParameterRow({ name, sync }: { name: string; sync: number }) {
   );
 }
 
+/** The letters the functions use as parameters, in alphabetical order. */
+export const parameterNames = () => [...new Set(state.functions.flatMap(f => compiled(f, state.mode, state.params).parameters))].sort();
+
 export function Parameters() {
   const sync = useTopics(['list', 'expr', 'mode']);
-  const names = [...new Set(state.functions.flatMap(f => compiled(f, state.mode, state.params).parameters))].sort();
+  const names = parameterNames();
+  if (!useShown('Parametry')) return null;
   return (
     <Section title="Parametry">
       {names.length ? (

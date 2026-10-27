@@ -55,24 +55,47 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 #plot.grabbing { cursor: grabbing; }
 #hover { pointer-events: none; }
 
-/* ---------- Phones: the dock is a sheet with a grip (peek, half, full) ---------- */
+/* ---------- Phones: the canvas is free; the pane bar's buttons open one part of the dock as a sheet ---------- */
+#panebar { display: contents; }
 @media (max-width: 767px) {
-  .app { height: calc(100dvh - var(--b-topbar-h) - var(--b-bottombar-h)); }
+  .app { --b-panebar-h: 64px; height: calc(100dvh - var(--b-topbar-h) - var(--b-bottombar-h)); }
   body[data-dock] .b-dock {
-    top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: var(--b-sheet-h, 156px);
-    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; transition: height var(--b-slow) var(--b-ease);
+    top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: var(--b-sheet-h, 50%);
+    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; animation: none;
+    transition: height var(--b-slow) var(--b-ease), transform var(--b-slow) var(--b-ease), visibility 0s;
+  }
+  /* away: below the edge, and out of reach of the keyboard and screen readers once it has slid out */
+  body[data-sheet="closed"] .b-dock {
+    transform: translateY(calc(100% + 24px)); visibility: hidden;
+    transition: transform var(--b-leave) ease-in, visibility 0s linear var(--b-leave);
   }
   .sidebar-body { padding: var(--b-s2) var(--b-s3) var(--b-s4); }
   body[data-dock] .b-dock.is-dragging { transition: none; }
-  .b-dock-bar { position: relative; height: 48px; padding-top: 6px; touch-action: none; cursor: grab; }
+  .b-dock-bar { position: relative; height: 52px; padding: 8px 6px 0 var(--b-s4); gap: 2px; touch-action: none; cursor: grab; }
+  .b-dock-bar .ui-buttonc { --h: 40px; }
   .b-dock-grip {
     display: block; position: absolute; top: 6px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--b-line-hover);
   }
+  /* the sheet's header names the part (and its button the count), so its first section's heading steps aside; a
+     button beside the heading (Wyczyść historię) stays */
+  .b-dock .sidebar-body > .b-section:first-child > .b-section-head > h2 {
+    position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .b-dock .sidebar-body > .b-section:first-child > .b-section-head:not(:has(button)) { display: none; }
+  .b-dock .sidebar-body > .b-section:first-child > .b-section-head { justify-content: flex-end; min-height: 0; }
   #calc.calc { padding-bottom: var(--b-inset-bottom); }
-}
-@media (max-width: 767px) {
-  .b-dock { animation-name: b-enter-up; }
+
+  /* The pane bar: a row of buttons over the bottom of the canvas, centred, scrolling sideways if it must */
+  .b-panebar {
+    position: absolute; z-index: 3; left: 50%; bottom: 10px; translate: -50% 0;
+    display: flex; gap: 2px; max-width: calc(100% - 16px); padding: 4px; overflow-x: auto; scrollbar-width: none;
+    border-radius: var(--b-r-xl); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
+    animation: b-enter-up var(--b-enter) var(--b-ease) 120ms backwards;
+  }
+  .b-panebar .ui-buttonc { --h: 44px; flex: none; color: var(--b-ink); }
+  .b-panebar .b-count { margin-left: 2px; }
+  .b-panebar .b-tool-text { font-size: var(--b-fs-math-sm); }
 }
 @media (prefers-reduced-motion: reduce) {
-  body[data-dock] .b-dock { transition: none; }
+  body[data-dock] .b-dock, body[data-sheet="closed"] .b-dock { transition: none; }
 }

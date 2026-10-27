@@ -1,7 +1,9 @@
 /**
  * What floats over the Wykresy canvas: the toolbar (zoom, fit, equal axes, reset · Badanie, Widok, PNG), the Widok
  * popover (grid, axes, snapping, axis labels, typed range) and the range caption. The caption and the range fields
- * follow every pan and zoom by writing their text directly, so a drag never renders React.
+ * follow every pan and zoom by writing their text directly, so a drag never renders React. On phones the toolbar
+ * keeps zoom and reset; Funkcje, Parametry, Badanie and Widok are buttons of the pane bar, and fitting, equal axes
+ * and PNG move into Widok.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
@@ -15,8 +17,12 @@ import { commit, state, type AxisUnit } from '../../state';
 import { equalAxes, fitY, resetView, zoomIn, zoomOut } from '../../ui/canvas-input';
 import { toast } from '../toast';
 import { applyRange, exportPng, rangeSubscribe, scene } from '../graph-runtime';
+import { PaneBar } from '../Dock';
+import { parameterNames } from './Parameters';
 
 const IconStudy = () => <span className="b-tool-text" aria-hidden="true">f′</span>;
+const toggleAnalysis = () => { state.analysisOpen = !state.analysisOpen; commit('panel'); };
+const savePng = async () => toast(await exportPng() ? 'Wykres zapisany jako PNG.' : 'Nie udało się zapisać obrazu.');
 
 /** Everything over the canvas. */
 export function StageTools() {
@@ -26,7 +32,24 @@ export function StageTools() {
       <Toolbar viewOpen={viewOpen} />
       <ViewPanel onOpenChange={setViewOpen} />
       <RangeCaption />
+      <Panes viewOpen={viewOpen} />
     </>
+  );
+}
+
+/** The phone's pane bar: the list, the parameters when there are any, Badanie and Widok. */
+function Panes({ viewOpen }: { viewOpen: boolean }) {
+  const { count, params, analysisOpen } = useStore(['list', 'expr', 'mode', 'panel'], s => ({ count: s.functions.length, params: parameterNames().length, analysisOpen: s.analysisOpen }));
+  return (
+    <PaneBar
+      panel="graphs"
+      items={[
+        { label: 'Funkcje', count },
+        ...params ? [{ label: 'Parametry', count: params }] : [],
+        { label: 'Badanie', icon: <IconStudy />, pressed: analysisOpen, onClick: toggleAnalysis },
+        { label: 'Widok', icon: <IconSliders />, popover: 'view-panel', expanded: viewOpen },
+      ]}
+    />
   );
 }
 
@@ -39,11 +62,11 @@ export function Toolbar({ viewOpen }: { viewOpen: boolean }) {
         <Button variant="ghost" icon={<IconZoomOut />} aria-label="Oddal" title="Oddal  −" onClick={zoomOut} />
       </div>
       <div className="b-tool-group">
-        <Button variant="ghost" icon={<IconFitY />} aria-label="Dopasuj oś y do wykresów" title="Dopasuj oś y  F" onClick={fitY} />
-        <Button variant="ghost" icon={<IconRatio />} aria-label="Równe osie 1:1" title="Równe osie 1:1" onClick={equalAxes} />
+        <Button variant="ghost" className="b-tool-wide" icon={<IconFitY />} aria-label="Dopasuj oś y do wykresów" title="Dopasuj oś y  F" onClick={fitY} />
+        <Button variant="ghost" className="b-tool-wide" icon={<IconRatio />} aria-label="Równe osie 1:1" title="Równe osie 1:1" onClick={equalAxes} />
         <Button variant="ghost" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok  0" onClick={resetView} />
       </div>
-      <div className="b-tool-group">
+      <div className="b-tool-group b-tool-wide">
         <Button
           variant="ghost"
           className="b-tool-toggle"
@@ -52,7 +75,7 @@ export function Toolbar({ viewOpen }: { viewOpen: boolean }) {
           aria-controls="analysis"
           aria-label="Badanie funkcji"
           title="Badanie funkcji  B"
-          onClick={() => { state.analysisOpen = !state.analysisOpen; commit('panel'); }}
+          onClick={toggleAnalysis}
         />
         <Button variant="ghost" className="b-tool-toggle" icon={<IconSliders />} aria-label="Ustawienia widoku" aria-expanded={viewOpen} title="Siatka, osie, zakres" popoverTarget="view-panel" />
         <Button
@@ -60,7 +83,7 @@ export function Toolbar({ viewOpen }: { viewOpen: boolean }) {
           icon={<IconDownload />}
           aria-label="Zapisz wykres jako PNG"
           title="Zapisz PNG"
-          onClick={async () => toast(await exportPng() ? 'Wykres zapisany jako PNG.' : 'Nie udało się zapisać obrazu.')}
+          onClick={savePng}
         />
       </div>
     </div>
@@ -127,6 +150,12 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
   return (
     <div ref={pop} id="view-panel" className="b-popover b-view" popover="auto" role="dialog" aria-labelledby="view-title">
       <h3 id="view-title" className="b-popover-title">Widok</h3>
+      {/* phones: what the short toolbar leaves out */}
+      <div className="b-view-actions">
+        <Button variant="secondary" size="sm" icon={<IconFitY />} onClick={fitY}>Dopasuj y</Button>
+        <Button variant="secondary" size="sm" icon={<IconRatio />} onClick={equalAxes}>Osie 1:1</Button>
+        <Button variant="secondary" size="sm" icon={<IconDownload />} onClick={savePng}>PNG</Button>
+      </div>
       <div className="b-view-body">
         <Disclosure title="Wyświetlanie">
           <Switch checked={toggles.grid} onChange={set('grid')}>Siatka</Switch>

@@ -65,6 +65,12 @@
 .b-glook-row > :nth-child(2):last-child { grid-column: 2 / -1; justify-self: start; }
 .b-glook-row output { min-width: 3em; text-align: end; font-size: var(--b-fs-sm); font-variant-numeric: tabular-nums; color: var(--b-ink); }
 .ui-buttonc.b-glook-reset { justify-self: start; margin-top: 2px; }
+.b-ginspect-name { flex: 1; min-width: 0; }
+
+/* ---------- Widok (phones: what the short toolbar leaves out) ---------- */
+.b-gview { width: 312px; }
+.b-gview-body { display: grid; gap: 2px; padding: 0 8px 12px; }
+.b-gview-actions { display: flex; flex-wrap: wrap; gap: var(--b-s2); padding: 8px 8px 0; }
 
 /* ---------- Side panel ---------- */
 .b-gtabs { margin: 0 0 var(--b-s3); }
@@ -141,8 +147,11 @@
 
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
-  .b-gtop { left: 8px; top: 8px; right: 60px; }
+  .b-gtop { left: 8px; top: 8px; right: 68px; }
   .b-ghint { display: none; }
+  .b-gview { width: auto; }
+  /* the tabs are the pane bar's buttons */
+  .b-gtabs { display: none; }
   .b-ginspect { left: 8px; right: 60px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(100% - var(--b-inset-bottom) - 72px); }
 }
 @media (pointer: coarse) {

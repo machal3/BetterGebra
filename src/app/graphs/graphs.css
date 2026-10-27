@@ -124,6 +124,10 @@
 .b-view-range > span { color: var(--b-text); text-align: center; }
 .b-view-range > span:nth-child(5n + 1) { font: italic var(--b-fs-math-sm) var(--b-math); color: var(--b-ink); }
 .b-view-error { padding: 4px 8px 0; }
+.b-view-actions { display: none; }
+@media (max-width: 767px) {
+  .b-view-actions { display: flex; flex-wrap: wrap; gap: var(--b-s2); padding: 4px 16px 8px; }
+}
 
 /* ---------- Badanie ---------- */
 .b-analysis {
@@ -150,9 +154,12 @@
 /* ---------- Phones: the tools stay a column on the right; the cards keep clear of it ---------- */
 @media (max-width: 767px) {
   .b-caption { display: none; }
-  .b-analysis { left: 8px; right: 64px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(100% - var(--b-inset-bottom) - 16px); }
-  /* the name above its value: the numbers get the whole width */
-  .b-ledger > div { grid-template-columns: 1fr; gap: 2px; }
+  /* the card keeps the upper half of the canvas free (the short toolbar is above it) */
+  .b-analysis { left: 8px; right: 8px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(55% - var(--b-inset-bottom)); }
+  /* the name above its value: the numbers get the whole width; f(0) and f(1) share a row */
+  .b-ledger { grid-template-columns: 1fr 1fr; column-gap: var(--b-s3); }
+  .b-ledger > div { grid-template-columns: 1fr; gap: 2px; padding: 6px 0; }
+  .b-ledger > div:nth-last-child(-n + 2) { grid-column: 1 / -1; }
   .b-ledger dt { font-size: var(--b-fs-sm); }
   .b-rowset-pop, .b-view { width: auto; }
 }

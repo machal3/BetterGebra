@@ -1,22 +1,25 @@
 /**
  * The side panel as a floating card over the canvas: its header (the part's name and a button that folds the card
- * up to that header, remembered; motion.ts moves it), and on phones a sheet with a grip that rests at a peek, half or
- * full height. Whatever part of the canvas the card covers becomes the inset of the Wykresy and Geometria views,
- * measured with a ResizeObserver and passed on outside React, so dragging the sheet never re-renders anything.
+ * up to that header, remembered; motion.ts moves it). On phones the card is away until a button of the pane bar
+ * (over the bottom of the canvas) opens one part of it as a sheet — Funkcje, Obiekty, Historia… — with a grip, a
+ * half or full height and a close button, so the canvas is free the rest of the time. Whatever part of the canvas
+ * the card covers becomes the inset of the Wykresy and Geometria views, measured with a ResizeObserver and passed on
+ * outside React, so dragging the sheet never re-renders anything.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
-import { IconChevronDown, IconPanel } from '@/components/icons';
+import { Count } from '@/components/controls';
+import { IconChevronDown, IconClose, IconPanel } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { setGeometryInset } from '../geometry/controller';
 import { NO_INSET, type Inset } from '../render/viewport';
 import { setInset } from './graph-runtime';
 import { fold } from './motion';
+import { usePanel, type Panel } from './navigation';
 
 const STORE = 'bettergebra.dock';
-type Sheet = 'peek' | 'half' | 'full';
-const PEEK = 156;
+type Sheet = 'half' | 'full';
 
 function savedOpen(): boolean {
   try {
@@ -27,35 +30,102 @@ function savedOpen(): boolean {
   return !matchMedia('(max-width: 1023px) and (orientation: portrait)').matches;
 }
 
-const sheetHeight = (s: Sheet, app: number) => s === 'peek' ? Math.min(PEEK, app * 0.4) : s === 'half' ? app * 0.5 : app - 8;
+const sheetHeight = (s: Sheet, app: number) => s === 'half' ? app * 0.5 : app - 8;
+
+/* ---------- Which part the phone's sheet shows, by its name (null: none, the canvas is free) ---------- */
+let pane: string | null = null;
+/** The part last opened: a sheet that slides away keeps showing it. */
+let lastPane: string | null = null;
+/** How high the sheet rests; a closed sheet opens at half height next time. */
+let sheet: Sheet = 'half';
+const paneListeners = new Set<() => void>();
+export function setPane(next: string | null): void {
+  if (next === pane) return;
+  pane = next;
+  if (next) lastPane = next; else sheet = 'half';
+  paneListeners.forEach(f => f());
+}
+function setSheet(next: Sheet): void {
+  sheet = next;
+  paneListeners.forEach(f => f());
+}
+const subscribePane = (notify: () => void) => { paneListeners.add(notify); return () => { paneListeners.delete(notify); }; };
+export const usePane = () => useSyncExternalStore(subscribePane, () => pane);
+/** Whether a part of the side panel is shown: always on wider screens; on phones while the sheet shows it, or leaves with it. */
+export function useShown(name: string): boolean {
+  const phone = useMedia(PHONE);
+  usePane();
+  return !phone || lastPane === name;
+}
+
+/**
+ * One button of the pane bar. Without onClick or popover it opens the sheet with the part of that name (and closes
+ * it again); with onClick it is a toggle (pressed), with popover it opens that popover (expanded).
+ */
+export type PaneButton = { label: string; icon?: ReactNode; count?: number; onClick?: () => void; pressed?: boolean; popover?: string; expanded?: boolean };
+
+/** The phone's buttons over the bottom of the canvas, for the panel that is shown; nothing on wider screens. */
+export function PaneBar({ panel, items }: { panel: Panel; items: PaneButton[] }) {
+  const phone = useMedia(PHONE), open = usePane(), shown = usePanel() === panel;
+  const host = document.getElementById('panebar');
+  if (!phone || !shown || !host) return null;
+  return createPortal(
+    <nav className="b-panebar" aria-label="Części panelu">
+      {items.map(b => {
+        const sheet = !b.onClick && !b.popover, on = sheet ? open === b.label : b.popover ? b.expanded : b.pressed;
+        return (
+          <Button
+            key={b.label}
+            variant="ghost"
+            className="b-tool-toggle"
+            icon={b.icon}
+            aria-pressed={b.popover ? undefined : !!on}
+            aria-expanded={b.popover ? !!on : undefined}
+            popoverTarget={b.popover}
+            onClick={sheet ? () => setPane(open === b.label ? null : b.label) : b.onClick}
+          >
+            {b.label}{b.count ? <Count>{b.count}</Count> : null}
+          </Button>
+        );
+      })}
+    </nav>,
+    host,
+  );
+}
 
 export function Dock({ title }: { title: string }) {
   const head = document.getElementById('dock-head');
   const phone = useMedia(PHONE);
-  const [open, setOpen] = useState(savedOpen);
-  const [sheet, setSheet] = useState<Sheet>('peek');
+  const open = usePane();
+  const [card, setCard] = useState(savedOpen);
+  const height = useSyncExternalStore(subscribePane, () => sheet);
   /** The canvas size at the last measure: the views keep what they show still only when the card alone moved. */
   const last = useRef<{ w: number; h: number; phone: boolean } | null>(null);
 
-  useLayoutEffect(() => { document.body.dataset.dock = open ? 'open' : 'closed'; }, [open]);
-  useEffect(() => () => { delete document.body.dataset.dock; }, []);
+  useLayoutEffect(() => { document.body.dataset.dock = card ? 'open' : 'closed'; }, [card]);
+  useLayoutEffect(() => { document.body.dataset.sheet = open ? 'open' : 'closed'; }, [open]);
+  useEffect(() => () => { delete document.body.dataset.dock; delete document.body.dataset.sheet; }, []);
+  // another part of the app starts with the canvas free
+  useEffect(() => { setPane(null); lastPane = null; }, [title]);
   const toggle = () => {
-    const next = !open, apply = () => flushSync(() => setOpen(next));
+    const next = !card, apply = () => flushSync(() => setCard(next));
     try { localStorage.setItem(STORE, next ? 'open' : 'closed'); } catch { /* just don't remember */ }
     const dock = document.querySelector<HTMLElement>('.b-dock');
     if (dock) fold(dock, apply, next); else apply();
   };
 
-  // The sheet's height follows its resting place and the page's height
+  // The sheet's height follows its resting place and the page's height (a closed one keeps its height as it leaves)
   useLayoutEffect(() => {
     const dock = document.querySelector<HTMLElement>('.b-dock'), app = document.querySelector<HTMLElement>('.app');
     if (!dock || !app) return;
-    const place = () => { if (phone) dock.style.setProperty('--b-sheet-h', `${sheetHeight(sheet, app.clientHeight)}px`); else dock.style.removeProperty('--b-sheet-h'); };
+    if (!phone) { dock.style.removeProperty('--b-sheet-h'); return; }
+    if (!open) return;
+    const place = () => dock.style.setProperty('--b-sheet-h', `${sheetHeight(height, app.clientHeight)}px`);
     place();
     const ro = new ResizeObserver(place);
     ro.observe(app);
     return () => ro.disconnect();
-  }, [phone, sheet]);
+  }, [phone, height, open]);
 
   // The inset: what the card covers, for the views and for what else floats over the canvas
   useEffect(() => {
@@ -65,9 +135,12 @@ export function Dock({ title }: { title: string }) {
       const a = app.getBoundingClientRect(), d = dock.getBoundingClientRect();
       let inset: Inset = NO_INSET;
       if (a.width && d.width) {
-        // a phone's sheet: its height, but never more than half the canvas; elsewhere the open card's right edge
-        if (matchMedia(PHONE).matches) inset = { left: 0, bottom: Math.round(Math.min(a.bottom - d.top, a.height / 2)) };
-        else if (open) inset = { left: Math.round(d.right - a.left), bottom: 0 };
+        // a phone: the open sheet's height (its layout height: it may still be sliding in), never more than half the
+        // canvas; with the sheet away, the pane bar. Elsewhere the open card's right edge
+        if (matchMedia(PHONE).matches) {
+          const bar = parseFloat(getComputedStyle(app).getPropertyValue('--b-panebar-h')) || 0;
+          inset = { left: 0, bottom: Math.round(open ? Math.min(dock.offsetHeight, a.height / 2) : bar) };
+        } else if (card) inset = { left: Math.round(d.right - a.left), bottom: 0 };
       }
       app.style.setProperty('--b-inset-left', `${inset.left}px`);
       app.style.setProperty('--b-inset-bottom', `${inset.bottom}px`);
@@ -83,9 +156,18 @@ export function Dock({ title }: { title: string }) {
     ro.observe(dock);
     ro.observe(app);
     return () => ro.disconnect();
-  }, [open, phone]);
+  }, [card, phone, open]);
 
-  // Dragging the sheet by its header; a short move is a tap and leaves it to the button
+  // Esc in the sheet puts it away
+  useEffect(() => {
+    const dock = document.querySelector<HTMLElement>('.b-dock');
+    if (!dock || !phone) return;
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) setPane(null); };
+    dock.addEventListener('keydown', key);
+    return () => dock.removeEventListener('keydown', key);
+  }, [phone]);
+
+  // Dragging the sheet by its header: to the nearest height, or away when let go low; a short move is a tap
   const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!phone || (e.target as Element).closest('button')) return;
@@ -108,34 +190,41 @@ export function Dock({ title }: { title: string }) {
     if (!d?.moved) return;
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!, app = dock.parentElement!.clientHeight, h = dock.offsetHeight;
     dock.classList.remove('is-dragging');
-    // the nearest resting place
-    const next = (['peek', 'half', 'full'] as Sheet[]).reduce((a, b) => Math.abs(sheetHeight(b, app) - h) < Math.abs(sheetHeight(a, app) - h) ? b : a);
+    if (h < sheetHeight('half', app) * 0.6) { setPane(null); return; }
+    const next: Sheet = Math.abs(sheetHeight('full', app) - h) < Math.abs(sheetHeight('half', app) - h) ? 'full' : 'half';
     dock.style.setProperty('--b-sheet-h', `${sheetHeight(next, app)}px`);
     setSheet(next);
   };
 
-  // On a phone, a field focused in a peeking sheet lifts it to half, so the field isn't under the keyboard's edge
-  useEffect(() => {
-    const dock = document.querySelector<HTMLElement>('.b-dock');
-    if (!dock || !phone) return;
-    const lift = () => setSheet(s => s === 'peek' ? 'half' : s);
-    dock.addEventListener('focusin', lift);
-    return () => dock.removeEventListener('focusin', lift);
-  }, [phone]);
-
   if (!head) return null;
-  const expanded = phone ? sheet !== 'peek' : open;
+  if (phone) {
+    const full = height === 'full';
+    return createPortal(
+      <div className="b-dock-bar" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+        <span className="b-dock-grip" aria-hidden="true" />
+        <h2 className="b-dock-title">{open ?? lastPane ?? title}</h2>
+        <Button
+          variant="ghost"
+          icon={<IconChevronDown className={full ? undefined : 'b-flip'} />}
+          aria-label={full ? 'Zmniejsz panel' : 'Powiększ panel'}
+          title={full ? 'Zmniejsz panel' : 'Powiększ panel'}
+          onClick={() => setSheet(full ? 'half' : 'full')}
+        />
+        <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij panel" title="Zamknij panel" onClick={() => setPane(null)} />
+      </div>,
+      head,
+    );
+  }
   return createPortal(
-    <div className="b-dock-bar" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-      <span className="b-dock-grip" aria-hidden="true" />
+    <div className="b-dock-bar">
       <h2 className="b-dock-title">{title}</h2>
       <Button
         variant="ghost"
-        icon={phone ? <IconChevronDown className={expanded ? undefined : 'b-flip'} /> : <IconPanel />}
-        aria-expanded={expanded}
-        aria-label={expanded ? 'Zwiń panel' : 'Rozwiń panel'}
-        title={expanded ? 'Zwiń panel' : 'Rozwiń panel'}
-        onClick={phone ? () => setSheet(s => s === 'peek' ? 'half' : 'peek') : toggle}
+        icon={<IconPanel />}
+        aria-expanded={card}
+        aria-label={card ? 'Zwiń panel' : 'Rozwiń panel'}
+        title={card ? 'Zwiń panel' : 'Rozwiń panel'}
+        onClick={toggle}
       />
     </div>,
     head,

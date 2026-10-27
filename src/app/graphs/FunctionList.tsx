@@ -14,6 +14,7 @@ import { domainText } from '../../format';
 import { expressionMathML, relationMathML } from '../../math';
 import { compiled } from '../../model';
 import { MAX_FUNCTIONS, addFunction, patchFunction, removeFunction, setActive, state, type FnState, type Mode } from '../../state';
+import { useShown } from '../Dock';
 import { toast } from '../toast';
 import { RowSettings } from './RowSettings';
 
@@ -168,6 +169,7 @@ export function FunctionList() {
   // the same topics the old list listened to: not params, so a slider never re-renders the list
   const { functions, mode, activeId } = useStore(['list', 'expr', 'active', 'mode', 'style'], s => ({ functions: s.functions, mode: s.mode, activeId: s.activeId }));
   const full = functions.length >= MAX_FUNCTIONS;
+  if (!useShown('Funkcje')) return null;
   return (
     <Section title="Funkcje" aside={<Count label={`${functions.length} z ${MAX_FUNCTIONS} funkcji`}>{functions.length} / {MAX_FUNCTIONS}</Count>}>
       <ol className="b-fn-list">

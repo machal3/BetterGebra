@@ -1,6 +1,6 @@
 /**
  * The calculator panel: one input line as the centre of the page, result cards below, history and examples in the
- * side panel. Results are exact as the engine gives them — fractions, roots, π, and only the decimal digits that
+ * side panel (on phones, each its own sheet from a button of the pane bar). Results are exact as the engine gives them — fractions, roots, π, and only the decimal digits that
  * are certain — and are shown as they are, never animated or rounded here.
  */
 import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
@@ -12,11 +12,12 @@ import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { TipsPanel } from '@/components/ui/tips-panel-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconCalculator, IconHistory, IconStop, IconTrash } from '@/components/icons';
+import { IconArrowRight, IconBook, IconCalculator, IconHistory, IconList, IconStop, IconTrash } from '@/components/icons';
 import type { Pod, Result, Row } from '../../cas/engine';
 import { nodeML } from '../../cas/nodeformat';
 import { parse } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
+import { PaneBar, setPane, useShown } from '../Dock';
 import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
 import { DIGITS, abort, clearHistory, compute, setDigits, useCalc } from './calc-store';
@@ -200,11 +201,14 @@ function Suggestions({ run }: { run: (q: string) => void }) {
   );
 }
 
-function Side({ run }: { run: (q: string) => void }) {
+function Side({ run: compute }: { run: (q: string) => void }) {
   const { history } = useCalc();
+  const shown = { history: useShown('Historia'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
+  // a question picked in a phone's sheet: the sheet steps aside for its answer
+  const run = (q: string) => { setPane(null); compute(q); };
   return (
     <>
-      <Section
+      {shown.history && <Section
         title="Historia"
         aside={history.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Wyczyść historię" title="Wyczyść historię" onClick={clearHistory} />}
       >
@@ -231,8 +235,8 @@ function Side({ run }: { run: (q: string) => void }) {
             <p>Tu pojawią się Twoje obliczenia. Strzałki ↑ ↓ w polu wpisywania przywołują poprzednie.</p>
           </div>
         )}
-      </Section>
-      <Section title="Przykłady">
+      </Section>}
+      {shown.examples && <Section title="Przykłady">
         {EXAMPLES.map(([group, items]) => (
           <Disclosure key={group} title={group} aside={<Count>{items.length}</Count>} defaultOpen={false}>
             <div className="b-examples">
@@ -245,8 +249,8 @@ function Side({ run }: { run: (q: string) => void }) {
             </div>
           </Disclosure>
         ))}
-      </Section>
-      <Section title="Zapis i polecenia">
+      </Section>}
+      {shown.syntax && <Section title="Zapis i polecenia">
         <Disclosure title="Pokaż zapis" defaultOpen={false}>
           <table className="b-syntax">
             <tbody>
@@ -268,14 +272,14 @@ function Side({ run }: { run: (q: string) => void }) {
             </tbody>
           </table>
         </Disclosure>
-      </Section>
+      </Section>}
     </>
   );
 }
 
 export function CalculatorPanel() {
   const main = document.getElementById('calc'), side = document.getElementById('calc-side');
-  const { run: current } = useCalc();
+  const { run: current, history } = useCalc();
   const [value, setValue] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const panel = usePanel();
@@ -319,6 +323,14 @@ export function CalculatorPanel() {
         main,
       )}
       {side && createPortal(<Side run={run} />, side)}
+      <PaneBar
+        panel="calculator"
+        items={[
+          { label: 'Historia', icon: <IconHistory />, count: history.length },
+          { label: 'Przykłady', icon: <IconList /> },
+          { label: 'Zapis', icon: <IconBook /> },
+        ]}
+      />
     </>
   );
 }

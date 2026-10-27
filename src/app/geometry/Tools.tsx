@@ -5,7 +5,9 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { Field, Count, cx } from '@/components/controls';
 import { IconStar, IconTools } from '@/components/icons';
+import { PHONE } from '@/hooks/use-media';
 import { GROUPS, ICON, TOOLS, setTool, type GroupEntry, type ToolId } from '../../geometry/controller';
+import { setPane } from '../Dock';
 import { plain, setFavs, useFavs, useGeo } from './use-geo';
 
 const FAVOURITES = 'Ulubione';
@@ -89,7 +91,8 @@ export function ToolCatalogue({ searchRef }: { searchRef: React.RefObject<HTMLIn
                       data-tool={id}
                       aria-pressed={geo.tool === id}
                       title={`${TOOLS[id].label}: ${TOOLS[id].hint}${inFavs ? ' Przeciągnij albo Alt + strzałki, aby zmienić kolejność.' : ''}`}
-                      onClick={() => setTool(id)}
+                      // a phone's sheet steps aside, so the tool can be used on the board at once
+                      onClick={() => { setTool(id); if (matchMedia(PHONE).matches) setPane(null); }}
                       onKeyDown={onKeyDown}
                     >
                       <ToolIcon id={id} />

@@ -254,7 +254,11 @@
 .b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 0.5px 0 var(--b-line-hover); }
 .b-toolbar .ui-buttonc { --h: 32px; color: var(--b-ink); }
 .b-tool-text { display: block; font: italic var(--b-fs-math)/1 var(--b-math); }
-@media (max-width: 767px) { .b-toolbar { top: 8px; right: 8px; } }
+/* phones: the column keeps what a thumb needs on the canvas; the rest is in the pane bar's sheets */
+@media (max-width: 767px) {
+  .b-toolbar { top: 8px; right: 8px; }
+  .b-toolbar .b-tool-wide { display: none; }
+}
 
 /* ---------- Empty state: a quiet drawing and a sentence ---------- */
 .b-empty { display: grid; justify-items: center; gap: var(--b-s2); padding: var(--b-s4) var(--b-s2); text-align: center; }
