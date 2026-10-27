@@ -85,6 +85,7 @@ export const COMMANDS: Record<string, [number, number]> = {
   fpdf: [3, 3], fcdf: [3, 3], finv: [3, 3], binopdf: [3, 3], binocdf: [3, 3], poisspdf: [2, 2], poisscdf: [2, 2], exppdf: [1, 2], expcdf: [1, 2],
   expinv: [1, 2], unifpdf: [1, 3], unifcdf: [1, 3], unifinv: [1, 3], gampdf: [2, 3], gamcdf: [2, 3], gaminv: [2, 3], betapdf: [3, 3],
   betacdf: [3, 3], betainv: [3, 3],
+  fft: [1, 2], ifft: [1, 2], fftshift: [1, 1], ifftshift: [1, 1], filter: [3, 3], periodogram: [1, 2],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -134,7 +135,7 @@ export const ALIAS: Record<string, string> = {
   hist: 'histogram', dopasuj: 'fit', interpoluj: 'interp1', splot: 'conv', trapezy: 'trapz', sklejana: 'spline', punktowy: 'scatter',
   slupkowy: 'bar', biegunowy: 'polarplot', quadgk: 'integrate',
   dominanta: 'mode', rozstep: 'range', percentyl: 'prctile', kwantyl: 'quantile', skosnosc: 'skewness', kurtoza: 'kurtosis',
-  kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance',
+  kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance', angle: 'arg', filtr: 'filter', widmo: 'fft',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;

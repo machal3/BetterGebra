@@ -13,6 +13,7 @@ import { NUMERICS, integrand } from './numerics';
 import { odeCommand } from './ode';
 import { dsolveCommand } from './dsolve';
 import { RandomSource, STATS, setRandom } from './stats';
+import { SIGNAL } from './signal';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -1011,6 +1012,12 @@ function linalgOut(r: Linalg): Out {
     }
     // a line of text: a model, a row of a table of coefficients
     if (v.t === 'str') return { ml: M(`${lhsML}${lhs ? mo(':') + '<mspace width="0.5em"/>' : ''}${mtext(v.s)}`), text: `${lhs ? `${lhs}: ` : ''}${v.s}` };
+    // a long list (a spectrum, samples) is shown by its beginning and end, as in the list cards; all of it is copied
+    if (v.t === 'list' && v.items.length > LIST_SHOWN && v.items.every(i => i.t === 'expr')) {
+      const xs = v.items.map(i => (i as { e: Expr }).e), cell = ap ? approxML : toML;
+      const shown = [...xs.slice(0, LIST_SHOWN - 4).map(cell), mi('…'), ...xs.slice(-3).map(cell)];
+      return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${mo('[')}${shown.join(mo(';'))}${mo(']')}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${valueText(v)}`, note: `${xs.length} elementów` };
+    }
     return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${valueML(v)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${valueText(v)}` };
   };
   return { pods: r.cards.map(c => ({ title: c.title, rows: c.rows.map(([lhs, v]) => valueRow(lhs, v)), note: c.note, ...(c.plot ? { plot: c.plot } : {}) })), value: r.outputs[0], outputs: r.outputs };
@@ -1214,6 +1221,10 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
   }
   if (name === 'ode45' || name === 'ode23' || name === 'ode15s') return linalgOut(odeCommand(name, args, env, nout));
   if (name === 'dsolve') return linalgOut(dsolveCommand(args, env));
+  if (Object.hasOwn(SIGNAL, name)) {
+    const r = SIGNAL[name](args.map(a => evaluate(a, env)), nout);
+    if (r) return linalgOut(r);
+  }
   if (Object.hasOwn(STATS, name)) {
     const r = STATS[name](args.map(a => evaluate(a, env)), nout);
     if (r) return linalgOut(r);
