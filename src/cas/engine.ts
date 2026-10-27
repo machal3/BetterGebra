@@ -6,7 +6,7 @@
 import './functions';
 import { bfSign, bfToNumber } from './bigfloat';
 import { diff, diffN, limit, Lim, taylor } from './calculus';
-import { Env, Value, evaluate, ex, scalar, setInverse, dims, matMul } from './evaluate';
+import { Env, Value, evaluate, ex, hidden, scalar, setInverse, dims, matMul } from './evaluate';
 import { Expr, I, INF, ONE, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isFn } from './expr';
 import { compileDouble } from './fast';
 import { toML, toText } from './format';
@@ -23,7 +23,7 @@ export { sugar };
 import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from './poly';
 import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, bitLength, gcd as bgcd } from './q';
 import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } from './simplify';
-import { Interval, Sol, SystemResult, chooseUnknowns, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
+import { Interval, IntervalSet, Sol, SolveResult, SystemResult, chooseUnknowns, domain as domainOf, setDomainText, solveEquation, solveInequality, solveSystem, intersect, within, zeroIntervals } from './solve';
 import { product as prodOf, sum as sumOf, ratioHint, numericSum } from './sums';
 import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRow, features, fmt, graphText, implicitPlot, matrixPlot, parametricSeries, plotOf, regionPlot, rootsPlot, sequencePlot, statsPlot, zText } from './plot';
 export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
@@ -56,6 +56,7 @@ export interface RunOptions { digits?: number; ans?: string | null }
 
 export function run(rawInput: string, opts: RunOptions = {}): Result {
   digitsDefault = Math.min(5000, Math.max(5, opts.digits ?? 25));
+  hidden.length = 0;
   let ans: Expr | null = null;
   if (opts.ans) { try { ans = scalar(evaluate(parse(opts.ans), baseEnv(null)), 'ans'); } catch { ans = null; } }
   const env = baseEnv(ans);
@@ -71,6 +72,17 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
     return { input, pods: [], error: message(err), interpreted };
   }
 }
+/** What the input asks of x that its simplified form doesn't show (x/x: x ≠ 0). */
+const guardOf = (x: string) => hidden.filter(g => variables(g).every(v => v === x));
+/** The domain of e, within what the input itself asks of x. */
+function domain(e: Expr, x: string): IntervalSet {
+  const d = domainOf(e, x), g = guardOf(x);
+  if (!g.length) return d;
+  const h = domainOf({ k: '+', t: g }, x);
+  return { parts: intersect(d.parts, h.parts), note: d.note ?? h.note };
+}
+/** The zeros of e (solutions of e = 0) that the input allows. */
+const zerosOf = (e: Expr, x: string): SolveResult => within(solveEquation(e, x), x, guardOf(x));
 const message = (err: unknown) => err instanceof CasError ? err.message : `Błąd wewnętrzny: ${(err as Error)?.message ?? String(err)}`;
 
 function baseEnv(ans: Expr | null): Env {
@@ -214,13 +226,14 @@ function integerPods(n: bigint): Pod[] {
     if (f.unfactored.length) notes.push('Ostatni czynnik jest złożony, ale nie udało się go rozłożyć w limicie czasu.');
     if (f.probable.length) notes.push('Czynniki większe od 3,3·10²⁴ są pierwsze według testu BPSW (nie znaleziono dotąd liczby, która by go oszukała).');
     pods.push({
-      title: isPrime ? 'Liczba pierwsza' : 'Rozkład na czynniki pierwsze',
+      // primes are positive: −2 is −1 times the prime 2
+      title: isPrime && n > 0n ? 'Liczba pierwsza' : 'Rozkład na czynniki pierwsze',
       rows: [{ ml: M(`${n < 0n ? `${mo('−')}` : ''}${terms.join(mo('·'))}`), text: `${n < 0n ? '−' : ''}${textTerms.join(' · ')}` }],
-      note: notes.join(' ') || (isPrime ? `${an} jest liczbą pierwszą.` : undefined),
+      note: notes.join(' ') || (isPrime ? `${an} jest liczbą pierwszą.` : undefined) || (n < 0n ? `Liczby pierwsze i złożone są dodatnie; to rozkład ${an}.` : undefined),
     });
     // properties
     const props: string[] = [n % 2n ? 'nieparzysta' : 'parzysta'];
-    if (!isPrime && !f.unfactored.length) props.push('złożona');
+    if (!isPrime && !f.unfactored.length && n > 0n) props.push('złożona');
     if (!f.unfactored.length && f.factors.length) {
       const g = f.factors.reduce((acc, [, e]) => { let a = acc, b = e; while (b) [a, b] = [b, a % b]; return a; }, 0);
       if (g > 1) props.push(`potęga: ${f.factors.reduce((acc, [p, e]) => acc * p ** BigInt(e / g), 1n)}^${g}`);
@@ -350,7 +363,9 @@ function expressionPods(e: Expr): Pod[] {
     if (d) pods.push({ title: 'Pochodna', rows: [eqRow(derivML(x, `<mrow>${mo('(')}${toML(e)}${mo(')')}</mrow>`), `d/d${x} (${toText(e)})`, polyForm(d, x))] });
     const F = size(e) < 200 ? safe(() => integrate(e, x)) : null;
     if (F) { const G = antiderivativeForm(simplify(F), x); pods.push({ title: 'Całka nieoznaczona', rows: [{ ml: M(`${mo('∫')}${toML(e)}<mspace width="0.17em"/><mi mathvariant="normal">d</mi>${mi(x)}${mo('=')}${toML(G)}${mo('+')}<mi>C</mi>`), text: `${toText(G)} + C` }] }); }
-    const z = safe(() => solveEquation(e, x));
+    const set = safe(() => zeroIntervals(e, x));
+    const z = set ? null : safe(() => zerosOf(e, x));
+    if (set) pods.push({ title: 'Miejsca zerowe', rows: [intervalRow(set, x)] });
     if (z && z.kind === 'list') {
       const real = z.sols.filter(s => !s.approx || isRealSol(s));
       if (real.length) pods.push({ title: 'Miejsca zerowe', rows: solutionRows(real.slice(0, 16), x), note: z.note ?? (real.length > 16 ? `Pokazano 16 z ${real.length}.` : undefined) });
@@ -418,9 +433,12 @@ function solutionRows(sols: Sol[], x: string): Row[] {
       const e = s.exact;
       const fam = s.family;
       const shown = fam ? familyOrder(e) : toML(e);
-      const famML = fam ? `${mo(',')}<mspace width="0.4em"/>${mi('k')}${mo('∈')}<mi mathvariant="normal">ℤ</mi>${s.excludeK?.length ? `${mo('∖')}${mo('{')}${s.excludeK.map(k => k < 0n ? `${mo('−')}<mn>${-k}</mn>` : `<mn>${k}</mn>`).join(mo(','))}${mo('}')}` : ''}` : '';
+      const kML = (k: bigint) => k < 0n ? `${mo('−')}<mn>${-k}</mn>` : `<mn>${k}</mn>`, kText = (k: bigint) => String(k).replace('-', '−');
+      // k ≥ 0 for x = ln(kπ + π/2)
+      const bound = s.kMin !== undefined ? ['≥', s.kMin] as const : s.kMax !== undefined ? ['≤', s.kMax] as const : null;
+      const famML = fam ? `${mo(',')}<mspace width="0.4em"/>${mi('k')}${mo('∈')}<mi mathvariant="normal">ℤ</mi>${s.excludeK?.length ? `${mo('∖')}${mo('{')}${s.excludeK.map(kML).join(mo(','))}${mo('}')}` : ''}${bound ? `${mo(',')}<mspace width="0.4em"/>${mi('k')}${mo(bound[0])}${kML(bound[1])}` : ''}` : '';
       const note = [s.mult > 1 ? `pierwiastek ${s.mult}-krotny` : '', !fam && !isNum(e) && isConstant(e) ? shortApprox(e) : ''].filter(Boolean).join(', ');
-      return { ml: M(`${lhs}${mo('=')}${shown}${famML}`), text: `${x} = ${toText(e)}${fam ? `, k ∈ ℤ${s.excludeK?.length ? ` ∖ {${s.excludeK.map(k => String(k).replace('-', '−')).join(', ')}}` : ''}` : ''}`, note: note || undefined };
+      return { ml: M(`${lhs}${mo('=')}${shown}${famML}`), text: `${x} = ${toText(e)}${fam ? `, k ∈ ℤ${s.excludeK?.length ? ` ∖ {${s.excludeK.map(kText).join(', ')}}` : ''}${bound ? `, k ${bound[0]} ${kText(bound[1])}` : ''}` : ''}`, note: note || undefined };
     }
     const z = s.approx!;
     const d = complexDecimal(z, 20);
@@ -511,6 +529,8 @@ function relation(node: Extract<Node, { t: 'rel' }>, env: Env, varsHint: string[
     const r = solveInequality(sub(parts[k], parts[k + 1]), op, x);
     note = note ?? r.note;
     res = res ? intersect(res, r.parts) : r.parts;
+    // (x − 1)/(x − 1) > 0 is 1 > 0 once built, but not at x = 1
+    if (guardOf(x).length) res = intersect(res, domain(ONE, x).parts);
   }
   const pods: Pod[] = [{ title: 'Rozwiązanie', rows: [intervalRow(res!, x)], note }];
   if (parts.length === 2) {
@@ -528,7 +548,9 @@ function relation(node: Extract<Node, { t: 'rel' }>, env: Env, varsHint: string[
 
 function equationPods(l: Expr, r: Expr, x: string): Out {
   const f = sub(l, r);
-  const res = solveEquation(f, x);
+  const set = zeroIntervals(f, x);
+  if (set) return { pods: [{ title: 'Rozwiązanie', rows: [intervalRow(set, x)] }] };
+  const res = zerosOf(f, x);
   const pods: Pod[] = [];
   if (res.kind === 'all') pods.push({ title: 'Rozwiązanie', rows: [textRow(`Równanie jest tożsamością: spełnia je każde ${x} z dziedziny.`)], note: res.note });
   else if (res.kind === 'none') pods.push({ title: 'Rozwiązanie', rows: [textRow('Brak rozwiązań.')], note: res.note });
@@ -1181,7 +1203,7 @@ function integrateCommand(args: Node[], env: Env): Out {
   const d = definite(e, x, a, b);
   const pods: Pod[] = [];
   if (d.divergent) {
-    pods.push({ title: 'Całka oznaczona', rows: [textRow(d.divergent === 'yes' ? 'Całka jest rozbieżna.' : `Całka jest rozbieżna do ${d.divergent > 0 ? '+∞' : '−∞'}.`)], note: 'Funkcja ma osobliwość w przedziale całkowania lub na jego końcu, a granica funkcji pierwotnej jest nieskończona.' });
+    pods.push({ title: 'Całka oznaczona', rows: [textRow(d.divergent === 'yes' ? 'Całka jest rozbieżna.' : `Całka jest rozbieżna do ${d.divergent > 0 ? '+∞' : '−∞'}.`)], note: 'Przy osobliwości w przedziale całkowania lub na jego końcu (albo w nieskończoności) funkcja nie maleje dość szybko, by pole było skończone.' });
     return { pods };
   }
   if (d.exact) {
@@ -1460,11 +1482,13 @@ function analyzeCommand(args: Node[], env: Env, onlyExtrema = false): Out {
   const vlines: number[] = [], hlines: number[] = [], oblique: Expr[] = [];
   if (!onlyExtrema) {
     // zeros and the y-intercept
-    const z = safe(() => solveEquation(e, x));
-    const rows: Row[] = [];
+    const set = safe(() => zeroIntervals(e, x));
+    const z = set ? null : safe(() => zerosOf(e, x));
+    const rows: Row[] = set ? [intervalRow(set, x)] : [];
     if (z && z.kind === 'list') rows.push(...solutionRows(z.sols.filter(isRealSol).filter(s => s.family || !s.approx || inDom(bfToNumber(s.approx.re))).slice(0, 12), x));
     if (z?.kind === 'list') z.sols.forEach(s => { if (!s.family && s.approx && isRealSol(s)) marks.push({ x: bfToNumber(s.approx.re), kind: 'zero' }); });
-    pods.push({ title: 'Miejsca zerowe', rows: rows.length ? rows : [textRow('Brak.')], note: z?.kind === 'list' ? z.note : undefined });
+    // no answer from the solver is not the answer "none"
+    pods.push({ title: 'Miejsca zerowe', rows: rows.length ? rows : [textRow(z || set ? 'Brak.' : 'Nie udało się ich wyznaczyć.')], note: z && z.kind !== 'all' ? z.note : undefined });
     if (inDom(0)) { const y0 = safe(() => simplify(subst(e, x, ZERO))); if (y0) pods.push({ title: 'Punkt przecięcia z osią Oy', rows: [{ ml: M(`<mi>f</mi>${mo('(')}<mn>0</mn>${mo(')')}${mo('=')}${toML(y0)}`), text: `f(0) = ${toText(y0)}` }] }); }
     // parity
     const fm = subst(e, x, neg(X));

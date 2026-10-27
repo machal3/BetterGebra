@@ -3,8 +3,9 @@
  * from the series' leading term when the expression has a Laurent expansion at the point; otherwise by
  * structural rules with l'Hôpital's rule; every answer is cross-checked numerically at 100 digits.
  */
-import { E, Expr, MINUS_ONE, same, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren, isInt, HALF } from './expr';
+import { E, Expr, MINUS_ONE, same, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren, isInt, HALF , children } from './expr';
 import { evalC, approx } from './numeric';
+import { compileDouble } from './fast';
 import { CasError, Q, fail, q, qint, qsign } from './q';
 import { bfToNumber, top } from './bigfloat';
 import { lnPrimes } from './simplify';
@@ -240,11 +241,44 @@ export function limit(e: Expr, x: string, a: Expr, dir: -1 | 0 | 1 = 0): Lim | n
   const s = infSign(a);
   if (s) return oneSided(e, x, a, s > 0 ? -1 : 1);
   if (dir) return oneSided(e, x, a, dir);
+  // ln x at 0, √(1 − x) at 1: on one side there is no real function to have a limit, the other side decides
+  const offL = offDomain(e, x, a, -1), offR = offDomain(e, x, a, 1);
+  if (offL !== offR) return oneSided(e, x, a, offL ? 1 : -1);
   const r = oneSided(e, x, a, 1), l = oneSided(e, x, a, -1);
   if (!r || !l) return null;
   if (sameLim(l, r)) return r;
   if (l.kind === 'bounded' && r.kind === 'bounded') return r;
   return { kind: 'none', left: l, right: r };
+}
+/**
+ * Near a on side dir, a logarithm, root or arc function inside e has no real value (acos x / √(1 − x) past 1).
+ * Only their arguments are evaluated, in doubles: sin(sinh(3/x)) near 0 would take forever at high precision.
+ */
+function offDomain(e: Expr, x: string, a: Expr, dir: -1 | 1): boolean {
+  if (!isConstant(a) || !freeOf(e, 'i')) return false;
+  const A = approx(a).re;
+  if (!Number.isFinite(A)) return false;
+  const tests: ((x: number) => boolean)[] = [];
+  const visit = (u: Expr) => {
+    if (freeOf(u, x)) return;
+    const arg = (v: Expr) => { try { return compileDouble(v, x); } catch { return null; } };
+    if (u.k === '^' && !isInt(u.e)) {
+      const b = arg(u.b);
+      if (b) tests.push(t => b(t) < 0);
+    } else if (u.k === 'f') {
+      const g = arg(u.a[u.a.length - 1]);
+      const bad: Record<string, (v: number) => boolean> = {
+        ln: v => v <= 0, log: v => v <= 0, asin: v => Math.abs(v) > 1, acos: v => Math.abs(v) > 1, acosh: v => v < 1, atanh: v => Math.abs(v) >= 1,
+      };
+      if (g && bad[u.n]) tests.push(t => bad[u.n](g(t)));
+    }
+    children(u).forEach(visit);
+  };
+  visit(e);
+  return tests.length > 0 && [1e-6, 1e-9, 1e-12].every(h => {
+    const t = A + dir * h * Math.max(1, Math.abs(A));
+    return t !== A && tests.some(test => test(t));
+  });
 }
 function sameLim(a: Lim, b: Lim): boolean {
   if (a.kind !== b.kind) return false;

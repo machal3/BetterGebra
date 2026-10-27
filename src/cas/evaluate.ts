@@ -2,7 +2,7 @@
  * Syntax tree → values: expressions, lists, matrices and relations. Commands nested inside expressions
  * (diff(x³; x) + 1) are run through the hook the engine installs.
  */
-import { E, Expr, I, INF, ONE, PI, TWO, add, div, fn, isNum, mul, neg, num, pow, sqrt, sub, sym, variables } from './expr';
+import { E, Expr, HALF, I, INF, MINUS_ONE, ONE, PI, TWO, add, div, fn, isInt, isNum, mul, neg, num, pow, sqrt, sub, sym, variables } from './expr';
 import { diff } from './calculus';
 import { COMMANDS, FUNCTIONS, Node } from './parse';
 import { fail, parseDecimal } from './q';
@@ -14,6 +14,26 @@ export type Value =
   | { t: 'rel'; ops: string[]; parts: Expr[] };
 
 export const ex = (e: Expr): Value => ({ t: 'expr', e });
+
+/**
+ * What the input asks of its variables that building it may simplify away: x/x is 1 and (√x)² is x, yet x = 0
+ * and x < 0 stay outside. Each is kept as it was written (a 1/u, √u, ln u …), unsimplified; the engine clears the
+ * list per question and keeps solutions, intervals and domains within them.
+ */
+export const hidden: Expr[] = [];
+const note = (e: Expr) => { if (variables(e).length) hidden.push(e); };
+/** Functions defined on part of the line, with the argument condition domain() reads off them. */
+const PARTIAL: Record<string, (a: readonly Expr[]) => Expr> = {
+  ln: a => ({ k: 'f', n: 'ln', a: [a[0]] }),
+  log: a => ({ k: 'f', n: 'ln', a: [a[a.length - 1]] }),
+  log10: a => ({ k: 'f', n: 'ln', a: [a[0]] }),
+  log2: a => ({ k: 'f', n: 'ln', a: [a[0]] }),
+  sqrt: a => ({ k: '^', b: a[0], e: HALF }),
+  asin: a => ({ k: 'f', n: 'asin', a: [a[0]] }),
+  acos: a => ({ k: 'f', n: 'acos', a: [a[0]] }),
+  acosh: a => ({ k: 'f', n: 'acosh', a: [a[0]] }),
+  atanh: a => ({ k: 'f', n: 'atanh', a: [a[0]] }),
+};
 
 export interface Env {
   ans: Expr | null;
@@ -38,6 +58,7 @@ export function evaluate(n: Node, env: Env): Value {
     case 'call': {
       if (Object.hasOwn(FUNCTIONS, n.n)) {
         const args = n.args.map(a => scalar(evaluate(a, env), n.n));
+        if (Object.hasOwn(PARTIAL, n.n)) note(PARTIAL[n.n](args));
         return ex(fn(n.n, ...args));
       }
       if (Object.hasOwn(COMMANDS, n.n)) return env.command(n.n, n.args, env);
@@ -104,8 +125,11 @@ function scalarOp(op: Exclude<Op, 'neg'>, a: Expr, b: Expr): Expr {
     case '+': return add(a, b);
     case '-': return sub(a, b);
     case '*': return mul(a, b);
-    case '/': return div(a, b);
-    case '^': return pow(a, b);
+    case '/': note({ k: '^', b, e: MINUS_ONE }); return div(a, b);
+    case '^':
+      // x^(1/2), x^(−1): a root or a reciprocal, written as a power
+      if (isNum(b) && (!isInt(b) || b.v.n < 0n)) note({ k: '^', b: a, e: b });
+      return pow(a, b);
   }
 }
 function mapValue(v: Value, f: (e: Expr) => Expr): Value {

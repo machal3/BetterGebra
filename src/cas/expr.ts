@@ -4,7 +4,7 @@
  * bases combined; numbers are exact rationals; roots of rationals are pulled apart (√12 → 2√3, 1/√2 → √2/2).
  * Subtraction is a + (−1)·b, division a·b^(−1), √x is x^(1/2). Expressions are immutable and may share subtrees.
  */
-import { Q, Q0, Q1, QHALF, QM1, extractPower, fail, iroot, q, qadd, qcmp, qdiv, qeq, qfloor, qint, qmul, qpow, qsign, qsub } from './q';
+import { Q, Q0, Q1, QHALF, QM1, MAX_BITS, bitLength, extractPower, fail, iroot, q, qadd, qcmp, qdiv, qeq, qfloor, qint, qmul, qpow, qsign, qsub } from './q';
 
 export type Expr = Num | Sym | Add | Mul | Pow | Fn;
 export interface Num { readonly k: 'n'; readonly v: Q }
@@ -206,7 +206,12 @@ export const sqrt = (a: Expr) => pow(a, HALF);
 
 /** Exact a^(p/q): integer part times a reduced root, with the denominator rationalised. */
 function numericPow(a: Q, e: Q): Expr {
-  if (qint(e)) return num(qpow(a, e.n));
+  if (qint(e)) {
+    // (1 + 10⁻³⁰)^(10³⁰) has no room as a fraction, but it is a number: kept as a power, its digits still come out
+    const bits = Math.max(bitLength(a.n < 0n ? -a.n : a.n), bitLength(a.d));
+    if (a.n && !(bits <= 1 && a.d === 1n) && bits * Math.abs(Number(e.n)) > MAX_BITS) return { k: '^', b: num(a), e: num(e) };
+    return num(qpow(a, e.n));
+  }
   if (!a.n) { if (qsign(e) > 0) return ZERO; return fail('Dzielenie przez zero (0 do potęgi ujemnej).'); }
   if (qeq(a, Q1)) return ONE;
   const k = qfloor(e), r = qsub(e, q(k));        // e = k + r, 0 < r < 1
@@ -334,6 +339,7 @@ function denest(b: Expr, k: 2 | 3): Expr | null {
     const uApprox = (Math.cbrt(rr + t) + Math.cbrt(rr - t)) / 2;
     if (!Number.isFinite(uApprox)) return null;
     for (const den of [1n, 2n, 4n, m.d, 2n * m.d, 4n * m.d, r.d, 2n * r.d, 4n * r.d]) {
+      if (!Number.isFinite(uApprox * Number(den))) continue;
       const u = q(BigInt(Math.round(uApprox * Number(den))), den);
       for (const uu of [u]) {
         const v2 = qdiv(qsub(qmul(uu, uu), m), q(c));

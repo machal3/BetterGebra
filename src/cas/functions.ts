@@ -242,10 +242,13 @@ RULES.acsc = ([x]) => isZero(x) ? fail('arccsc 0 nie istnieje.') : fn('asin', re
 // --- Hyperbolic ---
 
 const odd = (name: string) => ([x]: Expr[]) => isZero(x) ? ZERO : isNegative(x) ? neg(fn(name, neg(x))) : null;
-/** c·ln u → [u^c, u^(−c)]: hyperbolic functions of a logarithm are algebraic, sinh(ln 2) = 3/4. */
+/**
+ * c·ln u → [u^c, u^(−c)]: hyperbolic functions of a logarithm are algebraic, sinh(ln 2) = 3/4. Only for a positive
+ * constant u: sinh(ln(sin x)) is defined where sin x > 0 only, (sin x − 1/sin x)/2 also where it is negative.
+ */
 function expPair(x: Expr): [Expr, Expr] | null {
   const [c, rest] = split(x);
-  if (!isFn(rest, 'ln')) return null;
+  if (!isFn(rest, 'ln') || !isConstant(rest.a[0]) || constSign(rest.a[0]) !== 1) return null;
   const p = pow(rest.a[0], num(c));
   return [p, pow(p, MINUS_ONE)];
 }
@@ -290,6 +293,8 @@ RULES.ln = ([x]) => {
   if (isSym(x, 'i')) return mul(HALF, I, PI);
   // variables are real: ln(e^u) = u for any u without i
   if (x.k === '^' && isSym(x.b, 'e') && freeOf(x.e, 'i')) return x.e;
+  // a power too large to multiply out (2^(10⁷)) keeps its exponent outside
+  if (x.k === '^' && isNum(x.b) && isNum(x.e) && qsign(x.b.v) > 0) return mul(x.e, fn('ln', x.b));
   if (isNum(x)) {
     if (qsign(x.v) < 0) return add(fn('ln', num(qneg(x.v))), mul(I, PI));
     if (x.v.n === 1n) return neg(fn('ln', num(x.v.d)));
@@ -327,9 +332,15 @@ function minimalBase(b: Q): [Q, bigint] {
 function iRootExact(n: bigint, k: number): bigint | null {
   if (n < 0n) return null;
   if (n < 2n) return n;
-  const guess = BigInt(Math.round(Math.pow(Number(n), 1 / k)));
-  for (const g of [guess - 1n, guess, guess + 1n]) if (g > 0n && g ** BigInt(k) === n) return g;
-  return null;
+  // Newton down from a power of two above the root (Number(n) overflows past 10³⁰⁸: ln(10¹⁰⁰⁰))
+  const K = BigInt(k);
+  let r = 1n << BigInt(Math.ceil(bitLength(n) / k));
+  for (;;) {
+    const s = ((K - 1n) * r + n / r ** (K - 1n)) / K;
+    if (s >= r) break;
+    r = s;
+  }
+  return r ** K === n ? r : null;
 }
 
 /** log(b; x) = ln x / ln b, exact when x is a rational power of b. */

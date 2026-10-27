@@ -745,6 +745,15 @@ export function definite(f: Expr, x: string, a: Expr, b: Expr): Definite {
     if (ok) exact = mul(num(flip), add(...parts));
     if (divergent && typeof divergent === 'number') divergent = (divergent * flip) as 1 | -1;
   }
+  // the quadrature runs into a pole without noticing (|tan x| over π/2 gives a finite number): ask f itself
+  const heads = [
+    ...cuts.flatMap(([, c]) => [pole(g, c, -1), pole(g, c, 1)]),
+    Number.isFinite(LO) ? pole(g, LO, 1) : 0, Number.isFinite(HI) ? pole(g, HI, -1) : 0,
+  ].filter(s => s);
+  if (heads.length) {
+    divergent = heads.every(s => s === heads[0]) ? (heads[0] * flip) as 1 | -1 : 'yes';
+    exact = null;
+  }
   if (numeric) numeric = { value: numeric.value * flip, error: numeric.error };
   // the two must agree; an exact value the quadrature contradicts is dropped
   let note: string | undefined;
@@ -753,7 +762,7 @@ export function definite(f: Expr, x: string, a: Expr, b: Expr): Definite {
     const tol = Math.max(1e-6 * Math.abs(v), 50 * numeric.error, 1e-9);
     if (!(Math.abs(v - numeric.value) <= tol)) { note = 'Wartość z funkcji pierwotnej nie zgadza się z całkowaniem numerycznym, więc jej nie podaję.'; exact = null; }
   }
-  if (divergent && numeric && Math.abs(numeric.value) < 1e6 && numeric.error < 1e-3 * Math.max(1, Math.abs(numeric.value))) {
+  if (divergent && !heads.length && numeric && Math.abs(numeric.value) < 1e6 && numeric.error < 1e-3 * Math.max(1, Math.abs(numeric.value))) {
     // the quadrature converged although the antiderivative's limit is infinite: something is off; show neither as certain
     note = 'Nie udało się rozstrzygnąć zbieżności.';
     divergent = 0;
@@ -801,16 +810,56 @@ function singularPoints(f: Expr, x: string, lo: number, hi: number): [Expr, numb
       if (l && isNum(l[0]) && isNum(l[1])) {
         const a = qToNumber((l[0] as { v: Q }).v), b0 = qToNumber((l[1] as { v: Q }).v);
         const off = isFn(d, 'cos') ? 0.5 : 0;
-        for (let k = Math.ceil(((Math.min(a * lo, a * hi) + 0) - b0) / Math.PI - off) - 1; k <= Math.floor((Math.max(a * lo, a * hi) - b0) / Math.PI - off) + 1; k++) {
+        // a·x + b = (k + off)π
+        for (let k = Math.floor((Math.min(a * lo, a * hi) + b0) / Math.PI - off) - 1; k <= Math.ceil((Math.max(a * lo, a * hi) + b0) / Math.PI - off) + 1; k++) {
           const v = ((k + off) * Math.PI - b0) / a;
           if (v > lo && v < hi && !out.some(([, w]) => Math.abs(w - v) < 1e-12)) {
             out.push([div(sub(mul(num(q(BigInt(2 * k + (off ? 1 : 0)), 2n)), PI), l[1]), l[0]), v]);
           }
         }
+      } else if (Number.isFinite(lo) && Number.isFinite(hi)) {
+        // anything else (e·x + 1/2 − π, |x|): sign changes and touching zeros of samples, to doubles
+        for (const v of sampledZeros(compileDouble(d, x), lo, hi)) {
+          if (!out.some(([, w]) => Math.abs(w - v) < 1e-12 * Math.max(1, Math.abs(v)))) out.push([num(qFromNumber(v)), v]);
+        }
       }
     }
   }
   return out.sort((p, r) => p[1] - r[1]);
+}
+function sampledZeros(d: (t: number) => number, lo: number, hi: number): number[] {
+  const n = 2000, h = (hi - lo) / n, at = (k: number) => lo + k * h, abs = Math.abs, out: number[] = [];
+  const ys = Array.from({ length: n + 1 }, (_, k) => d(at(k)));
+  for (let k = 1; k < n; k++) {
+    const p = ys[k - 1], y = ys[k], nx = ys[k + 1];
+    if (y === 0) { out.push(at(k)); continue; }
+    if (Number.isFinite(p) && Number.isFinite(y) && p !== 0 && Math.sign(p) !== Math.sign(y)) {
+      let a = at(k - 1), b = at(k);
+      for (let j = 0; j < 80; j++) { const m = (a + b) / 2; if (Math.sign(d(m)) === Math.sign(p)) a = m; else b = m; }
+      out.push((a + b) / 2);
+    }
+    if (abs(y) < abs(p) && abs(y) <= abs(nx) && Math.sign(p) === Math.sign(y) && Math.sign(nx) === Math.sign(y)) {
+      let a = at(k - 1), b = at(k + 1);
+      for (let j = 0; j < 100 && b - a > 1e-15 * Math.max(1, abs(a)); j++) {
+        const c = b - (b - a) * 0.618034, e = a + (b - a) * 0.618034;
+        if (abs(d(c)) < abs(d(e))) b = e; else a = c;
+      }
+      const m = (a + b) / 2;
+      if (abs(d(m)) < 1e-12 * Math.max(1, abs(p), abs(nx))) out.push(m);
+    }
+  }
+  return out.filter(v => v > lo && v < hi);
+}
+/**
+ * Approaching c from side s, |f| grows like 1/|x − c| or faster (1/x, tan x at π/2), so the integral can't reach c:
+ * the sign of f there (the infinity it heads for), else 0. A logarithm or 1/√ grows slower and is integrable.
+ */
+function pole(g: (t: number) => number, c: number, s: 1 | -1): number {
+  const w = Math.max(1, Math.abs(c));
+  const [a, b, d] = [1e-3, 1e-5, 1e-7].map(h => g(c + s * h * w));
+  if (![a, b, d].every(Number.isFinite) || !b || !d || Math.sign(b) !== Math.sign(d)) return 0;
+  const p1 = Math.log10(Math.abs(b / a)) / 2, p2 = Math.log10(Math.abs(d / b)) / 2;
+  return p1 > 0.97 && p2 > 0.97 ? Math.sign(d) : 0;
 }
 const qFromNumber = (v: number): Q => { let d = 1n, x = v; while (!Number.isInteger(x) && d < 1n << 60n) { x *= 2; d *= 2n; } return q(BigInt(Math.round(x)), d); };
 

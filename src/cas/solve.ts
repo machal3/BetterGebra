@@ -27,6 +27,9 @@ export interface Sol {
   family: boolean;
   /** Family members that are not solutions (x = kπ, k ≠ 0 for sin x / x = 0). */
   excludeK?: bigint[];
+  /** The family holds only from this k on (x = ln(kπ + π/2), k ≥ 0) or up to this k. */
+  kMin?: bigint;
+  kMax?: bigint;
 }
 export type SolveResult =
   | { kind: 'list'; sols: Sol[]; note?: string; numericRange?: [number, number] }
@@ -41,12 +44,78 @@ const approxOf = (e: Expr): C | null => {
 };
 const isRealC = (z: C) => !z.im.m || top(z.im) < Math.max(top(z.re), 0) - 150;
 
+/** Set while solving when a numeric search somewhere inside (√(x + ln x) = 0 → x + ln x = 0) supplied solutions. */
+let searched = false, crowded = false;
+const numericNote = (sols: Sol[]) => crowded ? 'Rozwiązań w przedziale ⟨−50; 50⟩ jest za dużo, by je wszystkie dopracować; poniżej te najbliższe zera, znalezione numerycznie.'
+  : !sols.length ? 'Nie znalazłem rozwiązań rzeczywistych w przedziale ⟨−50; 50⟩ (poza nim mogą istnieć).'
+  : sols.some(s => s.exact) ? 'Rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne); wartości dokładne rozpoznane i sprawdzone z dokładnością do 60 cyfr.'
+  : 'Nie znalazłem rozwiązania dokładnego; poniżej rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne).';
+
 /** f = 0 for x. complex: also complex solutions of polynomials (always for polynomial equations). */
 export function solveEquation(f: Expr, x: string): SolveResult {
+  // one input asks for the same zeros more than once (the card and the plot): the last few are kept
+  const id = `${x}|${key(f)}`, hit = solved.get(id);
+  if (hit) { searched ||= !!hit.searched; return hit.r; }
+  const outer = searched;
+  searched = false;
+  try {
+    const r = solveFresh(f, x);
+    solved.set(id, { r, searched });
+    if (solved.size > 16) solved.delete(solved.keys().next().value!);
+    return r;
+  } finally { searched ||= outer; }
+}
+const solved = new Map<string, { r: SolveResult; searched: boolean }>();
+
+/**
+ * The solutions at which the conditions the input hid hold (x·(2 + x/x) = 0 has none: x/x needs x ≠ 0). Family
+ * members that fail are left out of the family, one or two of them; more drop it.
+ */
+export function within(res: SolveResult, x: string, guard: Expr[]): SolveResult {
+  if (!guard.length || res.kind !== 'list') return res;
+  const ok = (v: Expr, real: boolean) => guard.every(g => {
+    try {
+      const z = evalC(subst(g, x, v), 120);
+      return !real || !z.im.m || top(z.im) < Math.max(top(z.re), 0) - 60;
+    } catch (err) { if (err instanceof CasError) return false; throw err; }
+  });
+  const sols: Sol[] = [];
+  for (const s of res.sols) {
+    if (!s.family) {
+      const real = !s.approx || isRealC(s.approx);
+      const v = s.exact ?? (s.approx && real ? numFromBF(s.approx) : null);
+      if (!v || !isConstant(v) || ok(v, real)) sols.push(s);
+      continue;
+    }
+    const ks = Array.from({ length: 41 }, (_, j) => j - 20).filter(k =>
+      !s.excludeK?.includes(BigInt(k)) && (s.kMin === undefined || k >= s.kMin) && (s.kMax === undefined || k <= s.kMax));
+    const bad = ks.filter(k => { try { return !ok(subst(s.exact!, 'k', num(k)), true); } catch { return true; } });
+    if (!bad.length) sols.push(s);
+    else if (bad.length <= 2 && bad.every(k => Math.abs(k) <= 6)) sols.push({ ...s, excludeK: [...(s.excludeK ?? []), ...bad.map(BigInt)].sort((a, b) => (a < b ? -1 : 1)) });
+  }
+  return sols.length ? { ...res, sols } : { kind: 'none', note: res.note };
+}
+function solveFresh(f: Expr, x: string): SolveResult {
+  const outer = searched;
+  searched = false;
+  try {
+    const r = solveOnce(f, x);
+    if (!searched || r.kind === 'all' || (r.kind === 'list' && r.numericRange)) return r;
+    return r.kind === 'none' ? { kind: 'none', note: numericNote([]) } : { ...r, note: numericNote(r.sols), numericRange: [-50, 50] };
+  } finally { searched ||= outer; }
+}
+function solveOnce(f: Expr, x: string): SolveResult {
   const t = cancel(together(f));
   if (isZero(t) || isZero(expand(t))) return { kind: 'all' };
   if (freeOf(t, x)) return { kind: 'none' };
   const [N, D] = numDen(t);
+  // (1 + 2e)/(x·cosh³x): x only in the denominator; a/x = 0 has solutions when a = 0
+  if (freeOf(N, x)) return { kind: 'none', note: isConstant(N) ? undefined : `Przy założeniu, że ${textOf(N)} ≠ 0.` };
+  // |x| = x holds on all of x ≥ 0: no list of solutions says that (equationPods shows the interval); else the
+  // pieces between the zeros of the |u|'s give the solutions exactly (|x − 1| = |x + 1| at 0)
+  const set = zeroSet(f, x);
+  if (set?.some(iv => !iv.lo || !iv.hi || !same(iv.lo, iv.hi))) fail('Zbiorem rozwiązań jest cały przedział, nie lista liczb.');
+  if (set) return set.length ? { kind: 'list', sols: set.map(iv => ({ exact: iv.lo!, approx: approxOf(iv.lo!), mult: 1, family: false })) } : { kind: 'none' };
   let sols: Sol[] | null = null, note: string | undefined, numericRange: [number, number] | undefined;
   // polynomial in x
   // ponytail: exact and numeric roots up to degree 60 (~1 s); above, the root refinement alone runs past the time limit
@@ -80,20 +149,19 @@ export function solveEquation(f: Expr, x: string): SolveResult {
       if (variables(N).some(v => v !== x)) {
         fail('Nie umiem rozwiązać tego równania dokładnie, a z parametrami nie da się go rozwiązać numerycznie.');
       }
-      const r = numericReal(N, x, -50, 50);
-      sols = r;
+      crowded = false;
+      sols = numericReal(N, x, -50, 50);
+      searched = true;
       numericRange = [-50, 50];
-      note = !r.length ? 'Nie znalazłem rozwiązań rzeczywistych w przedziale ⟨−50; 50⟩ (poza nim mogą istnieć).'
-        : r.some(s => s.exact) ? 'Rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne); wartości dokładne rozpoznane i sprawdzone z dokładnością do 60 cyfr.'
-        : 'Nie znalazłem rozwiązania dokładnego; poniżej rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne).';
+      note = numericNote(sols);
     }
   }
   // drop what isn't a solution of the original equation (zeros of the denominator, extraneous roots)
   const checked = sols.filter(s => checkSolution(f, x, s, D));
-  if (!checked.length) return { kind: 'none', note };
-  return { kind: 'list', sols: dedupe(checked), note, numericRange };
+  if (!checked.length) return { kind: 'none', note: numericRange ? numericNote([]) : note };
+  return { kind: 'list', sols: dedupe(checked), note: numericRange ? numericNote(checked) : note, numericRange };
 }
-const textOf = (e: Expr) => key(e);
+const textOf = (e: Expr) => textU(e);
 
 function dedupe(sols: Sol[]): Sol[] {
   const out: Sol[] = [];
@@ -102,7 +170,19 @@ function dedupe(sols: Sol[]): Sol[] {
     if (same_) { same_.mult = Math.max(same_.mult, s.mult); if (!same_.exact && s.exact) same_.exact = s.exact; continue; }
     out.push(s);
   }
-  return out;
+  // x = 0 next to x = kπ (x² sin x = 0) is one of its members
+  return out.filter(s => s.family || !s.approx || !out.some(o => memberOf(o, s.approx!)));
+}
+function memberOf(F: Sol, z: C): boolean {
+  if (!F.family || !F.exact || F.excludeK?.length) return false;
+  const ab = coeffsOf(F.exact, 'k', 1);
+  if (!ab || ab.length !== 2 || !isConstant(ab[0]) || !isConstant(ab[1])) return false;
+  const a = approxOf(ab[0]), b = approxOf(ab[1]);
+  if (!a || !b || !isRealC(a) || !isRealC(b) || !isRealC(z)) return false;
+  const k = Math.round((bfToNumber(z.re) - bfToNumber(a.re)) / bfToNumber(b.re));
+  if ((F.kMin !== undefined && k < F.kMin) || (F.kMax !== undefined && k > F.kMax)) return false;
+  const m = approxOf(subst(F.exact, 'k', num(k)));
+  return !!m && closeC(m, z);
 }
 const closeC = (a: C, b: C) => {
   const dr = Math.abs(bfToNumber(a.re) - bfToNumber(b.re)), di = Math.abs(bfToNumber(a.im) - bfToNumber(b.im));
@@ -111,24 +191,35 @@ const closeC = (a: C, b: C) => {
 };
 
 /**
- * The solution makes the original f vanish and doesn't zero the denominator. A family is tested at k = −6…6: when
- * only odd (even) k work it becomes x(2k + 1) (x(2k)); one or two members that fail (sin x / x = 0 at k = 0,
- * sin x / (x − π) = 0 at k = 1) are left out of it; more failures reject it.
+ * The solution makes the original f vanish and doesn't zero the denominator; a real one also keeps every root,
+ * logarithm and power on the way real (x = −3 is no solution of (x + 3)·√x = 0). A family is tested at k = −20…20,
+ * its members real: when only odd (even) k work it becomes x(2k + 1) (x(2k)); one or two members that fail
+ * (sin x / x = 0 at k = 0, sin x / (x − π) = 0 at k = 1) are left out of it; when it works from some k on (or up to
+ * one) that is its range (cos eˣ = 0: x = ln(kπ + π/2) for k ≥ 0); anything else rejects it.
  */
 function checkSolution(f: Expr, x: string, s: Sol, D: Expr): boolean {
   if (s.exact && s.family) {
-    const failing = (e: Expr, ks: number[]) =>
-      ks.filter(k => !checkSolution(f, x, { ...s, exact: subst(e, 'k', num(k)), family: false }, D));
-    const ks = Array.from({ length: 13 }, (_, j) => j - 6);
+    const works = (e: Expr, k: number) => {
+      try {
+        const v = subst(e, 'k', num(k)), z = approxOf(v);
+        return !!z && isRealC(z) && checkSolution(f, x, { ...s, exact: v, family: false }, D);
+      } catch (err) { if (err instanceof CasError) return false; throw err; } // x = 1/(kπ) at k = 0
+    };
+    const ks = Array.from({ length: 41 }, (_, j) => j - 20);
+    const failing = (e: Expr, ks: number[]) => ks.filter(k => !works(e, k));
     let e = s.exact, bad = failing(e, ks);
     const odd = (k: number) => Math.abs(k) % 2 === 1;
-    if (bad.length > 2) {
-      if (ks.filter(odd).every(k => !bad.includes(k))) e = subst(e, 'k', add(mul(TWO, K), ONE));
+    if (bad.length > 2 && bad.length < ks.length) {
+      const lo = Math.min(...ks.filter(k => !bad.includes(k))), hi = Math.max(...ks.filter(k => !bad.includes(k)));
+      // a range of k: every k past the end works, none before it
+      if (hi === 20 && bad.every(k => k < lo) && works(e, 60) && works(e, 400)) { s.kMin = BigInt(lo); bad = []; }
+      else if (lo === -20 && bad.every(k => k > hi) && works(e, -60) && works(e, -400)) { s.kMax = BigInt(hi); bad = []; }
+      else if (ks.filter(odd).every(k => !bad.includes(k))) e = subst(e, 'k', add(mul(TWO, K), ONE));
       else if (ks.filter(k => !odd(k) && k !== 0).every(k => !bad.includes(k))) e = subst(e, 'k', mul(TWO, K));
       else return false;
-      bad = failing(e, ks.filter(k => Math.abs(k) <= 3));
-      if (bad.length > 2) return false;
+      if (bad.length) bad = failing(e, ks.filter(k => Math.abs(k) <= 6));
     }
+    if (bad.length > 2) return false;
     s.exact = e;
     s.approx = approxOf(e);
     if (bad.length) s.excludeK = bad.map(BigInt);
@@ -147,8 +238,25 @@ function checkSolution(f: Expr, x: string, s: Sol, D: Expr): boolean {
     if (!zd.re.m && !zd.im.m) return false;
     const mag = Math.max(top(z.re), top(z.im));
     if (mag > -200 + scaleOf(f, x, v)) return false;
+    if (!staysReal(f, x, v)) return false;
   }
   return true;
+}
+/** At a real x = v, every function and non-integer power in f has a real value (or f is about complex numbers anyway). */
+function staysReal(f: Expr, x: string, v: Expr): boolean {
+  let at: C;
+  try { at = evalC(v, 120); } catch { return true; }
+  if (!isRealC(at) || !freeOf(f, 'i')) return true;
+  const real = (e: Expr): boolean => {
+    if (freeOf(e, x)) return true;
+    if (!children(e).every(real)) return false;
+    if (e.k !== 'f' && !(e.k === '^' && !isInt(e.e))) return true;
+    try {
+      const z = evalC(subst(e, x, v), 300);
+      return !z.im.m || top(z.im) < Math.max(top(z.re), 0) - 100;
+    } catch { return true; }
+  };
+  return real(f);
 }
 /** Typical size of the terms of f at x = v, as a power of two, so a cancellation-limited zero isn't rejected. */
 function scaleOf(f: Expr, x: string, v: Expr): number {
@@ -157,12 +265,16 @@ function scaleOf(f: Expr, x: string, v: Expr): number {
   for (const t of terms) { try { const z = evalC(subst(t, x, v), 120); m = Math.max(m, top(z.re), top(z.im)); } catch { /* skip */ } }
   return Math.max(0, m);
 }
+/**
+ * A root known to ~90 digits: f is small there, at 300 bits, not in doubles (√(x + ln x) is NaN a hair to one side of
+ * its root); a square root halves the digits of the zero, so the bar is lower than for exact values.
+ */
 function checkNumeric(f: Expr, x: string, z: C, D: Expr): boolean {
-  const g = compileDouble(f, x), d = compileDouble(D, x);
   if (z.im.m && top(z.im) > -100) return true; // complex root of a polynomial: refined already
-  const v = bfToNumber(z.re), r = g(v);
-  if (Number.isNaN(r)) return false;
-  return Math.abs(r) < 1e-6 * Math.max(1, Math.abs(v)) && d(v) !== 0;
+  const v = numFromBF(z);
+  let r: C, d: C;
+  try { r = evalC(subst(f, x, v), 300); d = evalC(subst(D, x, v), 300); } catch (err) { if (err instanceof CasError) return false; throw err; }
+  return (!!d.re.m || !!d.im.m) && Math.max(top(r.re), top(r.im)) <= -100 + scaleOf(f, x, v) && staysReal(f, x, v);
 }
 
 /** a₀ + a₁x (+ a₂x²) = 0 with symbolic coefficients. */
@@ -304,10 +416,27 @@ function replaceEven(e: Expr, from: 'sin' | 'cos', to: 'sin' | 'cos'): Expr {
   return e.k === '+' ? add(...e.t.map(t => replaceEven(t, from, to))) : e.k === '*' ? mul(...e.t.map(t => replaceEven(t, from, to))) : e.k === '^' ? pow(replaceEven(e.b, from, to), e.e) : e;
 }
 
-/** Solve g(x) = c with x occurring once in g. */
+const solving = new Set<string>();
+/**
+ * Solve g(x) = c by peeling g off from the outside; null when that doesn't reach every solution. Where x is left in
+ * more than one place (sin(x + ln x) = 0 → x + ln x = kπ) the rest is an equation of its own.
+ */
 function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
   const one = (e: Expr, family = false): Sol => ({ exact: e, approx: approxOf(e), mult: 1, family: family || !freeOf(e, 'k') });
   if (isSym(g, x)) return [one(c)];
+  if ((g.k === '+' || g.k === '*') && g.t.filter(t => !freeOf(t, x)).length > 1 || g.k === '^' && !freeOf(g.b, x) && !freeOf(g.e, x)) {
+    // x^x = 2 would come back here through the kernel x^x; with k in c (cos(x² + x) = 0 → x² + x = kπ + π/2) only
+    // an exact method can answer, the numeric search fails on the parameter
+    const id = key(sub(g, c));
+    if (solving.has(id)) return null;
+    solving.add(id);
+    try {
+      const r = solveEquation(sub(g, c), x);
+      return r.kind === 'none' ? [] : r.kind === 'list' ? r.sols.map(s => ({ ...s, family: s.family || (!!s.exact && !freeOf(s.exact, 'k')) })) : null;
+    } catch (err) { if (err instanceof CasError) return null; throw err; } finally { solving.delete(id); }
+  }
+  // the union of the solutions of several equations, or null when one of them is out of reach
+  const union = (rs: (Sol[] | null)[]) => (rs.some(r => !r) ? null : rs.flatMap(r => r!));
   if (g.k === '+') {
     const inner = g.t.find(t => !freeOf(t, x))!;
     return isolate(inner, sub(c, sub(g, inner)), x);
@@ -329,7 +458,7 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
         if (s === -1) return [];
         if (s === 0) return isolate(g.b, ZERO, x);
         const r = pow(c, num(q(1n, N_)));
-        return [...(isolate(g.b, neg(r), x) ?? []), ...(isolate(g.b, r, x) ?? [])];
+        return union([isolate(g.b, neg(r), x), isolate(g.b, r, x)]);
       }
       if (isNum(n)) {
         const p = n.v.n, q_ = n.v.d;
@@ -339,7 +468,7 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
         if (p % 2n === 0n && s === -1) return [];
         if (s === 0) return isolate(g.b, ZERO, x);
         const r = s !== null && s < 0 ? neg(pow(neg(c), num(q(q_, p)))) : pow(c, num(q(q_, p)));
-        if (p % 2n === 0n) return [...(isolate(g.b, neg(r), x) ?? []), ...(isolate(g.b, r, x) ?? [])];
+        if (p % 2n === 0n) return union([isolate(g.b, neg(r), x), isolate(g.b, r, x)]);
         return isolate(g.b, r, x);
       }
       // h^n = c → h = c^(1/n) (checked afterwards)
@@ -354,8 +483,20 @@ function isolate(g: Expr, c: Expr, x: string): Sol[] | null {
   }
   if (g.k === 'f' && g.a.length === 1) {
     const h = g.a[0];
-    const both = (a: Expr[]) => a.flatMap(v => isolate(h, v, x) ?? []);
+    const both = (a: Expr[]) => union(a.map(v => isolate(h, v, x)));
     const s = constSign(c);
+    if (!freeOf(c, 'k') && ['sin', 'cos', 'tan', 'cot'].includes(g.n)) {
+      // sin(cos x) = 0 → cos x = kπ: a second family would need a second parameter, but only finitely many k (here
+      // k = 0) put kπ within the range of cos, and each is solved on its own
+      if (g.n === 'tan' || g.n === 'cot') return null;
+      const ab = coeffsOf(c, 'k', 1);
+      if (!ab || ab.length !== 2 || !isConstant(ab[0]) || !isConstant(ab[1])) return null;
+      const a = approx(ab[0]).re, b = approx(ab[1]).re;
+      if (!b) return null;
+      const lo = Math.ceil(Math.min((-1 - a) / b, (1 - a) / b) - 1e-9), hi = Math.floor(Math.max((-1 - a) / b, (1 - a) / b) + 1e-9);
+      if (hi - lo > 20) return null;
+      return union(Array.from({ length: Math.max(0, hi - lo + 1) }, (_, j) => isolate(g, subst(c, 'k', num(lo + j)), x)));
+    }
     const between = (lo: number, hi: number) => { if (!isConstant(c)) return true; const v = approx(c); return Math.abs(v.im) < 1e-12 && v.re >= lo - 1e-15 && v.re <= hi + 1e-15; };
     switch (g.n) {
       case 'sin': if (!between(-1, 1)) return []; {
@@ -458,7 +599,8 @@ function viaKernel(M: Expr, t: string, kernel: Expr, x: string): Sol[] | null {
     // only real values of the kernel give real x here
     if (s.approx && !isRealC(s.approx)) continue;
     const sub_ = isolate(kernel, v, x);
-    if (sub_) out.push(...sub_.map(z => ({ ...z, exact: s.exact ? z.exact : null, approx: z.approx ?? null })));
+    if (!sub_) return null;
+    out.push(...sub_.map(z => ({ ...z, exact: s.exact ? z.exact : null, approx: z.approx ?? null })));
   }
   return out;
 }
@@ -523,8 +665,12 @@ export function numericReal(f: Expr, x: string, lo: number, hi: number): Sol[] {
   const ds: Expr[] = [f], der = (j: number): Expr | null => {
     try { while (ds.length <= j) ds.push(diff(ds[ds.length - 1], x)); return ds[j]; } catch { return null; }
   };
-  const out: Sol[] = [];
+  // sin(x·tan x) = 0 has thousands piling up at the poles: the 100 nearest 0 are refined, as many as 3 s allow
+  crowded = near.length > 100;
+  near.sort((a, b) => abs(a) - abs(b)).splice(100);
+  const out: Sol[] = [], until = Date.now() + 3000;
   for (const v of near) {
+    if (Date.now() > until) { crowded = true; break; }
     const s = rootNear(f, x, v, h, der);
     const t = s && bfToNumber(s.approx!.re);
     if (s && !out.some(o => abs(bfToNumber(o.approx!.re) - t!) <= 1e-12 * Math.max(1, abs(t!)))) out.push(s);
@@ -544,7 +690,7 @@ function rootNear(f: Expr, x: string, v: number, h: number, der: (j: number) => 
     const g = der(m - 1), dg = der(m);
     if (!g || !dg) break;
     const r = newton(g, dg, x, v);
-    if (r && Math.abs(bfToNumber(r) - v) <= h && Array.from({ length: m }, (_, j) => der(j)!).every(d => zeroAt(d, x, numFromBF({ re: r, im: BZERO })))) z = r;
+    if (r && Math.abs(bfToNumber(r) - v) <= h && Array.from({ length: m }, (_, j) => j).every(j => rootOf(der(j)!, der(j + 1), x, r))) z = r;
   }
   const exact = recognize(f, x, z ?? bfFromNumber(v), z ? 200 : 40);
   if (!exact && !z) return null;
@@ -573,6 +719,19 @@ function newton(g: Expr, dg: Expr, x: string, v: number): BF | null {
     last = s;
   }
   return null;
+}
+/**
+ * z is a root of d: d vanishes there, or the Newton step from z is below its precision. The second is for steep
+ * roots, whose value is off by the slope times the last bits of z (½ + xˣ·sin x = 0 near 28, where xˣ ≈ 10⁴⁰).
+ */
+function rootOf(d: Expr, dd: Expr | null, x: string, z: BF): boolean {
+  const v = numFromBF({ re: z, im: BZERO });
+  if (zeroAt(d, x, v)) return true;
+  if (!dd) return false;
+  try {
+    const a = evalC(subst(d, x, v), 340), b = evalC(subst(dd, x, v), 340);
+    return !a.im.m && !!b.re.m && top(a.re) - top(b.re) < Math.max(top(z), 0) - 300;
+  } catch (err) { if (err instanceof CasError) return false; throw err; }
 }
 /** f vanishes at the constant c, up to the size of its terms there (the test checkSolution makes). */
 function zeroAt(f: Expr, x: string, c: Expr): boolean {
@@ -858,7 +1017,7 @@ function nonlinear(fs: Expr[], vars: string[], depth = 0): SystemResult {
     let numeric = false;
     for (const s of r.sols) {
       let v = s.exact ?? (s.approx ? numFromBF(s.approx) : null);
-      if (!v || (s.excludeK && s.excludeK.length)) continue;
+      if (!v || s.excludeK?.length || s.kMin !== undefined || s.kMax !== undefined) continue;
       if (!s.exact) { const e = snap(fs[0], x, v); if (e) v = e; else numeric = true; }
       if (holds(v)) list.push([v]);
     }
@@ -1012,6 +1171,8 @@ const val = (e: Expr | null, side: -1 | 1) => (e === null ? side * Infinity : ap
 
 /** Real solutions of f ⋚ 0 (op one of <, <=, >, >=, !=) as a union of intervals with exact ends. */
 export function solveInequality(f: Expr, op: string, x: string): IntervalSet {
+  const split = byAbsSigns(f, op, x);
+  if (split) return split;
   const dom = domain(f, x);
   const t = cancel(together(f));
   const [N, D] = numDen(t);
@@ -1079,6 +1240,79 @@ export function solveInequality(f: Expr, op: string, x: string): IntervalSet {
     else merged.push({ ...iv });
   }
   return { parts: merged, note: dom.note };
+}
+
+/**
+ * With |u| inside, f can vanish on a whole interval (|x| − x on x ≥ 0), which no list of zeros describes. Between
+ * the zeros of the innermost u's each |u| is u or −u, so f op 0 is solved piece by piece, and at each zero itself.
+ */
+function byAbsSigns(f: Expr, op: string, x: string): IntervalSet | null {
+  const us = new Map<string, Expr>();
+  const visit = (e: Expr) => {
+    if (isFn(e, 'abs') && !freeOf(e.a[0], x) && !hasAbs(e.a[0])) us.set(key(e.a[0]), e.a[0]);
+    children(e).forEach(visit);
+  };
+  visit(f);
+  if (!us.size) return null;
+  const cuts: { e: Expr; v: number }[] = [];
+  for (const u of us.values()) {
+    const r = solveEquation(u, x);
+    if (r.kind === 'all' || (r.kind === 'list' && (r.numericRange || r.sols.some(s => s.family)))) return null;
+    if (r.kind === 'list') for (const s of r.sols) {
+      if (!s.exact || !s.approx || !isRealC(s.approx)) continue;
+      const v = bfToNumber(s.approx.re);
+      if (!cuts.some(c => Math.abs(c.v - v) < 1e-12 * Math.max(1, Math.abs(v)))) cuts.push({ e: s.exact, v });
+    }
+  }
+  cuts.sort((a, b) => a.v - b.v);
+  const holds = (y: number) => op === '<' ? y < 0 : op === '<=' ? y <= 0 : op === '>' ? y > 0 : op === '>=' ? y >= 0 : y !== 0;
+  const parts: Interval[] = [];
+  const notes = new Set<string>();
+  for (let k = 0; k <= cuts.length; k++) {
+    const lo = cuts[k - 1] ?? null, hi = cuts[k] ?? null;
+    const mid = !lo ? (hi ? hi.v - Math.max(1, Math.abs(hi.v)) : 0) : !hi ? lo.v + Math.max(1, Math.abs(lo.v)) : (lo.v + hi.v) / 2;
+    let g = f;
+    for (const u of us.values()) {
+      const sg = Math.sign(compileDouble(u, x)(mid));
+      if (!sg) return null;
+      g = replaceAll(g, fn('abs', u), sg > 0 ? u : neg(u));
+    }
+    const r = solveInequality(g, op, x);
+    if (r.note) notes.add(r.note);
+    parts.push(...intersect(r.parts, [{ lo: lo?.e ?? null, hi: hi?.e ?? null, loClosed: false, hiClosed: false }]));
+    if (hi) {
+      // the cut itself, exactly
+      try {
+        const z = evalC(subst(f, x, hi.e), 300);
+        const y = !z.re.m || top(z.re) < -250 + scaleOf(f, x, hi.e) ? 0 : bfToNumber(z.re);
+        if ((!z.im.m || top(z.im) < -250) && holds(y)) parts.push({ lo: hi.e, hi: hi.e, loClosed: true, hiClosed: true });
+      } catch (err) { if (!(err instanceof CasError)) throw err; }
+    }
+  }
+  const merged: Interval[] = [];
+  for (const iv of parts) {
+    const last = merged[merged.length - 1];
+    if (last && last.hi && iv.lo && same(last.hi, iv.lo) && (last.hiClosed || iv.loClosed)) { last.hi = iv.hi; last.hiClosed = iv.hiClosed; }
+    else merged.push({ ...iv });
+  }
+  return { parts: merged, note: notes.size ? [...notes].join(' ') : undefined };
+}
+const hasAbs = (e: Expr): boolean => isFn(e, 'abs') || children(e).some(hasAbs);
+/** Where f = 0 when that includes a whole interval (|x| − x on x ≥ 0), else null. */
+export function zeroIntervals(f: Expr, x: string): Interval[] | null {
+  const S = zeroSet(f, x);
+  return S?.some(iv => !iv.lo || !iv.hi || !same(iv.lo, iv.hi)) ? S : null;
+}
+/** Where f = 0, solved piece by piece between the zeros of the |u|'s in it; null without them or when that fails. */
+function zeroSet(f: Expr, x: string): Interval[] | null {
+  if (!hasAbs(f) || variables(f).some(v => v !== x)) return null;
+  let S: Interval[];
+  try {
+    const le = byAbsSigns(f, '<=', x), ge = le && byAbsSigns(f, '>=', x);
+    if (!le || !ge) return null;
+    S = intersect(le.parts, ge.parts);
+  } catch (err) { if (err instanceof CasError) return null; throw err; }
+  return S;
 }
 
 /** The real domain of f as intervals, plus a note for periodic exclusions (tg, ctg). */

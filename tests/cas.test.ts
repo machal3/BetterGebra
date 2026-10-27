@@ -105,11 +105,15 @@ test('matrices and statistics', () => {
 });
 
 test('bad input is a readable error, never a crash', () => {
-  for (const q of ['', '(', 'x +', '1/0', 'sin(', '0^0', 'foo bar baz quux', 'det([[1,2]])', '2^(10^10)']) {
+  for (const q of ['', '(', 'x +', '1/0', 'sin(', '0^0', 'foo bar baz quux', 'det([[1,2]])']) {
     const r = run(q);
     expect(r.error, q).toBeTruthy();
     expect(r.error, q).not.toMatch(/wewnętrzny/);
   }
+  // too large to multiply out, but a number all the same
+  expect(card('2^(10^10)', 'Wynik')).toBe('2^10000000000');
+  expect(card('(1 + 10^(-30))^(10^30)', 'Postać dziesiętna')).toBe('2.718281828459045235360287');
+  expect(card('ln(10^1000)', 'Wynik')).toBe('1000ln(10)');
 });
 
 test('fixes from the audit stay fixed', () => {
@@ -224,4 +228,68 @@ test('systems: unknowns vs parameters, discussion, fractions, families', () => {
   // still right without parameters
   expect(card('x + y + z = 6, x - y + z = 2, 2x + y - z = 1', 'Rozwiązanie')).toBe('x = 1, y = 2, z = 3');
   expect(card('x + 2y = 3, 2x + 4y = 7', 'Rozwiązanie')).toBe('Układ jest sprzeczny: brak rozwiązań.');
+});
+
+test('equations: every solution or none claimed, nothing with x left in it', () => {
+  const sols = (q: string) => card(q, 'Rozwiązania');
+  // the inside of a function in more than one place is an equation of its own, not a constant
+  expect(run('sqrt(x + ln(x)) = 0').pods[0].rows.map(r => r.text).join()).toBe('x ≈ 0.56714329040978387300');
+  expect(run('x^x = 2').pods[0].rows[0].text).toBe('x ≈ 1.5596104694623693500');
+  // sin(cos x) = 0: cos x = kπ only for k = 0, not x = 2kπ ± arccos(kπ)
+  expect(sols('sin(cos(x)) = 0')).toBe('x = kπ + π/2, k ∈ ℤ');
+  // k only where the inverse is real
+  expect(sols('cos(e^x) = 0')).toBe('x = ln(kπ + π/2), k ∈ ℤ, k ≥ 0');
+  expect(sols('cos(x^2 + x + e) = 0')).toContain('k ∈ ℤ, k ≥ 1');
+  expect(sols('sin(1/x) = 0')).toBe('x = 1/(kπ), k ∈ ℤ ∖ {0}');
+  // x = 0 is one of the kπ
+  expect(sols('x^2 sin(x) = 0')).toBe('x = kπ, k ∈ ℤ');
+  // a constant numerator: no solutions, and with a parameter only when it isn't 0
+  expect(card('((1/2 + e)/x)/cosh(x)^3 = 0', 'Rozwiązanie')).toBe('Brak rozwiązań.');
+  expect(run('solve(a/x = 0, x)').pods[0].note).toBe('Przy założeniu, że a ≠ 0.');
+  // steep roots (xˣ ≈ 10⁴⁰) are roots all the same, in reasonable time
+  const t = Date.now();
+  expect(run('1/2 + x^x sin(x) = 0').pods[0].rows.length).toBeGreaterThan(10);
+  expect(Date.now() - t).toBeLessThan(8000);
+});
+
+test('domains: roots, logarithms and what simplifying hides', () => {
+  // √(−3) on the way: x = −3 is no real solution; nor is 0, which the division by √x rules out
+  expect(card('(x+3) sqrt(x) = 0', 'Rozwiązania')).toBe('x = 0');
+  expect(card('(x+3)/sqrt(x) x = 0', 'Rozwiązanie')).toBe('Brak rozwiązań.');
+  // sinh(ln u) is not (u − 1/u)/2 where u < 0
+  expect(card('sinh(ln(sin(x))) = 0', 'Rozwiązania')).toBe('x = 2kπ + π/2, k ∈ ℤ');
+  // x/x is 1, but not at 0
+  expect(card('x (2 + x/x) = 0', 'Rozwiązanie')).toBe('Brak rozwiązań.');
+  expect(card('(x-1)/(x-1) > 0', 'Rozwiązanie')).toBe('x ∈ (−∞; 1) ∪ (1; +∞)');
+  expect(card('sqrt(x)^2 = -4', 'Rozwiązanie')).toBe('Brak rozwiązań.');
+  expect(card('domain((x-1)/(x-1), x)', 'Dziedzina')).toBe('x ∈ (−∞; 1) ∪ (1; +∞)');
+  // primes are positive
+  expect(run('(-8)^(1/3)').pods.map(p => p.title)).not.toContain('Liczba pierwsza');
+});
+
+test('absolute values: solved piece by piece, intervals included', () => {
+  expect(card('abs(x) = x', 'Rozwiązanie')).toBe('x ∈ ⟨0; +∞)');
+  expect(card('abs(x - 1) + abs(x + 1) = 2', 'Rozwiązanie')).toBe('x ∈ ⟨−1; 1⟩');
+  expect(card('abs(x-1) = abs(x+1)', 'Rozwiązania')).toBe('x = 0');
+  expect(card('abs(x) > x', 'Rozwiązanie')).toBe('x ∈ (−∞; 0)');
+  expect(card('abs(x - 1) + abs(x + 1) <= 2', 'Rozwiązanie')).toBe('x ∈ ⟨−1; 1⟩');
+  expect(card('abs(abs(x) - 1) <= 1/2', 'Rozwiązanie')).toBe('x ∈ ⟨−3/2; −1/2⟩ ∪ ⟨1/2; 3/2⟩');
+  expect(card('abs(x) - x', 'Miejsca zerowe')).toBe('x ∈ ⟨0; +∞)');
+});
+
+test('definite integrals: a pole inside is divergence, not a number', () => {
+  expect(card('integrate(abs(tan(x)), x, 0.3, 1.6)', 'Całka oznaczona')).toBe('Całka jest rozbieżna do +∞.');
+  expect(card('integrate(2tan(x-3), x, 0.3, 1.6)', 'Całka oznaczona')).toBe('Całka jest rozbieżna.');
+  expect(card('integrate(-1/(e x + 1/2 - pi), x, 0.3, 1.6)', 'Całka oznaczona')).toBe('Całka jest rozbieżna.');
+  expect(card('integrate(tan(x), x, 0, pi)', 'Całka oznaczona')).toBe('Całka jest rozbieżna.');
+  // integrable singularities stay numbers
+  expect(card('integrate(1/sqrt(abs(x)), x, -1, 1)', 'Całka oznaczona')).toBe('4');
+  expect(card('integrate(ln(x), x, 0, 1)', 'Całka oznaczona')).toBe('−1');
+});
+
+test('limits where the function lives on one side only', () => {
+  expect(card('limit(x ln(x), x, 0)', 'Granica')).toBe('0');
+  expect(card('limit(ln(x), x, 0)', 'Granica')).toBe('−∞');
+  expect(card('limit(acos(x)/sqrt(1-x), x, 1)', 'Granica')).toBe('√2');
+  expect(card('limit(1/x, x, 0)', 'Granica')).toBe('Granica nie istnieje: granice jednostronne są różne.');
 });
