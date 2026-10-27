@@ -369,6 +369,10 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>v &gt; 2</code>, <code>v(v &gt; 2)</code>, <code>sum(v &gt; 2)</code></td><td>porównanie elementów (1 lub 0) i wybór warunkiem</td></tr>
               <tr><td><code>lu</code>, <code>qr</code>, <code>chol</code>, <code>svd</code>, <code>eig</code>, <code>[L, U, P] = lu(A)</code></td><td>rozkłady macierzy; dokładne, gdy się da, inaczej numeryczne i sprawdzone</td></tr>
               <tr><td><code>cond</code>, <code>norm(A, 1)</code>, <code>pinv</code>, <code>expm</code>, <code>null</code>, <code>orth</code></td><td>uwarunkowanie, normy, pseudoodwrotność, eksponenta, jądro, baza kolumn</td></tr>
+              <tr><td><code>roots([1 -6 11 -6])</code>, <code>poly</code>, <code>polyval</code>, <code>polyder</code>, <code>conv</code>, <code>deconv</code>, <code>residue</code></td><td>wielomiany jako wektory współczynników (od najwyższej potęgi)</td></tr>
+              <tr><td><code>polyfit(x, y, 2)</code>, <code>fit(x, y, a*exp(b*x))</code></td><td>dopasowanie: wielomian (dokładnie dla danych wymiernych) i dowolny model</td></tr>
+              <tr><td><code>interp1(x, y, xq, 'spline')</code>, <code>spline</code>, <code>pchip</code>, <code>trapz</code></td><td>interpolacja (także <code>spline(x, y, 'natural')</code>) i całkowanie danych</td></tr>
+              <tr><td><code>plot(x, y)</code>, <code>scatter</code>, <code>stem</code>, <code>bar</code>, <code>histogram</code>, <code>errorbar</code>, <code>polarplot</code></td><td>wykresy danych</td></tr>
               <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>

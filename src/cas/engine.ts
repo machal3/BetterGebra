@@ -8,6 +8,7 @@ import { bfSign, bfToNumber } from './bigfloat';
 import { diff, diffN, limit, Lim, taylor } from './calculus';
 import { Env, Value, approxValue as approxValueOf, evaluate, ex, hidden, isApprox, scalar, setInverse, setLeftSolve, shadow, toMat, dims, matMul, type FnValue } from './evaluate';
 import { LINALG, tiny, type Linalg } from './linalg';
+import { DATAFIT, plotData } from './datafit';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -249,7 +250,8 @@ function valueML(v: Value): string {
   switch (v.t) {
     case 'expr': return v.approx ? approxML(v.e) : toML(v.e);
     case 'matrix': return v.approx ? matML(v.rows, approxML) : matML(v.rows);
-    case 'list': return `${mo(v.set ? '{' : '[')}${v.items.map(valueML).join(mo(','))}${mo(v.set ? '}' : ']')}`;
+    // ; between elements, as in the list cards: a comma is the decimal separator
+    case 'list': return `${mo(v.set ? '{' : '[')}${v.items.map(valueML).join(mo(';'))}${mo(v.set ? '}' : ']')}`;
     case 'fn': return `${mo('(')}${v.params.map(nameML).join(mo(','))}${mo(')')}${mo('↦')}${valueML(v.body)}`;
     default: return '';
   }
@@ -994,7 +996,7 @@ function linalgOut(r: Linalg): Out {
     if (v.t === 'expr') return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${ap ? approxML(v.e) : toML(v.e)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${ap ? approxText(v.e, true) : toText(v.e)}` };
     return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${valueML(v)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${valueText(v)}` };
   };
-  return { pods: r.cards.map(c => ({ title: c.title, rows: c.rows.map(([lhs, v]) => valueRow(lhs, v)), note: c.note })), value: r.outputs[0], outputs: r.outputs };
+  return { pods: r.cards.map(c => ({ title: c.title, rows: c.rows.map(([lhs, v]) => valueRow(lhs, v)), note: c.note, ...(c.plot ? { plot: c.plot } : {}) })), value: r.outputs[0], outputs: r.outputs };
 }
 
 function matrixPods(m: Expr[][]): Pod[] {
@@ -1185,6 +1187,13 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
   }
   if (Object.hasOwn(LINALG, name)) {
     const r = LINALG[name](args.map(a => evaluate(a, env)), nout);
+    if (r) return linalgOut(r);
+  }
+  if (Object.hasOwn(DATAFIT, name)) {
+    // fit(x, y, a*exp(b*x)): the model's letters are its own (x and the parameters), whatever the workspace holds
+    const read = (a: Node, k: number) => evaluate(a, name === 'fit' && k === 2 ? shadow(env, letters(a)) : env);
+    const vals = name === 'roots' ? safe(() => args.map(read)) : args.map(read);
+    const r = vals && DATAFIT[name](vals, nout);
     if (r) return linalgOut(r);
   }
   switch (name) {
@@ -1747,7 +1756,21 @@ function sumCommand(name: 'sum' | 'product', args: Node[], env: Env): Out {
 
 // --- Plots on request: functions, curves F(x, y) = 0 and (x(t); y(t)) in one view ---
 
+/** The letters named in a piece of input. */
+function letters(n: Node, out: string[] = []): string[] {
+  if (n.t === 'id') out.push(n.n);
+  else if (n.t === 'op') { letters(n.a, out); letters(n.b, out); }
+  else if (n.t === 'neg' || n.t === 'post') letters(n.a, out);
+  else if (n.t === 'call' || n.t === 'index') n.args.forEach(a => letters(a, out));
+  else if (n.t === 'list') n.items.forEach(a => letters(a, out));
+  return out;
+}
+
 function plotCommand(args: Node[], env: Env): Out {
+  // plot(x, y), plot(y): data
+  const vals = safe(() => args.map(a => evaluate(a, env)));
+  const data = vals && plotData(vals);
+  if (data) return linalgOut(data);
   const fns: Expr[] = [], parts: Plot[] = [], labels: string[] = [], curves: { f: Expr; vx: string; vy: string }[] = [];
   const partRows: (HandoffRow[] | undefined)[] = [];
   for (const a of args) {

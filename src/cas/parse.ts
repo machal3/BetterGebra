@@ -74,6 +74,9 @@ export const COMMANDS: Record<string, [number, number]> = {
   all: [1, 2], cumsum: [1, 2], cumprod: [1, 2],
   lu: [1, 1], qr: [1, 1], chol: [1, 1], svd: [1, 1], eig: [1, 1], cond: [1, 2], pinv: [1, 1], expm: [1, 1], null: [1, 1], orth: [1, 1],
   double: [1, 1],
+  poly: [1, 1], polyval: [2, 2], polyder: [1, 2], polyint: [1, 2], conv: [2, 2], deconv: [2, 2], residue: [2, 2], polyfit: [3, 3],
+  fit: [3, 3], interp1: [3, 5], spline: [2, 3], pchip: [2, 3], trapz: [1, 2], cumtrapz: [1, 2], scatter: [2, 2], stem: [1, 2],
+  bar: [1, 2], histogram: [1, 2], errorbar: [3, 3], polarplot: [1, 2],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -120,6 +123,8 @@ export const ALIAS: Record<string, string> = {
   sumyczesciowe: 'cumsum', przesun: 'circshift',
   rozkladlu: 'lu', rozkladqr: 'qr', cholesky: 'chol', rozkladsvd: 'svd', wartosciszczegolne: 'svd', uwarunkowanie: 'cond',
   pseudoodwrotna: 'pinv', przyblizona: 'double',
+  hist: 'histogram', dopasuj: 'fit', interpoluj: 'interp1', splot: 'conv', trapezy: 'trapz', sklejana: 'spline', punktowy: 'scatter',
+  slupkowy: 'bar', biegunowy: 'polarplot',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;
@@ -162,6 +167,8 @@ export const isStr = (t: string | undefined) => t !== undefined && t[0] === '"';
 /** Tokens after which ' is a prime or a transpose; elsewhere it opens a string, as in MATLAB. */
 const endsOperand = (t: string | undefined) => t !== undefined && !isStr(t) && (/^\.?\d|^[a-zα-ω]/i.test(t) || [')', ']', '}', "'", ".'", '!', '°'].includes(t));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** MATLAB's names with a digit in them, read whole (interp1 is not interp·1). */
+const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s)(?![a-z0-9_])/y;
 
 /** Tokens, each with whether a space came before it (inside [ ] a space can separate elements). */
 function lex(source: string, names: readonly string[]): { toks: string[]; space: boolean[] } {
@@ -183,6 +190,7 @@ function lex(source: string, names: readonly string[]): { toks: string[]; space:
     }
     let m: RegExpExecArray | null = null;
     if (nameRe && !/[a-z0-9_]/.test(source[pos - 1] ?? '')) { nameRe.lastIndex = pos; m = nameRe.exec(source); }
+    if (!m && !/[a-z0-9_]/.test(source[pos - 1] ?? '')) { DIGIT_WORDS.lastIndex = pos; m = DIGIT_WORDS.exec(source); }
     if (!m) { TOKEN.lastIndex = pos; m = TOKEN.exec(source); }
     if (!m) return fail(`Nieznany znak „${c}”.`);
     raw.push(m[0]); before.push(sp); sp = false; pos += m[0].length;

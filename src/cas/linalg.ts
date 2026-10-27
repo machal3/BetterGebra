@@ -14,9 +14,10 @@ import { approx } from './numeric';
 import { polyOf, solvePoly } from './poly';
 import { fail } from './q';
 import { simplify } from './simplify';
+import type { Plot } from './plot';
 
 /** A card: rows of name = value, and what was checked. */
-export interface Card { title: string; rows: [string, Value][]; note?: string }
+export interface Card { title: string; rows: [string, Value][]; note?: string; plot?: Plot }
 /** cards to show; outputs as [a, b, …] = f(A) assigns them, the first one also the value of f(A). */
 export interface Linalg { cards: Card[]; outputs: Value[] }
 type Command = (args: Value[], nout: number) => Linalg | null;

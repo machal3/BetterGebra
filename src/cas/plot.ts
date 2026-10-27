@@ -599,3 +599,73 @@ export function combine(parts: Plot[]): Plot | null {
   }
   return p;
 }
+
+// --- Data: MATLAB's plot(x, y), scatter, stem, bar, histogram, errorbar ---
+
+/** Points of data; style line joins them (a break at each missing value), dots and stems show them one by one. */
+export interface DataSeries { xs: number[]; ys: number[]; label: string; style?: 'line' | 'dots' | 'stems'; expr?: string; color?: number; dash?: boolean }
+export interface DataExtras {
+  bars?: { xs: number[]; hs: number[]; width: number; labels: string[] };
+  /** Error bars: y ± e at each x. */
+  errors?: { xs: number[]; ys: number[]; es: number[] };
+  /** A smooth curve f over the x range of the data (a fit, an interpolant), drawn as a line. */
+  curve?: { f: RealFn; label: string; expr?: string; color?: number };
+  equal?: boolean;
+}
+/** A plot of data series (and bars, error bars, a fitted curve), framed around the data. */
+export function dataPlot(series: DataSeries[], o: DataExtras = {}): Plot | null {
+  const xs: number[] = [], ys: number[] = [];
+  for (const s of series) s.xs.forEach((x, i) => { if (Number.isFinite(x) && Number.isFinite(s.ys[i])) { xs.push(x); ys.push(s.ys[i]); } });
+  if (o.bars) o.bars.xs.forEach((x, i) => { xs.push(x - o.bars!.width / 2, x + o.bars!.width / 2); ys.push(0, o.bars!.hs[i]); });
+  if (o.errors) o.errors.xs.forEach((x, i) => { xs.push(x); ys.push(o.errors!.ys[i] - o.errors!.es[i], o.errors!.ys[i] + o.errors!.es[i]); });
+  if (!xs.length) return null;
+  let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+  if (x1 - x0 < 1e-12) { x0 -= 1; x1 += 1; }
+  const curveYs: number[] = [];
+  const curve = o.curve ? (() => {
+    const { segs, ys: cy } = sample(o.curve!.f, x0, x1);
+    curveYs.push(...cy);
+    return { label: o.curve!.label, segs, expr: o.curve!.expr, graph: true, color: o.curve!.color } as Series;
+  })() : null;
+  // stems and bars stand on the axis: keep 0 in view
+  const all = [...ys, ...curveYs.filter(y => y >= Math.min(...ys) - (Math.max(...ys) - Math.min(...ys)) && y <= Math.max(...ys) + (Math.max(...ys) - Math.min(...ys)))];
+  if (o.bars || series.some(s => s.style === 'stems')) all.push(0);
+  let [y0, y1] = [Math.min(...all), Math.max(...all)];
+  if (y1 - y0 < 1e-12) { y0 -= 1; y1 += 1; }
+  const px = (x1 - x0) * 0.06, py = (y1 - y0) * 0.12;
+  const p = blank([x0 - px, x1 + px], [y0 - py, y1 + py]);
+  p.equal = o.equal;
+  series.forEach((s, k) => {
+    const segs: number[][] = [];
+    if (s.style === 'dots' || s.style === 'stems') segs.push(s.xs.flatMap((x, i) => (Number.isFinite(x) && Number.isFinite(s.ys[i]) ? [x, s.ys[i]] : [])));
+    else {
+      let cur: number[] = [];
+      s.xs.forEach((x, i) => { if (Number.isFinite(x) && Number.isFinite(s.ys[i])) cur.push(x, s.ys[i]); else { if (cur.length) segs.push(cur); cur = []; } });
+      if (cur.length) segs.push(cur);
+    }
+    p.series.push({ label: s.label, segs, style: s.style ?? 'line', expr: s.expr, color: s.color ?? k, dash: s.dash });
+  });
+  if (curve) p.series.push({ ...curve, color: curve.color ?? series.length });
+  if (o.bars) o.bars.xs.forEach((x, i) => { if (o.bars!.hs[i]) p.bars.push({ x0: x - o.bars!.width / 2, x1: x + o.bars!.width / 2, h: o.bars!.hs[i], label: o.bars!.labels[i] }); });
+  if (o.errors) o.errors.xs.forEach((x, i) => {
+    const y = o.errors!.ys[i], e = o.errors!.es[i];
+    if ([x, y, e].every(Number.isFinite)) p.vectors.push({ x1: x, y1: y - e, x2: x, y2: y + e, label: `${fmt(y)} ± ${fmt(e)}`, color: 0 });
+  });
+  return p;
+}
+
+/** A histogram of values in bins (Sturges' rule when not given), as MATLAB's histogram. */
+export function histogramPlot(values: number[], bins?: number): { plot: Plot; edges: number[]; counts: number[] } | null {
+  const v = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const lo = v[0], hi = v[v.length - 1];
+  const n = Math.max(1, Math.min(1000, bins ?? Math.ceil(Math.log2(v.length) + 1)));
+  const w = (hi - lo) / n || 1, start = hi > lo ? lo : lo - 0.5;
+  const counts = Array<number>(n).fill(0);
+  for (const t of v) counts[Math.min(n - 1, Math.floor((t - start) / w))]++;
+  const edges = Array.from({ length: n + 1 }, (_, i) => start + i * w);
+  const top = Math.max(...counts);
+  const plot = blank([start - w * 0.5, start + (n + 0.5) * w], [-top * 0.08, top * 1.25]);
+  counts.forEach((h, i) => { if (h) plot.bars.push({ x0: edges[i], x1: edges[i + 1], h, label: `⟨${fmt(edges[i])}; ${fmt(edges[i + 1])}${i === n - 1 ? '⟩' : ')'}: ${h}` }); });
+  return { plot, edges, counts };
+}
