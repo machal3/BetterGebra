@@ -2,6 +2,7 @@
  * The React tree: the start screen, or the frame (top bar, bottom bar on phones) around the panels, which render
  * into the page's static containers next to their canvases; Pomoc and the messages on every screen.
  */
+import './layout.css';
 import './shell.css';
 import './overlays.css';
 import { Help } from './Help';

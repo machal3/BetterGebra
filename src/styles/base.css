@@ -1,0 +1,18 @@
+/* Base: the page, text and scrollbars in the Affect UI values (tokens.css). */
+*, *::before, *::after { box-sizing: border-box; }
+* { scrollbar-width: thin; scrollbar-color: var(--b-faint) transparent; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--b-page);
+  color: var(--b-ink);
+  font: 400 var(--b-fs-md)/20px var(--b-font);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+math { font-family: var(--b-math); }
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

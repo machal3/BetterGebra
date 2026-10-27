@@ -155,7 +155,8 @@ const css = /* css */ `
   border-radius: 10px;
   background: var(--ui-tpc-card);
   box-shadow: var(--ui-tpc-shadow);
-  font-family: "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Bettergebra: "Inter Variable" first, the family name @fontsource-variable/inter registers */
+  font-family: "Inter Variable", "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   line-height: 20px;
   font-weight: 400;

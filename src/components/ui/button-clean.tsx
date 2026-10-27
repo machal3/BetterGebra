@@ -220,7 +220,8 @@ const css = /* css */ `
   margin: 0;
   border: 0;
   border-radius: var(--radius);
-  font-family: "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Bettergebra: "Inter Variable" first, the family name @fontsource-variable/inter registers */
+  font-family: "Inter Variable", "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: var(--fs);
   font-weight: 500;
   line-height: var(--lh);

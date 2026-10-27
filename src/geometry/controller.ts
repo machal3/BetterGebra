@@ -614,7 +614,7 @@ const LAYER: Record<Shape['kind'], number> = { polygon: 0, sector: 0, angle: 1, 
 function draw(): void {
   if (!width || !height) return;
   const v = vp(), css = getComputedStyle(document.documentElement), c = (k: string) => css.getPropertyValue(`--${k}`).trim();
-  const theme = readTheme(), ink = c('b-ink'), free = c('b-accent'), bound = c('b-text'), poly = c('geo-polygon'), arc = c('geo-angle');
+  const theme = readTheme(), ink = c('b-ink'), free = c('geo-free'), bound = c('b-text'), poly = c('geo-polygon'), arc = c('geo-angle');
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
   const options = { grid, axes, xUnit: 'num' as const, yUnit: 'num' as const, plane: false, minorGrid: true, halo: false };

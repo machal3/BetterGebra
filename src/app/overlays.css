@@ -1,12 +1,12 @@
 /* ---------- Dialogs: Pomoc, the geometry value question ---------- */
 .b-dialog {
   width: min(400px, calc(100% - 32px)); margin: auto; padding: 0; border: 0; border-radius: var(--b-r-2xl);
-  background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-float); font: 400 var(--b-fs-body)/20px var(--b-font);
+  background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-pop); font: 400 var(--b-fs-md)/20px var(--b-font);
 }
 .b-dialog::backdrop { background: var(--b-backdrop); }
 .b-dialog[open] { animation: b-pop-in var(--b-slow) var(--b-ease); }
 .b-dialog-body { display: grid; gap: var(--b-s2); margin: 0; padding: var(--b-s5); }
-.b-dialog-title { margin-bottom: 4px; font-size: var(--b-fs-lg); font-weight: 600; line-height: 22px; color: var(--b-strong); }
+.b-dialog-title { margin-bottom: 4px; font-size: var(--b-fs-title); font-weight: 600; line-height: 22px; color: var(--b-strong); }
 .b-dialog-actions { display: flex; justify-content: flex-end; gap: var(--b-s2); margin-top: var(--b-s3); }
 
 
@@ -35,12 +35,12 @@
 }
 .b-toaster .ui-nsc { pointer-events: auto; }
 .b-toaster .ui-nsc__text:empty { display: none; }
-.b-toaster .ui-nsc__card { box-shadow: var(--b-shadow-float); }
+.b-toaster .ui-nsc__card { box-shadow: var(--b-shadow-pop); }
 
 /* ---------- Tooltip ---------- */
 .b-tooltip {
   position: fixed; inset: auto; margin: 0; max-width: 260px; padding: 4px 9px; border: 0; border-radius: var(--b-r-sm);
-  background: var(--b-solid); color: var(--b-on-solid); box-shadow: var(--b-shadow-float); pointer-events: none;
+  background: var(--b-solid); color: var(--b-on-solid); box-shadow: var(--b-shadow-pop); pointer-events: none;
   font: 500 var(--b-fs-sm)/16px var(--b-font); white-space: pre-line;
 }
 .b-tooltip:popover-open { animation: b-tip-in var(--b-normal) var(--b-ease); }

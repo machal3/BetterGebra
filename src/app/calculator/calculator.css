@@ -4,24 +4,24 @@
 .b-calc {
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-s4);
   width: min(100%, 860px); margin: 0 auto; padding: 40px 32px 72px;
-  font: 400 var(--b-fs-body)/20px var(--b-font); color: var(--b-ink);
+  font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);
 }
 
 /* ---------- Empty state ---------- */
 .b-calc-hero { display: grid; justify-items: center; gap: var(--b-s2); padding: 24px 0 4px; text-align: center; }
 .b-calc-hero-icon {
   display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 14px;
-  background: var(--b-accent); color: #ffffff; box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--b-accent) 60%, transparent);
+  background: var(--b-solid); color: #ffffff; box-shadow: 0 6px 18px -6px var(--b-line-hover);
 }
 .b-calc-hero h2 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; color: var(--b-strong); }
 .b-calc-hero p { max-width: 560px; margin: 0; color: var(--b-text); }
 
 /* ---------- Composer: the centre of the page ---------- */
 .b-composer {
-  border-radius: var(--b-r-2xl); background: var(--b-card); box-shadow: var(--b-shadow-float);
+  border-radius: var(--b-r-2xl); background: var(--b-card); box-shadow: var(--b-shadow-pop);
   transition: box-shadow var(--b-normal) ease;
 }
-.b-composer:focus-within { box-shadow: 0 0 0 1px var(--b-accent), 0 0 0 4px var(--b-focus), var(--b-shadow-float); }
+.b-composer:focus-within { box-shadow: 0 0 0 1px var(--b-solid), 0 0 0 4px var(--b-focus), var(--b-shadow-pop); }
 .b-composer-field { display: flex; align-items: center; gap: var(--b-s2); padding: 8px 8px 4px 20px; }
 .b-composer-field input {
   flex: 1; min-width: 0; height: 52px; margin: 0; padding: 0; border: 0; outline: none; background: transparent;
@@ -85,8 +85,8 @@
 .b-pod-note { margin: 4px 0 0; font-size: var(--b-fs-sm); color: var(--b-text); }
 .ui-buttonc.b-pod-more { justify-self: start; margin-top: 6px; }
 /* The answer: a line in the accent colour and larger type */
-.b-pod.is-primary { padding: 14px 20px 16px; box-shadow: inset 3px 0 0 var(--b-accent), var(--b-shadow-hover); }
-.b-pod.is-primary .b-pod-head h3 { color: var(--b-accent-ink); }
+.b-pod.is-primary { padding: 14px 20px 16px; box-shadow: inset 3px 0 0 var(--b-solid), var(--b-shadow-hover); }
+.b-pod.is-primary .b-pod-head h3 { color: var(--b-strong); }
 .b-pod.is-primary .b-pod-math { font-size: 26px; }
 .b-pod.is-error { display: flex; padding: 12px 16px; background: var(--b-danger-bg); box-shadow: inset 0 0 0 1px var(--b-danger-line); color: var(--b-ink); }
 .b-pod.is-error p { margin: 0; }
@@ -106,23 +106,23 @@
 .b-cplot { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 6px; }
 .b-cplot-stage {
   position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 240px; max-height: 440px; overflow: hidden;
-  border-radius: var(--b-r-lg); background: var(--plot-bg); box-shadow: inset 0 0 0 1px var(--b-line-strong);
+  border-radius: var(--b-r-lg); background: var(--plot-bg); box-shadow: inset 0 0 0 1px var(--b-line-hover);
 }
 .b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
 .b-cplot-canvas.grabbing { cursor: grabbing; }
-.b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-accent); }
+.b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-solid); }
 .b-cplot-tools {
   position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 2px; padding: 3px;
-  border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-float);
+  border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   opacity: 0; translate: 0 -4px; transition: opacity var(--b-normal) ease, translate var(--b-normal) var(--b-ease);
 }
 .b-cplot-stage:hover .b-cplot-tools, .b-cplot-stage:focus-within .b-cplot-tools { opacity: 1; translate: 0 0; }
 @media (hover: none) { .b-cplot-tools { opacity: 1; translate: 0 0; } }
 .b-cplot-tools .ui-buttonc { --h: 28px; }
-.b-cplot-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--b-line-strong); }
+.b-cplot-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--b-line-hover); }
 .b-cplot-tip {
   position: absolute; z-index: 1; display: grid; gap: 2px; max-width: min(320px, 70%); padding: 6px 10px; pointer-events: none;
-  border-left: 3px solid var(--b-line-strong); border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-float);
+  border-left: 3px solid var(--b-line-hover); border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
 }
 .b-cplot-tip .row { display: flex; align-items: center; gap: 6px; }

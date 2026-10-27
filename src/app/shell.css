@@ -3,10 +3,6 @@
   --b-topbar-h: 52px;
   --b-bottombar-h: 0px;
 }
-body {
-  background: var(--b-page);
-  font-family: var(--b-font);
-}
 .b-visually-hidden {
   position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -14,8 +10,8 @@ body {
 
 /* ---------- Logo ---------- */
 .b-logo { display: block; flex: none; }
-.b-logo rect { fill: var(--b-accent); }
-.b-logo path { fill: none; stroke: #ffffff; stroke-width: 2.6; stroke-linecap: round; }
+.b-logo rect { fill: var(--b-strong); }
+.b-logo path { fill: none; stroke: var(--b-on-solid); stroke-width: 2.6; stroke-linecap: round; }
 
 /* ---------- Top bar: logo · mode switch (centred) · help and theme ---------- */
 .b-topbar {
@@ -60,10 +56,6 @@ body {
 :root:not([data-theme="dark"]) .b-modes { --ui-seg-soft: #5c5c5c; }
 .b-topbar .b-modes { --ui-seg-tray: var(--b-track); }
 :root[data-theme="dark"] .b-topbar .b-modes { --ui-seg-tray: var(--b-page); }
-
-/* ---------- Side panel (its content moves to React panel by panel) ---------- */
-.sidebar { background: var(--b-panel); border-right: 0; box-shadow: inset -1px 0 0 var(--b-line); }
-.sidebar-body { padding: var(--b-s4) var(--b-s4) var(--b-s6); color: var(--b-ink); font: 400 var(--b-fs-md)/20px var(--b-font); }
 
 /* ---------- Tablet: no wordmark, the switch stays centred ---------- */
 @media (max-width: 1023px) {
@@ -150,5 +142,5 @@ body {
 @media (max-width: 767px) {
   .b-home-main { justify-content: flex-start; padding-top: 88px; }
   .b-home-brand { font-size: 24px; }
-  .b-home-lead { font-size: var(--b-fs-lg); margin-bottom: var(--b-s4); }
+  .b-home-lead { font-size: var(--b-fs-title); margin-bottom: var(--b-s4); }
 }

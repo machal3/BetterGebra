@@ -1,5 +1,5 @@
 import './styles/tokens.css';
-import './styles/app.css';
+import './styles/base.css';
 import { StrictMode, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';

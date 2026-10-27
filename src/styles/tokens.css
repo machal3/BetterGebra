@@ -1,8 +1,21 @@
 /*
- * Design tokens in the visual language of Affect UI (Clean): near-black ink in alpha steps, hairline shadows,
- * 6–12px radii, short calm motion. Every component built here reads these; the Affect UI files keep their own
- * --ui-* variables, which hold the same values. Dark mode follows data-theme="dark" on <html>, which main.tsx
- * always sets (the system preference is resolved there), because that is what the Affect UI components read.
+ * Design tokens: the values of Affect UI (Clean), taken from the component files in components/ui, so that what
+ * we build ourselves cannot be told apart from what the library ships. The contract:
+ *
+ *  - Inter Variable. 13/20 for controls and text, 12/16 small, 11/16 labels, 15/24 titles. Weights 400 and 500
+ *    only (the clean files never use 600), letter-spacing 0.
+ *  - Ink in alpha steps of black (white in dark mode). Lines .06, hover wash .03, selected fill .06, track .04.
+ *  - Monochrome: a picked or switched-on control is the solid chip or the neutral fill, never a colour. Colour is
+ *    for mathematics (curves, points, sets) and for state (danger, ok, warn). The one blue in the chrome is the
+ *    focus ring, as in the components themselves: a 2px outline, offset 1px (−2px on full-width rows).
+ *  - Shadows card / hover / pop exactly as the clean files. Radii 5 (tag, kbd, count) · 6 (buttons, fields,
+ *    tooltips) · 8 (trays, tiles) · 10 (cards, menus, popovers) · 12 (floating panels, dialogs) · 16 (sheets).
+ *  - Heights 24 / 28 / 32, 38–44 for a coarse pointer. Motion: hover 140ms ease, press scale .97 over 160ms,
+ *    popover 180ms, folding 340ms, chevron 280ms, easing cubic-bezier(.22, 1, .36, 1).
+ *
+ * Two deliberate steps away from the components: icons at .55 instead of .447 and field edges a little stronger
+ * than the hairline, both for contrast (WCAG 1.4.11). Dark mode follows data-theme="dark" on <html>, which the
+ * script in index.html and main.ts always set, because that is what the Affect UI components read.
  */
 @import '@fontsource-variable/inter/index.css';
 
@@ -13,53 +26,53 @@
   --b-math: "Cambria Math", "STIX Two Math", "Latin Modern Math", Cambria, "Times New Roman", serif;
 
   /* Surfaces */
-  --b-page: #f4f4f5;
+  --b-page: #f5f5f5;
   --b-panel: #ffffff;
   --b-card: #ffffff;
-  --b-tray: #f0f0f0;
   --b-raised: #ffffff;
-  --b-code: #fafafa;
 
   /* Ink */
   --b-strong: #000000;
   --b-ink: rgba(0, 0, 0, 0.88);
   --b-text: rgba(0, 0, 0, 0.61);
-  --b-muted: rgba(0, 0, 0, 0.5);
+  --b-muted: rgba(0, 0, 0, 0.45);
   --b-faint: rgba(0, 0, 0, 0.27);
   --b-icon: rgba(0, 0, 0, 0.55);
-  --b-on-solid: #fcfcfc;
   --b-solid: rgba(0, 0, 0, 0.88);
   --b-solid-hover: rgba(0, 0, 0, 0.8);
+  --b-on-solid: #fcfcfc;
 
   /* Lines and fills */
   --b-line: rgba(0, 0, 0, 0.06);
-  --b-line-strong: rgba(0, 0, 0, 0.12);
-  /* 3:1 against the card (WCAG 1.4.11): field edges and switches that are off */
-  --b-field-line: rgba(0, 0, 0, 0.42);
-  --b-control-off: rgba(0, 0, 0, 0.42);
-  --b-slider-track: rgba(0, 0, 0, 0.16);
+  --b-line-hover: rgba(0, 0, 0, 0.1);
+  --b-field-line: rgba(0, 0, 0, 0.14);
   --b-wash: rgba(0, 0, 0, 0.03);
   --b-fill: rgba(0, 0, 0, 0.06);
   --b-track: rgba(0, 0, 0, 0.04);
+  --b-control-off: rgba(0, 0, 0, 0.14);
+  --b-slider-track: rgba(0, 0, 0, 0.08);
+  --b-thumb: #ffffff;
+  --b-thumb-on: #ffffff;
 
-  /* Accent, status */
-  --b-accent: #0060e2;
-  --b-accent-ink: rgba(0, 96, 226, 0.9);
-  --b-accent-soft: rgba(0, 96, 226, 0.08);
+  /* Focus, state */
   --b-focus: rgba(0, 96, 226, 0.35);
-  --b-danger: #d93a2b;
-  --b-danger-bg: rgba(217, 58, 43, 0.06);
-  --b-danger-line: rgba(217, 58, 43, 0.18);
-  --b-ok: #1f8a4c;
+  --b-danger: #e5484d;
+  --b-danger-bg: rgba(229, 72, 77, 0.08);
+  --b-danger-line: rgba(229, 72, 77, 0.24);
+  --b-ok: #1a9a52;
+  --b-ok-bg: rgba(26, 154, 82, 0.08);
+  --b-warn: #e8a20c;
 
   /* Shadows */
   --b-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 1px -1px rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --b-shadow-hover: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 1px -1px rgba(0, 0, 0, 0.12), 0 1px 3px 0 rgba(0, 0, 0, 0.07);
-  --b-shadow-float: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.08), 0 12px 32px -8px rgba(0, 0, 0, 0.12);
+  --b-shadow-pop: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 12px 28px -10px rgba(0, 0, 0, 0.16), 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --b-shadow-field: 0 0 0 1px var(--b-field-line), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --b-shadow-thumb: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.2);
   --b-backdrop: rgba(0, 0, 0, 0.32);
 
   /* Radii */
-  --b-r-xs: 4px;
+  --b-r-xs: 5px;
   --b-r-sm: 6px;
   --b-r-md: 8px;
   --b-r-lg: 10px;
@@ -76,28 +89,35 @@
   --b-s6: 24px;
   --b-s8: 32px;
 
-  /* Type: 13px controls, 14px body */
+  /* Type */
   --b-fs-xs: 11px;
   --b-fs-sm: 12px;
   --b-fs-md: 13px;
-  --b-fs-body: 14px;
-  --b-fs-lg: 16px;
+  --b-fs-title: 15px;
   --b-fs-xl: 20px;
   --b-fs-2xl: 28px;
+  /* formulas: in a row, in a card, the answer */
+  --b-fs-math: 17px;
+  --b-fs-math-lg: 22px;
+  --b-fs-math-xl: 26px;
 
-  /* Motion: calm, crisp */
+  /* Motion */
   --b-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --b-ease-glide: cubic-bezier(0.25, 0.9, 0.3, 1);
-  --b-fast: 90ms;
-  --b-normal: 160ms;
-  --b-slow: 220ms;
+  --b-fast: 140ms;
+  --b-press: 160ms;
+  --b-pop: 180ms;
+  --b-normal: 200ms;
+  --b-slow: 280ms;
+  --b-fold: 340ms;
 
-  /* Canvas (read by the renderers through getComputedStyle) */
+  /* Mathematics on the canvas (read by the renderers through getComputedStyle) */
   --plot-bg: #ffffff;
-  --grid-minor: #f1f1f2;
-  --grid-major: #e2e2e5;
-  --axis: #6b6b70;
-  --plot-label: #5c5c63;
+  --grid-minor: #f3f3f3;
+  --grid-major: #e6e6e6;
+  --axis: #8a8a8a;
+  --plot-label: #737373;
+  --geo-free: #0060e2;
   --geo-polygon: #ca5010;
   --geo-angle: #107c10;
 }
@@ -107,48 +127,50 @@
   --b-page: #111113;
   --b-panel: #161618;
   --b-card: #1c1c1e;
-  --b-tray: #161618;
   --b-raised: #232326;
-  --b-code: #212123;
 
   --b-strong: #ffffff;
   --b-ink: rgba(255, 255, 255, 0.9);
   --b-text: rgba(255, 255, 255, 0.62);
-  --b-muted: rgba(255, 255, 255, 0.5);
+  --b-muted: rgba(255, 255, 255, 0.46);
   --b-faint: rgba(255, 255, 255, 0.3);
   --b-icon: rgba(255, 255, 255, 0.55);
-  --b-on-solid: #161618;
   --b-solid: rgba(255, 255, 255, 0.9);
   --b-solid-hover: rgba(255, 255, 255, 0.82);
+  --b-on-solid: #161618;
 
   --b-line: rgba(255, 255, 255, 0.08);
-  --b-line-strong: rgba(255, 255, 255, 0.14);
-  --b-field-line: rgba(255, 255, 255, 0.36);
-  --b-control-off: rgba(255, 255, 255, 0.4);
-  --b-slider-track: rgba(255, 255, 255, 0.2);
+  --b-line-hover: rgba(255, 255, 255, 0.16);
+  --b-field-line: rgba(255, 255, 255, 0.16);
   --b-wash: rgba(255, 255, 255, 0.04);
   --b-fill: rgba(255, 255, 255, 0.08);
   --b-track: rgba(255, 255, 255, 0.05);
+  --b-control-off: rgba(255, 255, 255, 0.16);
+  --b-slider-track: rgba(255, 255, 255, 0.12);
+  --b-thumb: rgba(255, 255, 255, 0.9);
+  --b-thumb-on: #161618;
 
-  --b-accent: #4d8dff;
-  --b-accent-ink: #6ea2ff;
-  --b-accent-soft: rgba(77, 141, 255, 0.14);
   --b-focus: rgba(77, 141, 255, 0.5);
-  --b-danger: #ff7b72;
-  --b-danger-bg: rgba(255, 110, 100, 0.08);
-  --b-danger-line: rgba(255, 110, 100, 0.22);
-  --b-ok: #4cc38a;
+  --b-danger: #ff6369;
+  --b-danger-bg: rgba(255, 99, 105, 0.14);
+  --b-danger-line: rgba(255, 99, 105, 0.3);
+  --b-ok: #3ec27a;
+  --b-ok-bg: rgba(26, 154, 82, 0.14);
+  --b-warn: #f0b232;
 
   --b-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --b-shadow-hover: 0 0 0 0.5px rgba(255, 255, 255, 0.16), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --b-shadow-float: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 4px 12px -2px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  --b-shadow-pop: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 12px 28px -10px rgba(0, 0, 0, 0.6), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --b-shadow-field: 0 0 0 1px var(--b-field-line), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --b-shadow-thumb: 0 0 0 0.5px rgba(0, 0, 0, 0.3), 0 1px 3px 0 rgba(0, 0, 0, 0.5);
   --b-backdrop: rgba(0, 0, 0, 0.55);
 
   --plot-bg: #161618;
-  --grid-minor: #1e1e21;
-  --grid-major: #2c2c30;
-  --axis: #8f8f96;
-  --plot-label: #a1a1aa;
+  --grid-minor: #1d1d20;
+  --grid-major: #2a2a2e;
+  --axis: #77777d;
+  --plot-label: #8e8e94;
+  --geo-free: #4d8dff;
   --geo-polygon: #e9835e;
   --geo-angle: #54b054;
 }

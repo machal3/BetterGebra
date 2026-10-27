@@ -217,7 +217,8 @@ const css = /* css */ `
   background: var(--ui-tlc-bg);
   box-shadow: var(--ui-tlc-shadow);
   color: var(--ui-tlc-text);
-  font-family: "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Bettergebra: "Inter Variable" first, the family name @fontsource-variable/inter registers */
+  font-family: "Inter Variable", "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: var(--ui-tlc-font);
   font-weight: 500;
   line-height: var(--ui-tlc-lh);

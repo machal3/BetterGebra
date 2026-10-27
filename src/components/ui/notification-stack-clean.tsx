@@ -268,7 +268,8 @@ const css = /* css */ `
   container-type: inline-size;
   width: 100%;
   max-width: 380px;
-  font-family: "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Bettergebra: "Inter Variable" first, the family name @fontsource-variable/inter registers */
+  font-family: "Inter Variable", "Inter", "InterVariable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   font-weight: 400;
   line-height: 20px;
