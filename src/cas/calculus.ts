@@ -3,10 +3,11 @@
  * from the series' leading term when the expression has a Laurent expansion at the point; otherwise by
  * structural rules with l'Hôpital's rule; every answer is cross-checked numerically at 100 digits.
  */
-import { E, Expr, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren, isInt, HALF } from './expr';
+import { E, Expr, MINUS_ONE, same, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInf, isNum, isSym, isZero, mul, neg, num, numDen, pow, sqrt, sub, subst, sym, together, mapChildren, isInt, HALF } from './expr';
 import { evalC, approx } from './numeric';
 import { CasError, Q, fail, q, qint, qsign } from './q';
 import { bfToNumber, top } from './bigfloat';
+import { lnPrimes } from './simplify';
 
 // --- Derivatives ---
 
@@ -82,7 +83,7 @@ export function diffN(e: Expr, x: string, n: number): Expr {
 export interface Ser { v: number; c: Expr[]; o: number }
 class SeriesFail extends Error {}
 const nope = (): never => { throw new SeriesFail(); };
-const zeroTest = (e: Expr) => isZero(e) || isZero(expand(e)) || (isConstant(e) && isZero(expand(together(e))));
+const zeroTest = (e: Expr) => isZero(e) || isZero(expand(e)) || (isConstant(e) && (isZero(expand(together(e))) || isZero(expand(lnPrimes(e)))));
 
 function sNorm(s: Ser): Ser {
   let k = 0;
@@ -334,25 +335,29 @@ function structural(e: Expr, t: string, depth: number): Lim | null {
   if (isSym(e, t)) return fin(ZERO);
   if (e.k === '+') {
     const parts = e.t.map(rec);
-    if (parts.some(p => !p || p.kind === 'none')) return lhospital(e, t, depth);
+    // ∞ − ∞ or a term out of reach: l'Hôpital on one fraction, and failing that the logarithms taken apart
+    // (ln n!/n − ln n only cancels once ln n! is Stirling's sum)
+    const hard = () => lhospital(e, t, depth) ?? safeRec(() => { const f = expand(splitLogs(e, t, depth)); return same(f, e) ? null : f; }, t, depth + 2);
+    if (parts.some(p => !p || p.kind === 'none')) return hard();
     const infs = parts.filter(p => p!.kind === 'inf') as { kind: 'inf'; s: 1 | -1 }[];
     if (infs.length) {
       if (infs.every(p => p.s === infs[0].s)) return infs[0];
-      return lhospital(e, t, depth); // ∞ − ∞
+      return hard();
     }
     if (parts.some(p => p!.kind === 'bounded')) return { kind: 'bounded' };
     return fin(add(...parts.map(p => (p as { v: Expr }).v)));
   }
   if (e.k === '*' || (e.k === '^' && isNum(e.e) && qsign(e.e.v) < 0)) {
     const [n, d] = numDen(e);
+    let r: Lim | null;
     if (!isNum(d)) {
       const ln = rec(n), ld = rec(d);
-      if (!ln || !ld) return lhospital(e, t, depth);
-      return quotient(ln, ld, n, d, t, depth);
+      r = !ln || !ld ? lhospital(e, t, depth) : quotient(ln, ld, n, d, t, depth);
+    } else {
+      const parts = (e.k === '*' ? e.t : [e]).map(rec);
+      r = parts.some(p => !p) ? null : productOf(parts as Lim[], e, t, depth);
     }
-    const parts = (e.k === '*' ? e.t : [e]).map(rec);
-    if (parts.some(p => !p)) return null;
-    return productOf(parts as Lim[], e, t, depth);
+    return r ?? viaLog(e, t, depth);
   }
   if (e.k === '^') {
     if (freeOf(e.e, t)) {
@@ -382,13 +387,18 @@ function structural(e: Expr, t: string, depth: number): Lim | null {
       }
       return null;
     }
-    // b^p = e^(p ln b)
-    const inner = rec(mul(e.e, fn('ln', e.b)));
-    if (!inner) return null;
+    // b^p = e^(p ln b), with ln b taken apart (logOf) so that ln t terms can cancel
+    const inner = rec(mul(e.e, fn('ln', e.b))) ?? safeRec(() => expand(mul(e.e, logOf(e.b, t, depth))), t, depth);
+    if (!inner) return viaLog(e, t, depth);
     return applyFn('exp', inner, t, e);
   }
   if (e.k === 'f' && e.a.length === 1) {
     const inner = rec(e.a[0]);
+    // ln n!, ln Γ(u), ln of a product whose factors run off differently: logOf takes them apart (Stirling for Γ)
+    if (e.n === 'ln' && (!inner || inner.kind === 'inf')) {
+      const l = safeRec(() => { const L = expand(logOf(e.a[0], t, depth)); return L.k === 'f' && L.n === 'ln' ? null : L; }, t, depth);
+      if (l) return l;
+    }
     if (!inner) return null;
     if (inner.kind === 'fin' && isZero(inner.v) && (e.n === 'ln')) {
       const side = sideOf(e.a[0], t);
@@ -397,6 +407,95 @@ function structural(e: Expr, t: string, depth: number): Lim | null {
     return applyFn(e.n, inner, t, e);
   }
   return null;
+}
+
+/**
+ * lim P = s·e^(lim ln|P|) for a product P of constant sign s near the limit. In ln|P| products become sums, powers
+ * factors, e^u becomes u, and ln Γ(u) for u → +∞ becomes Stirling's u ln u − u − ½ ln u + ½ ln 2π (the difference
+ * tends to 0, so it may stand in a sum): e^(−1/t²)/t¹⁰ and n!/nⁿ, where l'Hôpital only goes round in circles.
+ */
+/** structural() of an expression that may fail to build. */
+function safeRec(build: () => Expr | null, t: string, depth: number): Lim | null {
+  if (depth > 9) return null;
+  let f: Expr | null;
+  try { f = build(); } catch (err) { if (err instanceof CasError) return null; throw err; }
+  return f ? structural(f, t, depth + 2) : null;
+}
+function viaLog(e: Expr, t: string, depth: number): Lim | null {
+  if (depth > 8) return null;
+  const s = signNear(e, t, depth);
+  if (s === null) return null;
+  let L: Expr;
+  try { L = expand(logOf(e, t, depth)); } catch (err) { if (err instanceof CasError) return null; throw err; }
+  if (L.k === 'f' && L.n === 'ln') return null; // nothing came apart
+  const l = viaSeries(L, t) ?? structural(L, t, depth + 4);
+  if (!l || l.kind === 'none' || l.kind === 'bounded') return null;
+  if (l.kind === 'inf') return l.s < 0 ? fin(ZERO) : { kind: 'inf', s };
+  return fin(mul(num(s), pow(E, l.v)));
+}
+/**
+ * Sign of e for small t > 0, factor by factor: e^u, t^p, Γ(u → +∞) and powers of positive constants are positive
+ * however far they over- or underflow, where evaluating e at t = 10⁻⁸⁰ (sideOf) can't tell.
+ */
+function signNear(e: Expr, t: string, depth: number): 1 | -1 | null {
+  if (isNum(e)) return e.v.n > 0n ? 1 : e.v.n < 0n ? -1 : null;
+  if (e.k === '*') {
+    let s = 1;
+    for (const f of e.t) { const g = signNear(f, t, depth); if (g === null) return null; s *= g; }
+    return s as 1 | -1;
+  }
+  if (e.k === '^' && (isSym(e.b, 'e') || isSym(e.b, t) || (freeOf(e.b, t) && constSignOf(e.b) === 1))) return 1;
+  if (e.k === '^') {
+    const b = signNear(e.b, t, depth);
+    if (b === 1) return 1;
+    if (isNum(e.e) && qint(e.e.v)) return b === null ? null : e.e.v.n % 2n ? b : 1;
+  }
+  if (e.k === 'f' && e.n === 'binomial' && e.a.length === 2) {
+    const up = (u: Expr) => { const l = structural(u, t, depth + 1); return !!l && l.kind === 'inf' && l.s > 0; };
+    if (up(e.a[0]) && up(e.a[1]) && up(sub(e.a[0], e.a[1]))) return 1;
+  }
+  if (e.k === 'f' && (e.n === 'gamma' || e.n === 'factorial') && e.a.length === 1) {
+    const l = structural(e.a[0], t, depth + 1);
+    if (l && l.kind === 'inf' && l.s > 0) return 1;
+  }
+  if (freeOf(e, t)) return constSignOf(e);
+  return sideOf(e, t);
+}
+function logOf(f: Expr, t: string, depth: number): Expr {
+  if (isNum(f)) return fn('ln', num(f.v.n < 0n ? -f.v.n : f.v.n, f.v.d));
+  if (f.k === '*') return add(...f.t.map(g => logOf(g, t, depth)));
+  if (f.k === '^') return isSym(f.b, 'e') ? f.e : mul(f.e, logOf(f.b, t, depth));
+  if (f.k === 'f' && f.n === 'abs') return logOf(f.a[0], t, depth);
+  if (f.k === 'f' && f.n === 'binomial' && f.a.length === 2) {
+    const [a, b] = f.a;
+    return sub(logOf(fn('factorial', a), t, depth), add(logOf(fn('factorial', b), t, depth), logOf(fn('factorial', sub(a, b)), t, depth)));
+  }
+  if (f.k === 'f' && (f.n === 'gamma' || f.n === 'factorial') && f.a.length === 1) {
+    const u = f.n === 'gamma' ? f.a[0] : add(f.a[0], ONE);
+    const l = structural(u, t, depth + 1);
+    if (l && l.kind === 'inf' && l.s > 0) return add(mul(sub(u, HALF), logOf(u, t, depth)), neg(u), mul(HALF, fn('ln', mul(TWO, PI))));
+  }
+  if (!freeOf(f, t)) {
+    // ln(1/t + 1) = ln(1 + t) − ln t: the leading power of t comes out, so ln t terms elsewhere can cancel against it
+    let v: number | null = null;
+    try { const ser = series(f, t, 3); if (ser.c.length) v = ser.v; } catch (err) { if (!(err instanceof SeriesFail || err instanceof CasError)) throw err; }
+    if (v) {
+      const g = expand(mul(f, pow(sym(t), num(-v))));
+      // g itself goes under ln as it is: split again, sin(t)/t would come back as ln t + ln sin t
+      return add(mul(num(v), fn('ln', sym(t))), lnSigned(g, t));
+    }
+  }
+  return lnSigned(f, t);
+}
+/** Every ln(u) in e with u depending on t taken apart by logOf. */
+function splitLogs(e: Expr, t: string, depth: number): Expr {
+  if (e.k === 'n' || e.k === 's' || freeOf(e, t)) return e;
+  if (e.k === 'f' && e.n === 'ln' && e.a.length === 1) return logOf(e.a[0], t, depth);
+  return mapChildren(e, c => splitLogs(c, t, depth));
+}
+function lnSigned(f: Expr, t: string): Expr {
+  const s = freeOf(f, t) ? null : sideOf(f, t);
+  return fn('ln', s === 1 ? f : s === -1 ? neg(f) : fn('abs', f));
 }
 
 function applyFn(name: string, inner: Lim, t: string, whole: Expr): Lim | null {
@@ -450,7 +549,7 @@ function applyFn(name: string, inner: Lim, t: string, whole: Expr): Lim | null {
       case 'abs': return { kind: 'inf', s: 1 };
       case 'sin': case 'cos': return { kind: 'bounded' };
       case 'sech': case 'csch': return fin(ZERO);
-      case 'gamma': return s > 0 ? { kind: 'inf', s: 1 } : null;
+      case 'gamma': case 'factorial': return s > 0 ? { kind: 'inf', s: 1 } : null;
       case 'sign': return fin(num(s));
     }
   }
@@ -511,14 +610,14 @@ function lhospital(e: Expr, t: string, depth: number, nd?: [Expr, Expr]): Lim | 
     if (isNum(d) || freeOf(d, t)) {
       // still not a fraction in t: try e = n with a factor moved down: f·g = f/(1/g)
       if (e.k === '*' && e.t.length >= 2) {
-        const f = e.t[0], g = mul(...e.t.slice(1));
-        const lf = structural(f, t, depth + 1), lg = structural(g, t, depth + 1);
-        if (lf && lg) {
-          // the infinite factor stays on top, the vanishing one goes down: x·ln x = ln x / (1/x)
-          if (lf.kind === 'fin' && isZero(lf.v) && lg.kind === 'inf') { n = g; d = pow(f, MINUS_ONE); }
-          else if (lg.kind === 'fin' && isZero(lg.v) && lf.kind === 'inf') { n = f; d = pow(g, MINUS_ONE); }
-          else return null;
-        } else return null;
+        // factors grouped by their limits: the vanishing ones go down, the rest stays on top (x·ln x = ln x / (1/x));
+        // a constant factor (−t·ln t) is not one of the two groups
+        const lims = e.t.map(f => structural(f, t, depth + 1));
+        if (lims.some(l => !l)) return null;
+        const zeros = e.t.filter((_, k) => lims[k]!.kind === 'fin' && isZero((lims[k] as { v: Expr }).v));
+        if (!zeros.length || zeros.length === e.t.length) return null;
+        n = mul(...e.t.filter(f => !zeros.includes(f)));
+        d = pow(mul(...zeros), MINUS_ONE);
       } else return null;
     }
     const ln = structural(n, t, depth + 1), ld = structural(d, t, depth + 1);
@@ -527,7 +626,9 @@ function lhospital(e: Expr, t: string, depth: number, nd?: [Expr, Expr]): Lim | 
     const bothInf = ln.kind === 'inf' && ld.kind === 'inf';
     if (!both0 && !bothInf) return quotient(ln, ld, n, d, t, depth + 1);
   }
-  const dn = diff(n, t), dd = diff(d, t);
+  let dn: Expr, dd: Expr;
+  // n!, Γ, ζ have no derivative here: then another method has to decide
+  try { dn = diff(n, t); dd = diff(d, t); } catch (err) { if (err instanceof CasError) return null; throw err; }
   if (isZero(dd)) return null;
   const next = together(mul(dn, pow(dd, MINUS_ONE)));
   return structural(next, t, depth + 1);

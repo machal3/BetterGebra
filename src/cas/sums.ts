@@ -5,17 +5,19 @@
  */
 import { limit } from './calculus';
 import {
-  E, Expr, INF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isZero, mul, neg, num, numDen, pow, sub,
+  E, Expr, INF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, sub,
   subst, sym, together,
 } from './expr';
-import { coeffsOf, polyOf } from './poly';
-import { partialFractions } from './integrate';
+import { coeffsOf, factorPoly, polyOf } from './poly';
+import { partialFractions, quad } from './integrate';
+import { diff } from './calculus';
+import { compileDouble } from './fast';
 import { cancel } from './simplify';
-import { Q, Q0, fail, q, qadd, qdiv, qsub } from './q';
+import { Q, Q0, fail, q, qadd, qcmp, qdiv, qint, qmul, qsub } from './q';
 import { approx } from './numeric';
 
 /** ratio: the sum holds for |ratio| < 1 (a geometric series with a symbolic ratio). */
-export interface SumResult { value: Expr | null; divergent?: boolean; note?: string; ratio?: Expr }
+export interface SumResult { value: Expr | null; divergent?: boolean; note?: string; ratio?: Expr; converges?: boolean }
 
 const MAX_TERMS = 20000;
 
@@ -31,6 +33,19 @@ export function sum(f: Expr, k: string, a: Expr, b: Expr): SumResult {
     }
   }
   if (infSign(a)) return { value: null, note: 'Dolna granica musi być skończona.' };
+  const binom = binomialSum(f, k, a, b);
+  if (binom) return { value: binom };
+  const pg = polyGeometric(f, k, a);
+  if (pg) {
+    if (!infSign(b)) return { value: add(mul(pow(pg.r, b), pg.Q(b)), pg.C) };
+    if (infSign(b) > 0) {
+      // r^n·Q(n) → 0 exactly when |r| < 1
+      if (!isConstant(pg.r)) return { value: pg.C, ratio: pg.r };
+      const v = approx(pg.r);
+      if (Math.hypot(v.re, v.im) < 1 - 1e-15) return { value: pg.C };
+      return { value: null, divergent: true, note: 'Wyrazy nie dążą do zera, bo |q| ≥ 1.' };
+    }
+  }
   if (infSign(b) > 0) {
     const g = geometric(f, k);
     if (g) {
@@ -46,7 +61,7 @@ export function sum(f: Expr, k: string, a: Expr, b: Expr): SumResult {
   }
   const n = sym('ŋ');
   const closed = closedForm(f, k, a, n);
-  if (!closed) return { value: null };
+  if (!closed) return infSign(b) > 0 ? convergence(f, k) : { value: null };
   if (!infSign(b)) return { value: cancel(together(subst(closed, 'ŋ', b))) };
   // infinite: the limit of the partial sums
   const L = limit(closed, 'ŋ', INF);
@@ -54,6 +69,97 @@ export function sum(f: Expr, k: string, a: Expr, b: Expr): SumResult {
   if (L.kind === 'fin') return { value: L.v };
   if (L.kind === 'inf') return { value: null, divergent: true, note: `Szereg jest rozbieżny do ${L.s > 0 ? '+∞' : '−∞'}.` };
   return { value: null, divergent: true, note: 'Szereg jest rozbieżny (sumy częściowe nie mają granicy).' };
+}
+
+/**
+ * Tests that decide an infinite series without a closed form. They use limits over the reals, which, when they
+ * exist, are also the limits along the integers: lim f ≠ 0 diverges; lim k·f = L ≠ 0 means the terms keep one sign
+ * and are of the order of 1/k, so the series diverges like the harmonic one; lim k²·f finite means |f| ≤ C/k², so it
+ * converges (absolutely), and `converges` asks for a numeric value.
+ */
+function convergence(f: Expr, k: string): SumResult {
+  const at = (g: Expr) => { try { return limit(g, k, INF); } catch { return null; } };
+  const l0 = at(f);
+  if (l0 && (l0.kind === 'inf' || (l0.kind === 'fin' && isConstant(l0.v) && Math.abs(approx(l0.v).re) > 1e-30))) {
+    return { value: null, divergent: true, note: 'Wyrazy nie dążą do zera (warunek konieczny zbieżności).' };
+  }
+  if (!l0 || l0.kind !== 'fin') return { value: null };
+  const K = sym(k);
+  const l1 = at(mul(K, f));
+  const sign = !l1 ? 0 : l1.kind === 'inf' ? l1.s : l1.kind === 'fin' && isConstant(l1.v) ? Math.sign(approx(l1.v).re) : 0;
+  if (sign) return { value: null, divergent: true, note: `Szereg jest rozbieżny do ${sign > 0 ? '+∞' : '−∞'}: wyrazy są rzędu 1/${k}, jak w szeregu harmonicznym (kryterium porównawcze).` };
+  const l2 = at(mul(pow(K, TWO), f));
+  if (l2 && (l2.kind === 'fin' || l2.kind === 'bounded')) return { value: null, converges: true };
+  return { value: null };
+}
+
+/**
+ * Σ_{k=a}^{∞} f(k) for a convergent series of smooth terms (|f| ≤ C/k²): the first terms added up, the tail by
+ * Euler–Maclaurin, ∫_N^∞ f + f(N)/2 − f′(N)/12 + f‴(N)/720 − f⁽⁵⁾(N)/30240. Null when f isn't smooth on the reals.
+ */
+export function numericSum(f: Expr, k: string, a: bigint): { value: number; error: number } | null {
+  const N = Number(a) + 400;
+  const g = compileDouble(f, k);
+  let s = 0, c = 0;
+  for (let j = Number(a); j < N; j++) {
+    const t = g(j);
+    if (!Number.isFinite(t)) return null;
+    const y = s + t;
+    c += Math.abs(s) >= Math.abs(t) ? (s - y) + t : (t - y) + s;
+    s = y;
+  }
+  let d1: Expr, d3: Expr, d5: Expr;
+  try { d1 = diff(f, k); d3 = diff(diff(d1, k), k); d5 = diff(diff(d3, k), k); } catch { return null; }
+  const tail = quad(g, N, Infinity);
+  if (!tail) return null;
+  const corr = g(N) / 2 - compileDouble(d1, k)(N) / 12 + compileDouble(d3, k)(N) / 720 - compileDouble(d5, k)(N) / 30240;
+  if (!Number.isFinite(corr)) return null;
+  const value = s + c + tail.value + corr;
+  return { value, error: tail.error + 1e-15 * Math.abs(value) + Math.abs(compileDouble(d5, k)(N)) / 30240 };
+}
+
+/**
+ * Σ_{k=a}^{n} P(k)·C·r^k with r ≠ 1: S(n) = r^n·Q(n) + C₀ where Q(n) − Q(n − 1)/r = C·P(n), solved coefficient by
+ * coefficient from the top (Σ k²xᵏ = x(1 + x)/(1 − x)³ in the limit).
+ */
+function polyGeometric(f: Expr, k: string, a: Expr): { Q: (n: Expr) => Expr; C: Expr; r: Expr } | null {
+  if (!isInt(a)) return null;
+  const factors = f.k === '*' ? f.t : [f];
+  const geo = factors.filter(t => t.k === '^' && freeOf(t.b, k) && !freeOf(t.e, k));
+  const rest = factors.filter(t => !geo.includes(t));
+  if (!geo.length) return null;
+  const g = geometric(mul(...geo), k), P = coeffsOf(mul(...rest), k, 30);
+  if (!g || !P || P.length < 2) return null;
+  const r = g.r, s = (e: Expr) => cancel(together(e));
+  if (isZero(s(sub(r, ONE)))) return null;
+  const d = P.length - 1, inv = pow(r, MINUS_ONE), Qc: Expr[] = [];
+  const binom = (j: number, m: number) => { let v = 1n; for (let i = 0; i < m; i++) v = v * BigInt(j - i) / BigInt(i + 1); return v; };
+  for (let m = d; m >= 0; m--) {
+    let rhs = mul(g.first, P[m]);
+    for (let j = m + 1; j <= d; j++) rhs = add(rhs, mul(inv, Qc[j], num(binom(j, m) * ((j - m) % 2 ? -1n : 1n))));
+    Qc[m] = s(div(rhs, sub(ONE, inv)));
+  }
+  // c₀ + c₁n + …, with no 0⁰ at n = 0
+  const at = (cs: Expr[], n: Expr) => add(...cs.map((c, j) => (j ? mul(c, pow(n, num(j))) : c)));
+  const Q = (n: Expr) => at(Qc, n);
+  const C = s(mul(pow(r, a), sub(mul(g.first, at(P, a)), Q(a))));
+  return { Q, C, r };
+}
+
+/** Σ_{k=0}^{n} P(k)·C(n, k)·C·r^k for deg P ≤ 2: (1 + r)^n, n·r·(1 + r)^(n−1), n·r·(1 + n·r)·(1 + r)^(n−2). */
+function binomialSum(f: Expr, k: string, a: Expr, b: Expr): Expr | null {
+  if (!isZero(a) || infSign(b)) return null;
+  const factors = f.k === '*' ? f.t : [f];
+  const bin = factors.find(t => t.k === 'f' && t.n === 'binomial' && t.a.length === 2 && isSym(t.a[1], k) && freeOf(t.a[0], k));
+  if (!bin || bin.k !== 'f' || !same(bin.a[0], b)) return null;
+  const others = factors.filter(t => t !== bin);
+  const geo = others.filter(t => !freeOf(t, k) && t.k === '^' && freeOf(t.b, k));
+  const g = geo.length ? geometric(mul(...geo), k) : { first: ONE, r: ONE };
+  const P = coeffsOf(mul(...others.filter(t => !geo.includes(t))), k, 2);
+  if (!g || !P) return null;
+  const r = g.r, n = b, u = add(ONE, r);
+  const forms = [pow(u, n), mul(n, r, pow(u, sub(n, ONE))), mul(n, r, add(ONE, mul(n, r)), pow(u, sub(n, TWO)))];
+  return mul(g.first, add(...P.map((c, j) => mul(c, forms[j]))));
 }
 
 /** S(n) = Σ_{k=a}^{n} f(k) in closed form, or null. */
@@ -191,8 +297,8 @@ function splitAlternating(N: Expr, k: string): { coef: Expr; shift: bigint } | n
 export function infiniteSpecial(f: Expr, k: string, a: Expr): Expr | null {
   if (!isInt(a)) return null;
   const [N, D] = numDen(f);
-  // c/(k + d)^s, s ≥ 2: ζ(s) minus the first terms
-  if (freeOf(N, k) && D.k === '^' && isInt(D.e) && D.e.v.n >= 2n) {
+  // c/(k + d)^s, s > 1 rational: ζ(s) minus the first terms
+  if (freeOf(N, k) && D.k === '^' && isNum(D.e) && qcmp(D.e.v, q(1)) > 0) {
     const lin = coeffsOf(D.b, k, 1);
     if (lin && lin.length === 2 && isNum(lin[1]) && isNum(lin[0]) && lin[1].v.n === 1n && lin[1].v.d === 1n && isInt(lin[0])) {
       const start = a.v.n + lin[0].v.n; // Σ_{m=start}^{∞} 1/m^s
@@ -278,8 +384,59 @@ export function product(f: Expr, k: string, a: Expr, b: Expr): Expr | null {
   }
   if (freeOf(f, k)) return pow(f, add(sub(b, a), ONE));
   if (f.k === 's' && f.n === k && isInt(a) && a.v.n >= 1n) return div(fn('factorial', b), fn('factorial', num(a.v.n - 1n)));
-  return null;
+  const n = sym('ŋ');
+  const P = linearProduct(f, k, a, n);
+  if (!P) return null;
+  if (!infSign(b)) return cancel(together(subst(P, 'ŋ', b)));
+  if (infSign(b) < 0) return null;
+  const L = limit(P, 'ŋ', INF);
+  // an infinite product whose partial products run off to ±∞ diverges to it
+  return !L ? null : L.kind === 'fin' ? L.v : L.kind === 'inf' ? (L.s > 0 ? INF : neg(INF)) : null;
 }
+
+/**
+ * Π_{k=a}^{n} of a rational function whose numerator and denominator split into linear factors over ℚ:
+ * Π (k + c) = Γ(n + c + 1)/Γ(a + c), and factors whose c differ by integers telescope, so Π (1 − 1/k²) from 2 is
+ * (n + 1)/(2n). Null when a factor would vanish in the range or doesn't split.
+ */
+function linearProduct(f: Expr, k: string, a: Expr, n: Expr): Expr | null {
+  if (!isInt(a)) return null;
+  const [N, D] = numDen(together(f));
+  const Np = polyOf(N, k, 40), Dp = polyOf(D, k, 40);
+  if (!Np || !Dp) return null;
+  let lead: Q = q(1);
+  const lin: { c: Q; m: number }[] = [];
+  for (const [p, sign] of [[Np, 1], [Dp, -1]] as const) {
+    const fac = factorPoly(p);
+    if (!fac.complete) return null;
+    lead = sign > 0 ? qmul(lead, fac.content) : qdiv(lead, fac.content);
+    for (const [g, m] of fac.factors) {
+      if (g.length !== 2) return null;
+      const [r0, r1] = g.map(v => q(v));
+      lead = sign > 0 ? qpow(lead, r1, m, 1) : qpow(lead, r1, m, -1);
+      const c = qdiv(r0, r1);  // p·k + r = p·(k + r/p)
+      if (qint(c) && a.v.n + c.n / c.d <= 0n) return null;  // k + c = 0 inside the range
+      lin.push({ c, m: m * sign });
+    }
+  }
+  const out: Expr[] = [pow(num(lead), add(sub(n, a), ONE))];
+  const classes = new Map<string, { c: Q; m: number }[]>();
+  for (const t of lin) { const fr = qsub(t.c, q(floorQ(t.c))); const id = `${fr.n}/${fr.d}`; (classes.get(id) ?? classes.set(id, []).get(id)!).push(t); }
+  for (const group of classes.values()) {
+    const c0 = group.reduce((m, t) => (qsub(t.c, m).n < 0n ? t.c : m), group[0].c);
+    let total = 0;
+    for (const { c, m } of group) {
+      const M = Number(qsub(c, c0).n);
+      // Π_{k=a}^{n} (k + c) = Γ(n + c0 + 1)/Γ(a + c) · Π_{j=1}^{M} (n + c0 + j)
+      total += m;
+      out.push(pow(fn('gamma', add(a, num(c))), num(-m)));
+      for (let j = 1; j <= M; j++) out.push(pow(add(n, num(c0), num(j)), num(m)));
+    }
+    if (total) out.push(pow(fn('gamma', add(n, num(c0), ONE)), num(total)));
+  }
+  return mul(...out);
+}
+const qpow = (lead: Q, p: Q, m: number, sign: 1 | -1): Q => { let v = lead; for (let i = 0; i < m; i++) v = sign > 0 ? qmul(v, p) : qdiv(v, p); return v; };
 
 /** Ratio test by numbers: |f(k+1)/f(k)| for large k. */
 export function ratioHint(f: Expr, k: string): number | null {

@@ -4,7 +4,7 @@
  * bases combined; numbers are exact rationals; roots of rationals are pulled apart (√12 → 2√3, 1/√2 → √2/2).
  * Subtraction is a + (−1)·b, division a·b^(−1), √x is x^(1/2). Expressions are immutable and may share subtrees.
  */
-import { Q, Q0, Q1, QHALF, QM1, extractPower, fail, iroot, q, qadd, qcmp, qeq, qfloor, qint, qmul, qpow, qsign, qsub } from './q';
+import { Q, Q0, Q1, QHALF, QM1, extractPower, fail, iroot, q, qadd, qcmp, qdiv, qeq, qfloor, qint, qmul, qpow, qsign, qsub } from './q';
 
 export type Expr = Num | Sym | Add | Mul | Pow | Fn;
 export interface Num { readonly k: 'n'; readonly v: Q }
@@ -158,6 +158,17 @@ export function mul(...xs: Expr[]): Expr {
     }
     if (!again || round > 8) {
       if (!c.n) return ZERO;
+      // a sum among other factors gives up its rational content: 2x·(1/4 + √5/4) = x·(1 + √5)/2
+      if (rest.length > 1 || !qeq(c, Q1)) {
+        for (let j = 0; j < rest.length; j++) {
+          const f = rest[j];
+          if (f.k !== '+') continue;
+          const g = content(f);
+          if (qeq(g, Q1)) continue;
+          c = qmul(c, g);
+          rest[j] = add(...f.t.map(t => mul(num(q(g.d, g.n)), t)));
+        }
+      }
       rest.sort(order);
       // −(a + b) → −a − b
       if (qeq(c, QM1) && rest.length === 1 && rest[0].k === '+') return add(...rest[0].t.map(t => mul(MINUS_ONE, t)));
@@ -167,6 +178,21 @@ export function mul(...xs: Expr[]): Expr {
     list = rest.concat(c === Q1 ? [] : [num(c)]);
     c = Q1;
   }
+}
+
+/** gcd of the numerators over the lcm of the denominators of a sum's rational coefficients (positive). */
+function content(s: Add): Q {
+  let n = 0n, d = 1n;
+  for (const t of s.t) {
+    const [k] = split(t);
+    let a = k.n < 0n ? -k.n : k.n, b = n;
+    while (b) [a, b] = [b, a % b];
+    n = a;
+    let x = d, y = k.d;
+    while (y) [x, y] = [y, x % y];
+    d = d / x * k.d;
+  }
+  return n ? q(n, d) : Q1;
 }
 
 export const neg = (a: Expr) => mul(MINUS_ONE, a);
@@ -236,6 +262,11 @@ export function pow(b: Expr, e: Expr): Expr {
       const m = Number(((e.v.n % 4n) + 4n) % 4n);
       return [ONE, I, MINUS_ONE, neg(I)][m];
     }
+    // √(3 + 2√2) = 1 + √2, ∛(2 + √5) = (1 + √5)/2
+    if (b.k === '+' && (qeq(e.v, QHALF) || qeq(e.v, q(1, 3)))) {
+      const d = denest(b, e.v.d === 2n ? 2 : 3);
+      if (d) return d;
+    }
     if (b.k === '^' && qint(e.v)) return pow(b.b, mul(b.e, e));
     // (x^a)^r = x^(ar) also for fractional r when the base is positive and a real number: (e^2)^(1/2) = e.
     if (b.k === '^' && b.e.k === 'n' && positiveConstant(b.b)) return pow(b.b, mul(b.e, e));
@@ -251,6 +282,8 @@ export function pow(b: Expr, e: Expr): Expr {
     }
   } else {
     if (isOne(b)) return ONE;
+    // principal value i^w = e^(iπw/2): i^i = e^(−π/2)
+    if (isSym(b, 'i') && variables(e).length === 0) return pow(E, mul(HALF, I, PI, e));
     if (isSym(b, 'e')) {
       const special = expRules(e);
       if (special) return special;
@@ -260,6 +293,58 @@ export function pow(b: Expr, e: Expr): Expr {
   if (isInf(e)) fail('Potęga o wykładniku nieskończonym ma sens tylko jako granica.');
   return { k: '^', b, e };
 }
+
+/** r + s√c with rationals r, s and a squarefree natural c > 1, or null. */
+function quadraticSurd(b: Expr): [Q, Q, bigint] | null {
+  if (b.k !== '+' || b.t.length !== 2 || b.t[0].k !== 'n') return null;
+  const [s, rest] = split(b.t[1]);
+  if (rest.k !== '^' || rest.b.k !== 'n' || !qint(rest.b.v) || !qeq((rest.e as Num).v ?? Q0, QHALF)) return null;
+  return [b.t[0].v, s, rest.b.v.n];
+}
+/**
+ * √(r + s√c) = √x ± √y when r² − s²c is a rational square (x, y = (r ± √(r² − s²c))/2), and ∛(r + s√c) = u + v√c
+ * when r² − s²c = m³ and 4u³ − 3mu = r has a rational root. The result is checked by raising it back.
+ */
+function denest(b: Expr, k: 2 | 3): Expr | null {
+  const z = quadraticSurd(b);
+  if (!z) return null;
+  const [r, s, c] = z, C = num(c), disc = qsub(qmul(r, r), qmul(qmul(s, s), q(c)));
+  const exactRoot = (v: Q, j: number): Q | null => {
+    if (qsign(v) < 0 && j % 2 === 0) return null;
+    const neg_ = qsign(v) < 0, n = neg_ ? -v.n : v.n, rn = iroot(n, j), rd = iroot(v.d, j);
+    return rn ** BigInt(j) === n && rd ** BigInt(j) === v.d ? q(neg_ ? -rn : rn, rd) : null;
+  };
+  let out: Expr | null = null;
+  if (k === 2) {
+    const w = exactRoot(disc, 2);
+    if (!w || qsign(r) <= 0) return null;
+    const x = q((r.n * w.d + w.n * r.d), 2n * r.d * w.d), y = qsub(r, x);
+    if (qsign(y) < 0) return null;
+    out = add(pow(num(x), HALF), mul(num(qsign(s)), pow(num(y), HALF)));
+  } else {
+    const m = exactRoot(disc, 3);
+    if (!m) return null;
+    // u is the mean of the two real cube roots ∛(r ± s√c); its denominator divides 4·den(m)·den(r) (4u³ − 3mu = r)
+    const t = s.n * s.n * c > 0n ? Math.abs(qToNumberLite(s)) * Math.sqrt(Number(c)) : 0, rr = qToNumberLite(r);
+    const uApprox = (Math.cbrt(rr + t) + Math.cbrt(rr - t)) / 2;
+    if (!Number.isFinite(uApprox)) return null;
+    for (const den of [1n, 2n, 4n, m.d, 2n * m.d, 4n * m.d, r.d, 2n * r.d, 4n * r.d]) {
+      const u = q(BigInt(Math.round(uApprox * Number(den))), den);
+      for (const uu of [u]) {
+        const v2 = qdiv(qsub(qmul(uu, uu), m), q(c));
+        const v = exactRoot(v2, 2);
+        if (!v) continue;
+        const cand = add(num(uu), mul(num(qsign(s) < 0 ? q(-v.n, v.d) : v), pow(C, HALF)));
+        if (keyOf(expandCube(cand)) === keyOf(b)) return cand;
+      }
+    }
+    return null;
+  }
+  return out;
+}
+const qToNumberLite = (v: Q) => Number(v.n) / Number(v.d);
+const keyOf = (e: Expr) => key(e);
+function expandCube(e: Expr): Expr { return expand(mul(e, e, e)); }
 
 /** Numbers > 0 and the constants π and e; used where pulling a factor out of a root is only valid for positives. */
 export function positiveConstant(f: Expr): boolean {

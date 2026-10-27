@@ -24,7 +24,7 @@ import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from '
 import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, bitLength, gcd as bgcd } from './q';
 import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } from './simplify';
 import { Interval, Sol, domain, setDomainText, solveEquation, solveInequality, solveSystem, intersect } from './solve';
-import { product as prodOf, sum as sumOf, ratioHint } from './sums';
+import { product as prodOf, sum as sumOf, ratioHint, numericSum } from './sums';
 import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRow, features, fmt, graphText, implicitPlot, matrixPlot, parametricSeries, plotOf, regionPlot, rootsPlot, sequencePlot, statsPlot, zText } from './plot';
 export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
 
@@ -279,7 +279,7 @@ function rationalPods(v: Q): Pod[] {
   return pods;
 }
 function cfRow(a: bigint[], open: boolean): Row {
-  const head = a[0], rest = a.slice(1);
+  const head = String(a[0]).replace('-', '−'), rest = a.slice(1);
   return { ml: M(`${mo('[')}<mn>${head}</mn>${rest.length ? mo(';') + rest.map(x => `<mn>${x}</mn>`).join(mo(',')) : ''}${open ? mo(',') + mo('…') : ''}${mo(']')}`), text: `[${head}${rest.length ? '; ' + rest.join(', ') : ''}${open ? ', …' : ''}]` };
 }
 /** Terms of the continued fraction that agree at two precisions. */
@@ -398,13 +398,15 @@ function seriesRow(all: Expr[], X: Expr, order: number, at: Expr): Row {
   const terms = all.filter(t => !isZero(t));
   if (!terms.length) terms.push(ZERO);
   const base = isZero(at) ? X : sub(X, at);
+  // around a ≠ 0 a term can be a sum, (x − 1): bracketed, or 1 + x − 1 + … reads as something else
+  const paren = (t: Expr) => terms.length > 1 && t.k === '+';
   const ml = terms.map((t, k) => {
-    const m = toML(t);
+    const m = paren(t) ? `<mrow>${mo('(')}${toML(t)}${mo(')')}</mrow>` : toML(t);
     if (k === 0) return m;
     return t.k === '*' && t.t[0].k === 'n' && qsign(t.t[0].v) < 0 ? `${mo('−')}${toML(neg(t))}` : `${mo('+')}${m}`;
   }).join('');
   const big = `${mo('+')}<mi mathvariant="script">O</mi>${mo('(')}<msup>${isZero(at) ? toML(X) : `<mrow>${mo('(')}${toML(base)}${mo(')')}</mrow>`}<mn>${order}</mn></msup>${mo(')')}`;
-  return { ml: M(`${ml}${big}`), text: terms.map(toText).join(' + ').replace(/\+ −/g, '− ') + ` + O(${toText(pow(base, num(order)))})` };
+  return { ml: M(`${ml}${big}`), text: terms.map(t => (paren(t) ? `(${toText(t)})` : toText(t))).join(' + ').replace(/\+ −/g, '− ') + ` + O(${toText(pow(base, num(order)))})` };
 }
 
 // --- Solutions ---
@@ -1099,7 +1101,7 @@ function diffCommand(args: Node[], env: Env): Out {
   }
   const d = diffN(e, x, k);
   const s = simplify(d);
-  pods.push({ title: k === 1 ? 'Pochodna' : `Pochodna rzędu ${k}`, rows: [eqRow(derivML(x, `<mrow>${mo('(')}${toML(e)}${mo(')')}</mrow>`, k), `d/d${x}`, s)] });
+  pods.push({ title: k === 1 ? 'Pochodna' : `Pochodna rzędu ${k}`, rows: [eqRow(derivML(x, `<mrow>${mo('(')}${toML(e)}${mo(')')}</mrow>`, k), `${k === 1 ? 'd' : `d^${k}`}/d${x}${k === 1 ? '' : `^${k}`} (${toText(e)})`, s)] });
   const alt = safe(() => factorExpr(s).e);
   if (alt && !same(alt, s) && size(alt) <= size(s) + 4) pods.push({ title: 'Inna postać', rows: [row(alt)] });
   const ex_ = safe(() => expand(s));
@@ -1306,6 +1308,15 @@ function sumCommand(name: 'sum' | 'product', args: Node[], env: Env): Out {
     return { pods, value: ex(v) };
   }
   if (r.divergent) return { pods: [{ title: 'Suma', rows: [textRow('Szereg jest rozbieżny.')], note: r.note }, ...seq()] };
+  if (r.converges && isInt(a) && variables(e).length <= 1) {
+    const v = safe(() => numericSum(e, k, a.v.n));
+    if (v) {
+      const sig = Math.max(3, Math.min(13, Math.floor(-Math.log10(Math.max(v.error, 1e-300) / Math.max(1e-300, Math.abs(v.value)))) - 1));
+      const t = String(Number(v.value.toPrecision(sig)));
+      return { pods: [{ title: 'Suma', rows: [{ ml: M(`${head}${mo('≈')}<mn>${t.replace('.', ',').replace('-', '−')}</mn>`), text: t }], note: `Szereg jest zbieżny (bezwzględnie: wyrazy maleją co najmniej jak 1/${k}²). Nie znalazłem postaci zamkniętej; wartość numeryczna (wzór Eulera–Maclaurina), ${sig} cyfr znaczących.` }, ...seq(v.value)] };
+    }
+    return { pods: [{ title: 'Suma', rows: [textRow('Szereg jest zbieżny.')], note: `Wyrazy maleją co najmniej jak 1/${k}², ale nie znalazłem postaci zamkniętej.` }, ...seq()] };
+  }
   // numeric fallback for infinite sums with geometric decay
   if (infSign(b) > 0 && isInt(a) && variables(e).length <= 1) {
     const ratio = ratioHint(e, k);

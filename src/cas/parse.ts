@@ -103,6 +103,7 @@ export function normalize(input: string): string {
     .toLowerCase()
     .replace(/[ąćęłńóśźż]/g, c => PL[c])
     .replace(/\b(?:atan|arctan|arctg)2(?=\s*\()/g, 'atantwo') // a digit would split the word: atan 2·(…)
+    .replace(/\blog(2|10)(?![\d.])/g, (_, b: string) => (b === '2' ? 'ld' : 'lg')) // likewise log2 x is log₂ x, not log(2)·x
     .replace(/\\(?:cdot|times)/g, '*').replace(/\\div/g, '/').replace(/\\(?:left|right)|\\[,;:! ]/g, '').replace(/\\(?=[a-z])/g, '')
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, s => `^(${[...s].map(c => SUPERSCRIPT[c]).join('')})`)
     .replace(/π/g, ' pi ').replace(/τ/g, ' tau ').replace(/[φϕ]/g, ' phi ').replace(/∞/g, ' inf ')

@@ -242,8 +242,18 @@ RULES.acsc = ([x]) => isZero(x) ? fail('arccsc 0 nie istnieje.') : fn('asin', re
 // --- Hyperbolic ---
 
 const odd = (name: string) => ([x]: Expr[]) => isZero(x) ? ZERO : isNegative(x) ? neg(fn(name, neg(x))) : null;
+/** c·ln u → [u^c, u^(−c)]: hyperbolic functions of a logarithm are algebraic, sinh(ln 2) = 3/4. */
+function expPair(x: Expr): [Expr, Expr] | null {
+  const [c, rest] = split(x);
+  if (!isFn(rest, 'ln')) return null;
+  const p = pow(rest.a[0], num(c));
+  return [p, pow(p, MINUS_ONE)];
+}
+const viaExp = (x: Expr, f: (p: Expr, m: Expr) => Expr) => { const e = expPair(x); return e ? f(e[0], e[1]) : null; };
 RULES.sinh = ([x]) => {
   if (isFn(x, 'asinh')) return x.a[0];
+  const L = viaExp(x, (p, m) => mul(HALF, sub(p, m)));
+  if (L) return L;
   const u = imaginaryFactor(x);
   if (u) return mul(I, fn('sin', u));
   return odd('sinh')([x]);
@@ -251,11 +261,13 @@ RULES.sinh = ([x]) => {
 RULES.cosh = ([x]) => {
   if (isZero(x)) return ONE;
   if (isFn(x, 'acosh')) return x.a[0];
+  const L = viaExp(x, (p, m) => mul(HALF, add(p, m)));
+  if (L) return L;
   const u = imaginaryFactor(x);
   if (u) return fn('cos', u);
   return isNegative(x) ? fn('cosh', neg(x)) : null;
 };
-RULES.tanh = ([x]) => isFn(x, 'atanh') ? x.a[0] : odd('tanh')([x]);
+RULES.tanh = ([x]) => isFn(x, 'atanh') ? x.a[0] : viaExp(x, (p, m) => div(sub(p, m), add(p, m))) ?? odd('tanh')([x]);
 RULES.coth = ([x]) => isZero(x) ? fail('cth 0 nie istnieje.') : isNegative(x) ? neg(fn('coth', neg(x))) : null;
 RULES.sech = ([x]) => isZero(x) ? ONE : isNegative(x) ? fn('sech', neg(x)) : null;
 RULES.csch = ([x]) => isZero(x) ? fail('csch 0 nie istnieje.') : isNegative(x) ? neg(fn('csch', neg(x))) : null;
@@ -281,6 +293,8 @@ RULES.ln = ([x]) => {
   if (isNum(x)) {
     if (qsign(x.v) < 0) return add(fn('ln', num(qneg(x.v))), mul(I, PI));
     if (x.v.n === 1n) return neg(fn('ln', num(x.v.d)));
+    // ln 8 = 3 ln 2, ln(9/4) = 2 ln(3/2): a perfect power keeps only its base, so ln 8/ln 2 is 3 and ln 4 − 2 ln 2 is 0
+    if (!qeq(x.v, Q1)) { const [r, m] = minimalBase(x.v); if (m > 1n) return mul(num(m), fn('ln', num(r))); }
   }
   if (x.k === '*' && x.t.length === 2 && isNum(x.t[0]) && qeq(x.t[0].v, qv(-1)) && isSym(x.t[1], 'i')) return mul(num(-1, 2), I, PI);
   return null;

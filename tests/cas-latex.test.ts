@@ -34,7 +34,7 @@ test('LaTeX questions get their answers', () => {
   expect(answer(String.raw`\sum_{k=1}^{\infty} \frac{1}{k^2}`)).toBe('π^2/6');
   expect(answer(String.raw`\prod_{k=1}^{5} k`)).toBe('120');
   expect(answer(String.raw`\lim_{x\to\infty}\left(1+\frac{1}{x}\right)^x`)).toBe('e');
-  expect(answer(String.raw`\frac{\mathrm{d}}{\mathrm{d}x}\left(x^2 e^x\right)`)).toBe('d/dx = x^2·e^x + 2x·e^x');
+  expect(answer(String.raw`\frac{\mathrm{d}}{\mathrm{d}x}\left(x^2 e^x\right)`)).toBe('d/dx (x^2·e^x) = x^2·e^x + 2x·e^x');
   expect(answer(String.raw`\frac{x-1}{x+2} \geq 0`)).toBe('x ∈ (−∞; −2) ∪ ⟨1; +∞)');
   expect(answer(String.raw`\det\begin{bmatrix} a & b \\ c & d \end{bmatrix}`)).toBe('a·d − b·c');
   expect(answer(String.raw`\begin{vmatrix} 1 & 2 \\ 3 & 4 \end{vmatrix}`)).toBe('−2');

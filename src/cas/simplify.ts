@@ -2,10 +2,14 @@
  * Rewriting beyond the automatic canonical form: cancelling rational functions, factoring expressions,
  * trigonometric identities, and simplify(), which keeps the smallest of the equivalent forms it tries.
  */
-import { Expr, I, ONE, TWO, add, children, div, expand, fn, freeOf, isFn, isNum, isZero, mapChildren, mul, num, numDen, pow, same, size, sub, sym, together, variables, isSym, split, isInt, key } from './expr';
+import { Expr, I, ONE, TWO, add, children, div, expand, fn, freeOf, isFn, isNum, isZero, mapChildren, mul, num, numDen, pow, same, size, sub, subst, sym, together, variables, isSym, split, isInt, key } from './expr';
 import { complexParts } from './functions';
 import { P, factorPoly, fromInts, pdivmod, pgcd, polyOf, polyToExpr, primitive, deg } from './poly';
 import { Q, Q1, gcd, qdiv, q, qeq, qint } from './q';
+import { compileDouble } from './fast';
+import { csub, evalC } from './numeric';
+import { top } from './bigfloat';
+import { factorInteger } from './ntheory';
 
 // --- Rational functions ---
 
@@ -58,6 +62,8 @@ function factorPolynomial(e: Expr): Factored {
   if (!vs.length) return { e, complete: true };
   // common numeric content and monomial
   const terms = ex.k === '+' ? ex.t : [ex];
+  // x^(n + 1), 1/x, sin x are no polynomial: the steps below would read x^(n + 1) as degree 0 and put x = 1 into it
+  if (!terms.every(t => isMonomial(t, vs))) return { e, complete: false };
   const mono = commonMonomial(terms, vs);
   const rest = expand(div(ex, mono));
   if (vs.length === 1) {
@@ -84,6 +90,11 @@ function factorPolynomial(e: Expr): Factored {
     // a polynomial in x whose coefficients involve y: pull out rational roots in x of the form ±y·c (difference of squares etc.)
   }
   return { e: mul(mono, rest), complete: false };
+}
+/** c·x^a·y^b… with natural exponents and c free of every variable in vs. */
+function isMonomial(t: Expr, vs: string[]): boolean {
+  return (t.k === '*' ? t.t : [t]).every(f => vs.every(v => freeOf(f, v))
+    || vs.some(v => isSym(f, v) || (f.k === '^' && isSym(f.b, v) && isInt(f.e) && f.e.v.n > 0n)));
 }
 function subsY(e: Expr, y: string): Expr {
   return expand(mapSym(e, y, ONE));
@@ -144,26 +155,32 @@ export function trigLinearize(e: Expr): Expr {
   const terms = ex.k === '+' ? ex.t : [ex];
   return add(...terms.map(linearizeTerm));
 }
+const LINEAR_FAMILIES = [['sin', 'cos'], ['sinh', 'cosh']];
 function linearizeTerm(t: Expr): Expr {
+  const inFamily = (f: Expr) => isFn(f) && LINEAR_FAMILIES.some(fam => fam.includes(f.n));
   const factors: Expr[] = [];
   for (const f of t.k === '*' ? t.t : [t]) {
-    if (f.k === '^' && (isFn(f.b, 'sin') || isFn(f.b, 'cos')) && isInt(f.e) && f.e.v.n > 1n && f.e.v.n <= 40n) {
+    if (f.k === '^' && inFamily(f.b) && isInt(f.e) && f.e.v.n > 1n && f.e.v.n <= 40n) {
       for (let k = 0n; k < f.e.v.n; k++) factors.push(f.b);
     } else factors.push(f);
   }
-  const trig = factors.filter(f => isFn(f, 'sin') || isFn(f, 'cos'));
-  if (trig.length < 2) return t;
-  const others = factors.filter(f => !(isFn(f, 'sin') || isFn(f, 'cos')));
-  const [A, B] = trig as [Expr & { n: string; a: Expr[] }, Expr & { n: string; a: Expr[] }];
-  const a = A.a[0], b = B.a[0];
-  let pair: Expr;
-  if (A.n === 'sin' && B.n === 'sin') pair = mul(num(1, 2), sub(fn('cos', sub(a, b)), fn('cos', add(a, b))));
-  else if (A.n === 'cos' && B.n === 'cos') pair = mul(num(1, 2), add(fn('cos', sub(a, b)), fn('cos', add(a, b))));
-  else {
-    const [s, c] = A.n === 'sin' ? [a, b] : [b, a];
-    pair = mul(num(1, 2), add(fn('sin', add(s, c)), fn('sin', sub(s, c))));
+  for (const fam of LINEAR_FAMILIES) {
+    const at = factors.flatMap((f, k) => (isFn(f) && fam.includes(f.n) ? [k] : []));
+    if (at.length < 2) continue;
+    const [A, B] = [factors[at[0]], factors[at[1]]] as [Expr & { n: string; a: Expr[] }, Expr & { n: string; a: Expr[] }];
+    const rest = factors.filter((_, k) => k !== at[0] && k !== at[1]);
+    const a = A.a[0], b = B.a[0], [S, C] = fam;
+    let pair: Expr;
+    // sin a sin b = (cos(a − b) − cos(a + b))/2, sinh a sinh b = (cosh(a + b) − cosh(a − b))/2, …
+    if (A.n === S && B.n === S) pair = mul(num(1, 2), S === 'sin' ? sub(fn(C, sub(a, b)), fn(C, add(a, b))) : sub(fn(C, add(a, b)), fn(C, sub(a, b))));
+    else if (A.n === C && B.n === C) pair = mul(num(1, 2), add(fn(C, sub(a, b)), fn(C, add(a, b))));
+    else {
+      const [s, c] = A.n === S ? [a, b] : [b, a];
+      pair = mul(num(1, 2), add(fn(S, add(s, c)), fn(S, sub(s, c))));
+    }
+    return trigLinearize(mul(pair, ...rest));
   }
-  return trigLinearize(mul(pair, ...trig.slice(2), ...others));
+  return t;
 }
 
 /** sin(a ± b), cos(a ± b) and integer multiples expanded into powers of sin and cos of the parts. */
@@ -225,6 +242,25 @@ export function expandLog(e: Expr): Expr {
   return m;
 }
 
+/**
+ * ln of every positive rational split over primes, ln 12 = 2 ln 2 + ln 3, so that ln 12 − ln 3 comes out 2 ln 2
+ * (and a difference of logarithms that is 0 comes out 0). Numbers with a prime factor that isn't found stay.
+ */
+export function lnPrimes(e: Expr): Expr {
+  if (e.k === 'n' || e.k === 's') return e;
+  const m = mapChildren(e, lnPrimes);
+  if (!isFn(m, 'ln') || !isNum(m.a[0]) || m.a[0].v.n <= 0n) return m;
+  const { n, d } = m.a[0].v;
+  const parts: Expr[] = [];
+  for (const [v, sign] of [[n, 1n], [d, -1n]] as const) {
+    if (v === 1n || v > 10n ** 40n) { if (v !== 1n) return m; continue; }
+    const f = factorInteger(v, 20000);
+    if (f.unfactored.length) return m;
+    for (const [p, k] of f.factors) parts.push(mul(num(sign * BigInt(k)), fn('ln', num(p))));
+  }
+  return add(...parts);
+}
+
 // --- Radicals and complex denominators ---
 
 /** 1/(a + b√k) → (a − b√k)/(a² − b²k) and 1/(a + bi) → (a − bi)/(a² + b²), anywhere in e. */
@@ -276,9 +312,41 @@ export function simplify(e: Expr): Expr {
   tryAdd(() => cancel(together(pythagoras(expand(inner)))));
   tryAdd(() => expand(rationalize(inner)));
   tryAdd(() => rationalize(inner));
-  let best = cands[0];
-  for (const c of cands.slice(1)) if (cost(c) < cost(best)) best = c;
-  return best;
+  if (hasLnOfNumber(inner)) { tryAdd(() => expand(lnPrimes(inner))); tryAdd(() => cancel(together(lnPrimes(inner)))); }
+  // the cheapest form that still has the value of the input: a rewrite with a bug in it is dropped, never shown
+  const ranked = cands.map((c, k) => ({ c, k, w: cost(c) })).sort((a, b) => a.w - b.w || a.k - b.k);
+  for (const { c } of ranked) if (c === inner || agrees(c, inner)) return c;
+  return inner;
+}
+
+const hasLnOfNumber = (e: Expr): boolean => (isFn(e, 'ln') && isNum(e.a[0])) || children(e).some(hasLnOfNumber);
+
+const SAMPLES = [0.7316, -0.4429, 1.6180, 2.3851];
+/**
+ * a = b at a few generic points (every variable gets its own value): doubles first, and when doubles disagree,
+ * 300 bits at nearby rationals, so cancellation in a long polynomial is not taken for a difference. Points where
+ * either side is undefined or not real tell nothing.
+ */
+export function agrees(a: Expr, b: Expr): boolean {
+  if (same(a, b)) return true;
+  const vs = [...new Set([...variables(a), ...variables(b)])];
+  for (const [s, base] of SAMPLES.entries()) {
+    const params: Record<string, number> = {};
+    vs.forEach((v, k) => { params[v] = base + 0.2137 * k * (s % 2 ? -1 : 1); });
+    const x = vs[0] ?? '·', t = params[x] ?? 0;
+    const A = compileDouble(a, x, params)(t), B = compileDouble(b, x, params)(t);
+    if (!Number.isFinite(A) || !Number.isFinite(B)) continue;
+    if (Math.abs(A - B) <= 1e-9 * Math.max(1, Math.abs(A), Math.abs(B))) continue;
+    if (!agreesPrecisely(a, b, vs, params)) return false;
+  }
+  return true;
+}
+function agreesPrecisely(a: Expr, b: Expr, vs: string[], params: Record<string, number>): boolean {
+  const at = (e: Expr) => vs.reduce((r, v) => subst(r, v, num(q(BigInt(Math.round(params[v] * 1e4)), 10000n))), e);
+  let A, B;
+  try { A = evalC(at(a), 300); B = evalC(at(b), 300); } catch { return false; }
+  const d = csub(A, B, 300);
+  return Math.max(top(d.re), top(d.im)) <= Math.max(top(A.re), top(A.im), top(B.re), top(B.im), 0) - 200;
 }
 
 /** Size, with roots or i left in a denominator counted as clutter. */

@@ -5,10 +5,10 @@
  * at several points; one that fails the check is discarded, never shown.
  */
 import { diff, limit, Lim } from './calculus';
-import { E, Expr, HALF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isFn, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isInt, isInf, children, key, mapChildren } from './expr';
+import { E, Expr, HALF, MINUS_ONE, ONE, PI, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isFn, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isInt, isInf, children, key, mapChildren, positiveConstant } from './expr';
 import { compileDouble } from './fast';
 import { approx, csub, evalC } from './numeric';
-import { P, coeffsOf, factorPoly, fromInts, pdivmod, pmul, polyOf, polyToExpr, ppow, solvePoly } from './poly';
+import { P, coeffsOf, factorPoly, fromInts, padd, pderiv, pdivmod, pmul, polyOf, polyToExpr, ppow, pscale, solvePoly } from './poly';
 import { solveQ } from './matrix';
 import { cancel, trigLinearize } from './simplify';
 import { CasError, Q, Q0, fail, q, qdiv, qmul, qneg, qsign, qsub, qToNumber } from './q';
@@ -25,6 +25,7 @@ function linear(u: Expr, x: string): [Expr, Expr] | null {
 
 /** ∫ e dx, verified; null when no method here finds it. */
 export function integrate(e: Expr, x: string): Expr | null {
+  work = 0;
   const F = int(e, x, 0);
   if (!F) return null;
   return verify(F, e, x) ? F : null;
@@ -60,8 +61,12 @@ function verifyPrecise(dF: Expr, f: Expr, x: string, others: string[]): boolean 
   return good >= 3;
 }
 
+/** Calls of int() in the current integrate(): the methods recurse into each other, and a hopeless integrand must give up in time. */
+let work = 0;
+const MAX_WORK = 400;
+
 function int(f: Expr, x: string, depth: number): Expr | null {
-  if (depth > 7) return null;
+  if (depth > 7 || ++work > MAX_WORK) return null;
   if (freeOf(f, x)) return mul(f, sym(x));
   if (f.k === '+') {
     const parts = f.t.map(t => int(t, x, depth + 1));
@@ -82,9 +87,13 @@ function int(f: Expr, x: string, depth: number): Expr | null {
 function others(f: Expr, x: string, depth: number): Expr | null {
   return polynomial(f, x)
     ?? rational(f, x)
+    ?? rationalParam(f, x)
     ?? sqrtQuadratic(f, x)
+    ?? sqrtPoly(f, x)
     ?? gaussian(f, x)
+    ?? gaussMoment(f, x, depth)
     ?? expTrig(f, x)
+    ?? trigPowers(f, x, depth)
     ?? substitution(f, x, depth)
     ?? byParts(f, x, depth)
     ?? rewrites(f, x, depth);
@@ -305,6 +314,62 @@ function quadraticTerm([c, b, a]: [Q, Q, Q], numer: Q[], j: number, X: Expr): Ex
   return add(first, mul(num(k2), I(j)));
 }
 
+// --- Rational functions with parameters (or surds) in the coefficients ---
+
+/** e ≥ 0 for every real value of its variables: positive constants, even powers, e^u, sums and products of these. */
+function nonNegative(e: Expr): boolean {
+  if (isNum(e)) return qsign(e.v) > 0;
+  if (positiveConstant(e)) return true;
+  if (e.k === '^') return (isInt(e.e) && e.e.v.n % 2n === 0n) || isSym(e.b, 'e') || nonNegative(e.b);
+  if (e.k === '+' || e.k === '*') return e.t.every(nonNegative);
+  return false;
+}
+/** √e when e is the square of a monomial, √(4a²) = 2a; where it is used the sign of the root doesn't matter. */
+function rootOfSquare(e: Expr): Expr | null {
+  if (isNum(e)) { if (qsign(e.v) < 0) return null; const r = sqrt(e); return isNum(r) ? r : null; }
+  if (e.k === '^' && isInt(e.e) && e.e.v.n % 2n === 0n) return pow(e.b, num(e.e.v.n / 2n));
+  if (e.k === '*') { const rs = e.t.map(rootOfSquare); return rs.every(Boolean) ? mul(...rs as Expr[]) : null; }
+  return null;
+}
+
+/**
+ * ∫ N/D for a denominator of degree 1 or 2 whose coefficients aren't all rational: 1/(x² + a²) = arctg(x/a)/a,
+ * 1/(x² − a²) = (ln|x − a| − ln|x + a|)/(2a). Long division first; the quadratic's discriminant decides the form
+ * when its sign holds for every value of the parameters, otherwise nothing is claimed.
+ */
+function rationalParam(f: Expr, x: string): Expr | null {
+  const [n, d] = numDen(together(f));
+  if (freeOf(d, x) || (polyOf(n, x) && polyOf(d, x))) return null;
+  const N = coeffsOf(n, x, 12), D = coeffsOf(d, x, 2);
+  if (!N || !D || D.length < 2) return null;
+  const s = (e: Expr) => cancel(together(e));
+  const dd = D.length - 1, X = sym(x), parts: Expr[] = [];
+  const R = [...N];
+  for (let k = R.length - 1; k >= dd; k--) {
+    const c = s(div(R[k], D[dd]));
+    if (!isZero(c)) parts.push(mul(c, pow(X, num(k - dd + 1)), num(1, k - dd + 1)));
+    for (let j = 0; j <= dd; j++) R[k - dd + j] = s(sub(R[k - dd + j], mul(c, D[j])));
+  }
+  const r0 = R[0] ?? ZERO, r1 = dd === 2 ? R[1] ?? ZERO : ZERO;
+  if (dd === 1) return add(...parts, mul(r0, pow(D[1], MINUS_ONE), fn('ln', fn('abs', add(mul(D[1], X), D[0])))));
+  const [c0, c1, c2] = D;
+  const den = add(mul(c2, pow(X, TWO)), mul(c1, X), c0), lin = add(mul(TWO, c2, X), c1);
+  // r1·x + r0 = k1·(2c2·x + c1) + k2
+  const k1 = s(div(r1, mul(TWO, c2))), k2 = s(sub(r0, div(mul(r1, c1), mul(TWO, c2))));
+  if (!isZero(k1)) parts.push(mul(k1, fn('ln', nonNegative(den) ? den : fn('abs', den))));
+  if (isZero(k2)) return add(...parts);
+  const disc = s(sub(pow(c1, TWO), mul(num(4), c2, c0)));
+  if (isZero(disc)) return add(...parts, mul(k2, num(-2), pow(lin, MINUS_ONE)));
+  const negDisc = s(neg(disc));
+  const w = rootOfSquare(negDisc) ?? (nonNegative(negDisc) ? sqrt(negDisc) : null);
+  if (w) return add(...parts, mul(k2, TWO, pow(w, MINUS_ONE), fn('atan', div(lin, w))));
+  const v = rootOfSquare(disc) ?? (nonNegative(disc) ? sqrt(disc) : null);
+  if (!v) return null;
+  // roots r± = (−c1 ± v)/(2c2): ∫ dx/D = (ln|x − r₊| − ln|x − r₋|)/v
+  const r = (sg: number) => div(add(neg(c1), mul(num(sg), v)), mul(TWO, c2));
+  return add(...parts, mul(k2, pow(v, MINUS_ONE), sub(fn('ln', fn('abs', sub(X, r(1)))), fn('ln', fn('abs', sub(X, r(-1)))))));
+}
+
 // --- √(quadratic) and Gaussian ---
 
 function sqrtQuadratic(f: Expr, x: string): Expr | null {
@@ -325,6 +390,92 @@ function sqrtQuadratic(f: Expr, x: string): Expr | null {
   if (sa > 0) return add(mul(HALF, u, R), mul(D, pow(mul(TWO, sqrt(A)), MINUS_ONE), fn('ln', fn('abs', add(mul(sqrt(A), u), R)))));
   if (sa < 0 && sd > 0) return add(mul(HALF, u, R), mul(D, pow(mul(TWO, sqrt(neg(A))), MINUS_ONE), fn('asin', mul(sqrt(neg(A)), u, pow(D, num(-1, 2))))));
   return null;
+}
+
+/**
+ * ∫ P(x)/√q dx = Q(x)·√q + λ∫ dx/√q for a quadratic q and deg Q = deg P − 1 (undetermined coefficients:
+ * P = Q′q + Qq′/2 + λ is a triangular system); P·√q is P·q/√q.
+ */
+function sqrtPoly(f: Expr, x: string): Expr | null {
+  const fs = f.k === '*' ? f.t : [f];
+  const root = fs.find(t => t.k === '^' && isNum(t.e) && t.e.v.d === 2n && (t.e.v.n === 1n || t.e.v.n === -1n) && polyOf(t.b, x, 2)?.length === 3) as Extract<Expr, { k: '^' }> | undefined;
+  if (!root) return null;
+  const qp = polyOf(root.b, x, 2)!;
+  let Pp = polyOf(mul(...fs.filter(t => t !== root)), x, 40);
+  if (!Pp) return null;
+  if ((root.e as { v: Q }).v.n === 1n) Pp = pmul(Pp, qp);
+  const n = Pp.length - 1;
+  if (n < 1) return null; // c/√q: sqrtQuadratic
+  const dq = pderiv(qp);
+  const cols: P[] = [];
+  for (let k = 0; k < n; k++) {
+    const xk: P = [...Array(k).fill(Q0), q(1)];
+    cols.push(padd(pmul(pderiv(xk), qp), pscale(pmul(xk, dq), q(1, 2))));
+  }
+  cols.push([q(1)]);
+  const P0 = Pp;
+  const A = Array.from({ length: n + 1 }, (_, row) => cols.map(c => c[row] ?? Q0));
+  const sol = solveQ(A, Array.from({ length: n + 1 }, (_, row) => P0[row] ?? Q0));
+  if (!sol) return null;
+  const lambda = sol[n];
+  const rest = lambda.n ? sqrtQuadratic(pow(root.b, num(-1, 2)), x) : ZERO;
+  if (!rest) return null;
+  return add(mul(polyToExpr(sol.slice(0, n), sym(x)), sqrt(root.b)), mul(num(lambda), rest));
+}
+
+/** ∫ xⁿe^(ax² + c) = xⁿ⁻¹e^(ax² + c)/(2a) − (n − 1)/(2a)·∫ xⁿ⁻²e^(ax² + c), down to the Gaussian or x·e^(ax²). */
+function gaussMoment(f: Expr, x: string, depth: number): Expr | null {
+  if (f.k !== '*' || f.t.length !== 2 || depth > 30) return null;
+  const g = f.t.find(t => t.k === '^' && isSym(t.b, 'e')) as Extract<Expr, { k: '^' }> | undefined;
+  const m = f.t.find(t => t !== g);
+  if (!g || !m) return null;
+  const p = polyOf(g.e, x, 2);
+  if (!p || p.length !== 3 || p[1].n) return null;
+  const n = m.k === '^' && isSym(m.b, x) && isInt(m.e) ? Number(m.e.v.n) : 0;
+  if (n < 2 || n > 40) return null;
+  const X = sym(x), a2 = num(qmul(q(2), p[2]));
+  const lower = int(n === 2 ? g : mul(pow(X, num(n - 2)), g), x, depth + 1);
+  if (!lower) return null;
+  return sub(div(mul(pow(X, num(n - 1)), g), a2), mul(num(n - 1), pow(a2, MINUS_ONE), lower));
+}
+
+/**
+ * sinᵐu·cosⁿu, and sinhᵐu·coshⁿu, for one linear u: an odd power gives up one factor and the rest becomes the
+ * other function (sin³u·cos²u = sin u·(1 − cos²u)·cos²u, which substitution finishes); two even powers are
+ * linearised, sin²u·cos²u = (1 − cos 4u)/8.
+ */
+function trigPowers(f: Expr, x: string, depth: number): Expr | null {
+  let arg: Expr | null = null, hyp: boolean | null = null, mixed = false, negative = false;
+  const pw: Record<string, bigint> = {};
+  for (const t of f.k === '*' ? f.t : [f]) {
+    if (freeOf(t, x)) continue;
+    const b = t.k === '^' ? t.b : t, k = t.k === '^' ? t.e : ONE;
+    if (!(isFn(b, 'sin') || isFn(b, 'cos') || isFn(b, 'sinh') || isFn(b, 'cosh')) || !isInt(k) || !linear(b.a[0], x)) return null;
+    const h = b.n.endsWith('h');
+    if (hyp === null) hyp = h; else if (hyp !== h) return null;
+    if (!arg) arg = b.a[0]; else if (!same(arg, b.a[0])) mixed = true;
+    if (k.v.n < 0n) negative = true;
+    pw[b.n] = (pw[b.n] ?? 0n) + k.v.n;
+  }
+  if (!arg) return null;
+  // sin 3x·cos 5x = (sin 8x − sin 2x)/2: different arguments only by product-to-sum
+  if (mixed) {
+    if (negative) return null;
+    let g: Expr;
+    try { g = trigLinearize(f); } catch { return null; }
+    return same(g, f) ? null : int(g, x, depth + 1);
+  }
+  const [sn, cn] = hyp ? ['sinh', 'cosh'] : ['sin', 'cos'];
+  const m = pw[sn] ?? 0n, n = pw[cn] ?? 0n, S = fn(sn, arg), C_ = fn(cn, arg);
+  let g: Expr;
+  try {
+    if (m > 0n && m % 2n === 1n && m <= 41n && (m > 1n || n !== 0n)) g = expand(mul(S, pow(hyp ? sub(pow(C_, TWO), ONE) : sub(ONE, pow(C_, TWO)), num((m - 1n) / 2n)), pow(C_, num(n))));
+    else if (n > 0n && n % 2n === 1n && n <= 41n && (n > 1n || m !== 0n)) g = expand(mul(C_, pow(hyp ? add(ONE, pow(S, TWO)) : sub(ONE, pow(S, TWO)), num((n - 1n) / 2n)), pow(S, num(m))));
+    else if (m >= 0n && n >= 0n && m + n >= 2n && m + n <= 40n) g = trigLinearize(f);
+    else return null;
+  } catch { return null; }
+  if (same(g, f)) return null;
+  return int(g, x, depth + 1);
 }
 
 /** ∫ e^(−k(ax + b)²) dx = √π/(2a√k) · erf(√k (ax + b)). */
@@ -380,7 +531,7 @@ function substitution(f: Expr, x: string, depth: number): Expr | null {
     let r = replace(ratio, u, sym(U));
     if (!freeOf(r, x)) {
       // u = x^k (or a·x + b): substitute x itself through the inverse
-      const inv = inverse(u, x);
+      const inv = inverse(u, x, depth < 3);
       if (!inv) continue;
       try { r = cancel(together(subst(r, x, inv))); } catch { continue; }
       if (!freeOf(r, x)) continue;
@@ -404,8 +555,13 @@ function replace(e: Expr, u: Expr, by: Expr): Expr {
   return m;
 }
 /** x as a function of U when u is a·x^k + b, e^(ax), or ln x. */
-function inverse(u: Expr, x: string): Expr | null {
+function inverse(u: Expr, x: string, roots = false): Expr | null {
   const Y = sym(U);
+  // u = √(x² + 1): x = √(U² − 1), so 1/(x√(x² + 1)) becomes 1/(U² − 1); near the top only, it branches a lot
+  if (roots && u.k === '^' && isNum(u.e) && !isInt(u.e) && !freeOf(u.b, x)) {
+    const inner = inverse(u.b, x);
+    return inner && subst(inner, U, pow(Y, num(q(u.e.v.d, u.e.v.n))));
+  }
   const c = coeffsOf(u, x, 12);
   if (c && c.length >= 2) {
     const nz = c.map((v, k) => [v, k] as const).filter(([v, k]) => k > 0 && !isZero(v));
@@ -459,6 +615,7 @@ function rewrites(f: Expr, x: string, depth: number): Expr | null {
     () => replaceTanSquared(f),
     () => expand(f),
     () => cancel(together(f)),
+    () => expand(hypToExp(f)),
   ];
   for (const t of tries) {
     let g: Expr;
@@ -467,8 +624,51 @@ function rewrites(f: Expr, x: string, depth: number): Expr | null {
     const G = int(g, x, depth + 2);
     if (G) return G;
   }
-  return null;
+  return weierstrass(f, x, depth);
 }
+/** sinh u = (eᵘ − e⁻ᵘ)/2 and the rest of the family in exponentials: e^x·cosh x = (e^(2x) + 1)/2. */
+function hypToExp(e: Expr): Expr {
+  if (e.k === 'n' || e.k === 's') return e;
+  const m = mapChildren(e, hypToExp);
+  if (m.k !== 'f' || m.a.length !== 1) return m;
+  const p = pow(E, m.a[0]), n = pow(E, neg(m.a[0]));
+  switch (m.n) {
+    case 'sinh': return mul(HALF, sub(p, n));
+    case 'cosh': return mul(HALF, add(p, n));
+    case 'tanh': return div(sub(p, n), add(p, n));
+    case 'coth': return div(add(p, n), sub(p, n));
+    case 'sech': return div(TWO, add(p, n));
+    case 'csch': return div(TWO, sub(p, n));
+  }
+  return m;
+}
+
+const T = 'ť'; // Weierstrass variable
+/** R(sin u, cos u) for one linear u: t = tg(u/2), sin u = 2t/(1 + t²), cos u = (1 − t²)/(1 + t²), du = 2dt/(1 + t²). */
+function weierstrass(f: Expr, x: string, depth: number): Expr | null {
+  if (depth > 6) return null;
+  const g = toSinCos(f);
+  let arg: Expr | null = null;
+  const ok = (e: Expr): boolean => {
+    if (freeOf(e, x)) return true;
+    if (isFn(e, 'sin') || isFn(e, 'cos')) {
+      if (!arg) { if (!linear(e.a[0], x)) return false; arg = e.a[0]; }
+      return same(arg, e.a[0]);
+    }
+    if (e.k === '+' || e.k === '*') return e.t.every(ok);
+    return e.k === '^' && isInt(e.e) && ok(e.b);
+  };
+  if (!ok(g) || !arg) return null;
+  const u: Expr = arg, [a] = linear(u, x)!, Tt = sym(T), w = add(ONE, pow(Tt, TWO));
+  const S = div(mul(TWO, Tt), w), C_ = div(sub(ONE, pow(Tt, TWO)), w);
+  const put = (e: Expr): Expr => isFn(e, 'sin') && same(e.a[0], u) ? S : isFn(e, 'cos') && same(e.a[0], u) ? C_ : e.k === 'n' || e.k === 's' ? e : mapChildren(e, put);
+  let r: Expr;
+  try { r = cancel(together(mul(put(g), TWO, pow(mul(a, w), MINUS_ONE)))); } catch { return null; }
+  if (!freeOf(r, x)) return null;
+  const G = int(r, T, depth + 2);
+  return G ? subst(G, T, fn('tan', div(u, TWO))) : null;
+}
+
 function toSinCos(e: Expr): Expr {
   if (e.k === 'n' || e.k === 's') return e;
   const m = mapChildren(e, toSinCos);
@@ -507,7 +707,10 @@ export function definite(f: Expr, x: string, a: Expr, b: Expr): Definite {
   if (A > B) { [lo, hi, LO, HI] = [b, a, B, A]; flip = -1; }
   if (A === B) return { exact: ZERO, numeric: { value: 0, error: 0 }, divergent: 0, antiderivative: F };
   // interior points where f blows up or is undefined: zeros of denominators, in (lo, hi)
+  // also where the antiderivative jumps (tg(x/2) from the Weierstrass substitution), so each piece is continuous
   const cuts = singularPoints(f, x, LO, HI);
+  if (F) for (const c of singularPoints(F, x, LO, HI)) if (!cuts.some(([, w]) => Math.abs(w - c[1]) < 1e-12)) cuts.push(c);
+  cuts.sort((p, r) => p[1] - r[1]);
   const g = compileDouble(f, x);
   const pieces: [Expr, Expr, number, number][] = [];
   const pts: [Expr, number][] = [[lo, LO], ...cuts, [hi, HI]];

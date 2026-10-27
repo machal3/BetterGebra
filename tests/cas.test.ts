@@ -64,11 +64,11 @@ test('calculus', () => {
   expect(card('całka 1/(1+x^2) od 0 do inf', 'Całka oznaczona')).toBe('π/2');
   expect(card('całka e^(-x^2) od -inf do inf', 'Całka oznaczona')).toBe('√π');
   expect(card('integrate(1/x^2, x, -1, 1)', 'Całka oznaczona')).toBe('Całka jest rozbieżna do +∞.');
-  // biquadratics irreducible over ℚ split over ℝ into quadratics with surd coefficients
+  // biquadratics irreducible over ℚ split over ℝ into quadratics with surd coefficients (denested: √((3 − √5)/2) = (√5 − 1)/2)
   expect(card('integrate(1/(x^4+1), x)', 'Całka nieoznaczona')).toBe('(2√2·arctg(√2·x − 1) + 2√2·arctg(√2·x + 1) + √2·ln(x^2 + √2·x + 1) − √2·ln(x^2 − √2·x + 1))/8 + C');
   expect(card('integrate(x^2/(x^4+1), x)', 'Całka nieoznaczona')).toBe('(2√2·arctg(√2·x − 1) + 2√2·arctg(√2·x + 1) − √2·ln(x^2 + √2·x + 1) + √2·ln(x^2 − √2·x + 1))/8 + C');
   expect(card('integrate(1/(x^4+2), x)', 'Całka nieoznaczona')).toBe('(2·2^(3/4)·arctg(2^(1/4)·x − 1) + 2·2^(3/4)·arctg(2^(1/4)·x + 1) + 2^(3/4)·ln(x^2 + 2^(3/4)·x + √2) − 2^(3/4)·ln(x^2 − 2^(3/4)·x + √2))/16 + C');
-  expect(card('integrate(1/(x^4+3x^2+1), x)', 'Całka nieoznaczona')).toBe('2√5·arctg(2x/√(6 − 2√5))/(5√(6 − 2√5)) − 2√5·arctg(2x/√(6 + 2√5))/(5√(6 + 2√5)) + C');
+  expect(card('integrate(1/(x^4+3x^2+1), x)', 'Całka nieoznaczona')).toBe('√5·arctg(x·(1 + √5)/2)·(1 + √5)/10 − √5·arctg(x·(√5 − 1)/2)·(√5 − 1)/10 + C');
   expect(card('integrate(1/(x^4+1), x, 0, 1)', 'Postać dziesiętna')).toBe('0.8669729873399110375739952');
   expect(card('sum(1/k^2, k, 1, inf)', 'Suma')).toBe('π^2/6');
   expect(card('sum(k^3, k, 1, n)', 'Suma')).toMatch(/n\^2·\(n \+ 1\)\^2\/4|\(n\^4 \+ 2n\^3 \+ n\^2\)\/4/);
@@ -101,4 +101,80 @@ test('fixes from the audit stay fixed', () => {
   // finding nothing numerically with a parameter in the way is not "no solutions"
   expect(run('solve(e^(a*x) + e^x = 2, x)').error).toMatch(/parametrami/);
   expect(run('foo').error).toMatch(/Nie rozpoznaję „foo”/);
+});
+
+test('wrong answers fixed: factor, simplify, log2/log10', () => {
+  // x^(n + 1) was read as a polynomial of degree 0 and became 1
+  expect(card('integrate(x^n, x)', 'Całka nieoznaczona')).toBe('x^(n + 1)/(n + 1) + C');
+  expect(card('simplify(x^(n+1)/(n+1))', 'Postać uproszczona')).toBe('x^(n + 1)/(n + 1)');
+  expect(card('log2(1024)', 'Wynik')).toBe('10');
+  expect(card('log10(0.001)', 'Wynik')).toBe('−3');
+  expect(card('ln(4) - 2 ln(2)', 'Wynik')).toBe('0');
+  expect(card('ln(8)/ln(2)', 'Wynik')).toBe('3');
+  expect(card('ln(12) - ln(3)', 'Wynik')).toBe('2ln(2)');
+  expect(card('taylor(x^x, x, 1, 3)', 'Szereg Taylora w x = 1')).toBe('1 + (x − 1) + (x − 1)^2 + (x − 1)^3/2 + O((x − 1)^4)');
+  expect(card('diff(e^(x^2), x, 3)', 'Pochodna rzędu 3')).toBe('d^3/dx^3 (e^(x^2)) = 8x^3·e^(x^2) + 12x·e^(x^2)');
+});
+
+test('exact constants: denesting, hyperbolic of ln, i^i', () => {
+  expect(card('sqrt(3+2sqrt(2))', 'Wynik')).toBe('1 + √2');
+  expect(card('sqrt(5+2sqrt(6))', 'Wynik')).toBe('√2 + √3');
+  expect(card('sqrt(2-sqrt(3))', 'Wynik')).toBe('(√6 − √2)/2');
+  expect(card('sqrt(1+sqrt(2))', 'Wynik')).toBe('√(1 + √2)');
+  expect(card('cbrt(2+sqrt(5)) + cbrt(2-sqrt(5))', 'Wynik')).toBe('1');
+  expect(card('cbrt(26+15sqrt(3))', 'Wynik')).toBe('2 + √3');
+  expect(card('sinh(ln 2)', 'Wynik')).toBe('3/4');
+  expect(card('tanh(ln 2)', 'Wynik')).toBe('3/5');
+  expect(card('i^i', 'Wynik')).toBe('e^(−π/2)');
+});
+
+test('limits: exponents, essential singularities, factorials (Stirling)', () => {
+  expect(card('limit(x^(1/x), x->inf)', 'Granica')).toBe('1');
+  expect(card('limit(n^(1/n), n->inf)', 'Granica')).toBe('1');
+  expect(card('limit(e^(-1/x^2)/x^10, x->0)', 'Granica')).toBe('0');
+  expect(card('limit(n^100/2^n, n->inf)', 'Granica')).toBe('0');
+  expect(card('limit(e^x/x^1000, x->inf)', 'Granica')).toBe('+∞');
+  expect(card('limit(n!/n^n, n->inf)', 'Granica')).toBe('0');
+  expect(card('limit((n!)^(1/n)/n, n->inf)', 'Granica')).toBe('1/e');
+  expect(card('limit(ln(n!)/n - ln(n), n->inf)', 'Granica')).toBe('−1');
+  expect(card('limit(sqrt(n) binomial(2n,n)/4^n, n->inf)', 'Granica')).toBe('1/√π');
+  expect(card('limit((1+1/x)^(x^2) e^(-x), x->inf)', 'Granica')).toBe('1/√e');
+});
+
+test('integrals: parameters, roots of quadratics, Weierstrass, hyperbolic, trig powers', () => {
+  const F = (q: string) => card(q, 'Całka nieoznaczona');
+  expect(F('integrate(1/(x^2+a^2), x)')).toBe('arctg(x/a)/a + C');
+  expect(F('integrate(1/(x^2-a^2), x)')).toBe('(ln(|x − a|) − ln(|a + x|))/(2a) + C');
+  expect(F('integrate(x^2/sqrt(x^2+1), x)')).toBe('(x·√(x^2 + 1) − ln(|x + √(x^2 + 1)|))/2 + C');
+  expect(F('integrate(x^2 sqrt(4-x^2), x)')).toBe('√(4 − x^2)·(x^3 − 2x)/4 + 2arcsin(x/2) + C');
+  expect(F('integrate(sqrt(x^2-4)/x, x)')).toBe('√(x^2 − 4) − 2arctg(√(x^2 − 4)/2) + C');
+  expect(F('integrate(1/(2+cos x), x)')).toBe('2√3·arctg(√3·tg(x/2)/3)/3 + C');
+  expect(F('integrate(sinh(x)^2, x)')).toBe('(sinh(2x) − 2x)/4 + C');
+  expect(F('integrate(cosh(x)^3, x)')).toBe('sinh(x)^3/3 + sinh(x) + C');
+  expect(F('integrate(x^2 e^(-x^2), x)')).toBe('√π·erf(x)/4 − x·e^(−x^2)/2 + C');
+  expect(F('integrate(sin(x)^2 cos(x)^2, x)')).toBe('x/8 − sin(4x)/32 + C');
+  expect(F('integrate(sin(x)^3 cos(x)^2, x)')).toBe('cos(x)^5/5 − cos(x)^3/3 + C');
+  expect(F('integrate(sin(3x) cos(5x), x)')).toBe('cos(2x)/4 − cos(8x)/16 + C');
+  // the antiderivative jumps at x = π (tg(x/2)): the interval is cut there
+  expect(card('integrate(1/(2+cos x), x, 0, 2pi)', 'Całka oznaczona')).toBe('2√3·π/3');
+  expect(card('integrate(x^2 e^(-x^2), x, -inf, inf)', 'Całka oznaczona')).toBe('√π/2');
+  expect(card('integrate(1/(1+x^4), x, 0, inf)', 'Całka oznaczona')).toBe('√2·π/4');
+  // a hopeless integrand gives up in time
+  const t = Date.now();
+  run('integrate(1/(x^2 sqrt(x^2+1)), x)');
+  expect(Date.now() - t).toBeLessThan(2500);
+});
+
+test('series: convergence tests, P(k)·r^k, binomial sums, telescoping products', () => {
+  expect(card('sum(1/k, k, 1, inf)', 'Suma')).toBe('Szereg jest rozbieżny.');
+  expect(card('sum(k/(k+1), k, 1, inf)', 'Suma')).toBe('Szereg jest rozbieżny.');
+  expect(card('sum(1/k^(3/2), k, 1, inf)', 'Suma')).toBe('zeta(3/2)');
+  expect(Number(card('sum(1/(k^2+1), k, 0, inf)', 'Suma'))).toBeCloseTo((1 + Math.PI / Math.tanh(Math.PI)) / 2, 11);
+  expect(card('sum(k^2 x^k, k, 0, inf)', 'Suma')).toBe('−x·(x + 1)/(x − 1)^3');
+  expect(card('sum(k^2/3^k, k, 0, inf)', 'Suma')).toBe('3/2');
+  expect(card('sum(k 2^k, k, 1, n)', 'Suma')).toBe('2·2^n·(n − 1) + 2');
+  expect(card('sum(binomial(n,k), k, 0, n)', 'Suma')).toBe('2^n');
+  expect(card('sum(binomial(n,k) x^k, k, 0, n)', 'Suma')).toBe('(x + 1)^n');
+  expect(card('product(1-1/k^2, k, 2, inf)', 'Iloczyn')).toBe('1/2');
+  expect(card('product((k+1)/k, k, 1, n)', 'Iloczyn')).toBe('n + 1');
 });
