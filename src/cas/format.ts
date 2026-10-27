@@ -161,6 +161,18 @@ function fnML(n: string, a: readonly Expr[], sup?: string): string {
 const SYMBOL_TEXT: Record<string, string> = { pi: 'π', inf: '∞', gammaconst: 'γ' };
 const TEXT_FN: Record<string, string> = { ...FN_NAMES, gamma: 'gamma', zeta: 'zeta', sign: 'sgn', re: 're', im: 'im', csc: 'csc' };
 
+/** e in the parser's own notation, every part bracketed: how the workspace stores a value. Not for reading. */
+export function toCode(e: Expr): string {
+  switch (e.k) {
+    case 'n': return e.v.d === 1n && e.v.n >= 0n ? `${e.v.n}` : `(${e.v.n}${e.v.d === 1n ? '' : `/${e.v.d}`})`;
+    case 's': return e.n;
+    case '+': return `(${e.t.map(toCode).join(' + ')})`;
+    case '*': return `(${e.t.map(toCode).join('*')})`;
+    case '^': return `(${toCode(e.b)})^(${toCode(e.e)})`;
+    case 'f': return `${e.n}(${e.a.map(toCode).join(', ')})`;
+  }
+}
+
 export function toText(e: Expr): string {
   switch (e.k) {
     case 'n': {

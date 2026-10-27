@@ -12,15 +12,15 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconHistory, IconList, IconStop, IconTrash } from '@/components/icons';
+import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import type { Pod, Result, Row } from '../../cas/engine';
-import { nodeML } from '../../cas/nodeformat';
-import { parse, type Node } from '../../cas/parse';
+import { nodeML, spelling } from '../../cas/nodeformat';
+import { parse, type Node, type VarKind } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
 import { PaneBar, setPane, useShown } from '../Dock';
 import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
-import { DIGITS, abort, clearHistory, compute, setDigits, useCalc } from './calc-store';
+import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, useCalc } from './calc-store';
 import { EXAMPLES, KEYS } from './content';
 import { Backdrop } from '../Backdrop';
 import { cascade } from '../motion';
@@ -32,17 +32,29 @@ const LONG = /^[−-]?[\d.e+−-]{70,}$/;
 
 const subscribeHash = (notify: () => void) => { addEventListener('hashchange', notify); return () => removeEventListener('hashchange', notify); };
 
-/** The preview of what was typed, or why it can't be read. */
-function preview(value: string): { ml: string; error: string } {
+/** The preview of what was typed, or why it can't be read; the variables' names read as names. */
+function preview(value: string, names: Record<string, VarKind>, display: Record<string, string>): { ml: string; error: string } {
   const v = value.trim();
   if (!v) return { ml: '', error: '' };
-  try { return { ml: nodeML(parse(sugar(v))), error: '' }; } catch (e) { return { ml: '', error: (e as Error).message }; }
+  try { return { ml: nodeML(parse(sugar(v), { names }), spelling(v, n => display[n])), error: '' }; } catch (e) { return { ml: '', error: (e as Error).message }; }
+}
+
+/** A matrix too large to typeset: its entries in a table, numbered like a spreadsheet. */
+function Grid({ cells }: { cells: string[][] }) {
+  return (
+    <div className="b-pod-grid" role="region" aria-label={`Macierz, ${cells.length} wierszy`}>
+      <table>
+        <thead><tr><th scope="col" aria-label="Wiersz" />{cells[0].map((_, j) => <th key={j} scope="col">{j + 1}</th>)}</tr></thead>
+        <tbody>{cells.map((r, i) => <tr key={i}><th scope="row">{i + 1}</th>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
 }
 
 function RowView({ row }: { row: Row }) {
   return (
     <div className="b-pod-row">
-      {LONG.test(row.text) ? <div className="b-pod-long">{row.text}</div> : <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: row.ml }} />}
+      {row.grid ? <Grid cells={row.grid} /> : LONG.test(row.text) ? <div className="b-pod-long">{row.text}</div> : <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: row.ml }} />}
       {row.note && <span className="b-pod-row-note">{row.note}</span>}
     </div>
   );
@@ -77,6 +89,7 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
             <span className="b-calc-query-label">Wejście</span>
             <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
             {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: {result.interpreted}</p>}
+            {result.used && <p className="b-calc-query-note">Ze zmiennych: {result.used}</p>}
           </div>
           <MessageActions actions={['regenerate']} text={query} regenerating={busy} onRegenerate={() => run(query)} label="Działania na pytaniu" />
         </header>
@@ -142,10 +155,12 @@ const Placeholder = () => (
 );
 
 function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLInputElement | null> }) {
-  const { history, digits } = useCalc();
+  const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
-  const shown = preview(useDeferredValue(value));
+  const names = Object.fromEntries(Object.entries(vars).map(([n, s]) => [n, s.kind]));
+  const display = Object.fromEntries(Object.entries(vars).flatMap(([n, s]) => (s.display ? [[n, s.display]] : [])));
+  const shown = preview(useDeferredValue(value), names, display);
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !history.length) return;
     e.preventDefault();
@@ -256,13 +271,37 @@ function Suggestions({ run }: { run: (q: string) => void }) {
   );
 }
 
-function Side({ run: compute }: { run: (q: string) => void }) {
-  const { history } = useCalc();
-  const shown = { history: useShown('Historia'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
+function Side({ run: compute, insert }: { run: (q: string) => void; insert: (text: string) => void }) {
+  const { history, vars } = useCalc();
+  const shown = { history: useShown('Historia'), vars: useShown('Zmienne'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
   // a question picked in a phone's sheet: the sheet steps aside for its answer
   const run = (q: string) => { setPane(null); compute(q); };
+  const entries = Object.entries(vars);
   return (
     <>
+      {shown.vars && <Section
+        title="Zmienne"
+        aside={entries.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Usuń wszystkie zmienne" title="Usuń wszystkie zmienne" onClick={clearVars} />}
+      >
+        {entries.length ? (
+          <ul className="b-vars">
+            {entries.map(([n, s]) => (
+              <li key={n} className="b-var">
+                <button type="button" className="b-row b-var-row" title={`Wstaw ${s.display ?? n} do pola`} onClick={() => { setPane(null); insert(s.display ?? n); }}>
+                  <span className="b-var-name">{s.display ?? n}{s.params ? `(${s.params.join(', ')})` : ''}</span>
+                  <span className="b-var-label">{s.label}</span>
+                  <span className="b-var-preview">{s.preview}</span>
+                </button>
+                <Button variant="ghost" className="b-var-remove" icon={<IconClose />} aria-label={`Usuń zmienną ${s.display ?? n}`} title={`Usuń ${s.display ?? n}`} onClick={() => removeVar(n)} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="b-empty">
+            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>.</p>
+          </div>
+        )}
+      </Section>}
       {shown.history && <Section
         title="Historia"
         aside={history.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Wyczyść historię" title="Wyczyść historię" onClick={clearHistory} />}
@@ -318,7 +357,12 @@ function Side({ run: compute }: { run: (q: string) => void }) {
               <tr><td><code>limit(f, x-&gt;a)</code>, <code>granica f przy x-&gt;0+</code></td><td>granice (też jednostronne)</td></tr>
               <tr><td><code>taylor(f, x, a, n)</code>, <code>sum(f, k, 1, inf)</code></td><td>szeregi i sumy</td></tr>
               <tr><td><code>solve</code>, <code>factor</code>, <code>expand</code>, <code>simplify</code>, <code>apart</code></td><td>algebra (też po polsku: <code>rozwiąż</code>, <code>rozłóż</code>, <code>rozwiń</code>, <code>uprość</code>)</td></tr>
-              <tr><td><code>[[1, 2], [3, 4]]</code>, <code>det</code>, <code>inverse</code>, <code>eigenvalues</code></td><td>macierze</td></tr>
+              <tr><td><code>[[1, 2], [3, 4]]</code>, <code>[1 2; 3 4]</code>, <code>det</code>, <code>inverse</code>, <code>eigenvalues</code></td><td>macierze, także zapisem MATLAB-a</td></tr>
+              <tr><td><code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>p := x^2 − 1</code></td><td>zmienne; <code>=</code> z wolnymi literami po prawej to równanie, <code>:=</code> zawsze przypisuje; wielkość liter bez znaczenia</td></tr>
+              <tr><td><code>f(x) = x^2</code>, <code>g = @(x, y) x*y</code>, <code>f(3)</code></td><td>funkcje</td></tr>
+              <tr><td><code>1:5</code>, <code>0:0.5:2</code>, <code>A(2, :)</code>, <code>v(end)</code></td><td>zakresy i indeksy (od 1)</td></tr>
+              <tr><td><code>A'</code>, <code>A .* B</code>, <code>A .^ 2</code>, <code>A\b</code>, <code>[A B; C D]</code></td><td>transpozycja, działania na elementach, układ A·x = b, sklejanie</td></tr>
+              <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
               <tr><td><code>wykres sin x, cos x</code>, <code>wykres x^2 + y^2 = 25</code></td><td>wykresy funkcji i krzywych</td></tr>
               <tr><td><code>isprime</code>, <code>gcd</code>, <code>lcm</code>, <code>powmod</code>, <code>crt</code>, <code>totient</code></td><td>teoria liczb</td></tr>
@@ -334,12 +378,21 @@ function Side({ run: compute }: { run: (q: string) => void }) {
 
 export function CalculatorPanel() {
   const main = document.getElementById('calc'), side = document.getElementById('calc-side');
-  const { run: current, history } = useCalc();
+  const { run: current, history, vars } = useCalc();
   const [value, setValue] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const panel = usePanel();
   const hash = useSyncExternalStore(subscribeHash, () => location.hash);
   const run = (q: string) => { setValue(q); void compute(q); };
+  /** A variable's name at the caret of the field. */
+  const insert = (text: string) => {
+    const el = input.current;
+    if (!el) return;
+    const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
+    el.setRangeText(text, a, b, 'end');
+    setValue(el.value);
+    el.focus();
+  };
 
   // #kalkulator?q=… runs that question (a link to a result); otherwise the field takes the focus on wide screens
   useEffect(() => {
@@ -382,11 +435,12 @@ export function CalculatorPanel() {
         </>,
         main,
       )}
-      {side && createPortal(<Side run={run} />, side)}
+      {side && createPortal(<Side run={run} insert={insert} />, side)}
       <PaneBar
         panel="calculator"
         items={[
           { label: 'Historia', icon: <IconHistory />, count: history.length },
+          { label: 'Zmienne', icon: <IconVariable />, count: Object.keys(vars).length },
           { label: 'Przykłady', icon: <IconList /> },
           { label: 'Zapis', icon: <IconBook /> },
         ]}

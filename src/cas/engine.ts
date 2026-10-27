@@ -6,18 +6,20 @@
 import './functions';
 import { bfSign, bfToNumber } from './bigfloat';
 import { diff, diffN, limit, Lim, taylor } from './calculus';
-import { Env, Value, evaluate, ex, hidden, scalar, setInverse, dims, matMul } from './evaluate';
+import { Env, Value, evaluate, ex, hidden, scalar, setInverse, setLeftSolve, shadow, dims, matMul, type FnValue } from './evaluate';
+import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
+export type { Saved } from './workspace';
 import { Expr, I, INF, ONE, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isInt, isNum, isSym, isZero, mul, neg, num, numDen, pow, same, size, sqrt, sub, subst, sym, together, variables, isFn } from './expr';
 import { compileDouble } from './fast';
 import { toML, toText } from './format';
 import { complexParts, constSign, binomialBig } from './functions';
 import { definite, integrate, partialFractions } from './integrate';
 import * as LA from './matrix';
-import { nodeML } from './nodeformat';
+import { nodeML, spelling } from './nodeformat';
 import * as NT from './ntheory';
 import { Decimal } from './bigfloat';
 import { C, approx, evalC, numericValue } from './numeric';
-import { COMMANDS, Node, parse } from './parse';
+import { COMMANDS, Node, parse, reserved } from './parse';
 import { sugar } from './sugar';
 export { sugar };
 import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from './poly';
@@ -29,13 +31,21 @@ import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRo
 export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
 
 setInverse(LA.inverse);
+setLeftSolve(LA.leftSolve);
 setDomainText(toText);
 
 // --- Result shape (plain JSON: crosses the worker boundary) ---
 
-export interface Row { ml: string; text: string; note?: string }
+/** A row of a card; grid: a matrix too large to typeset, shown as a table of its entries. */
+export interface Row { ml: string; text: string; note?: string; grid?: string[][] }
 export interface Pod { title: string; rows: Row[]; note?: string; plot?: Plot; more?: { label: string; query: string } }
-export interface Result { input: Row | null; pods: Pod[]; error?: string; ans?: string; interpreted?: string }
+export interface Result {
+  input: Row | null; pods: Pod[]; error?: string; interpreted?: string;
+  /** The answer as text (for the next steps), and as code for the next question's ans. */
+  ans?: string; ansCode?: string;
+  /** Variables this input set (null: removed), and the stored ones it used, for the heading. */
+  assigned?: Record<string, Saved | null>; used?: string;
+}
 
 const M = (inner: string) => `<math display="block">${inner}</math>`;
 // parentheses at their natural size: f(x) next to a tall fraction must not stretch
@@ -52,25 +62,58 @@ let digitsDefault = 25;
 
 // --- Entry ---
 
-export interface RunOptions { digits?: number; ans?: string | null }
+export interface RunOptions { digits?: number; ans?: string | null; vars?: Record<string, Saved> }
+
+/** The variables of the question being answered (the engine answers one at a time). */
+let ws = new Workspace({}, () => baseEnv(null));
+let assigned: Record<string, Saved | null> = {};
+/** A name as the question wrote it: A = [1 2; 3 4] shows A, though names don't depend on the case of letters. */
+let spelled = (n: string) => n;
+/** name = … read as an equation after all: its right side has free letters (y = 2x + 1). */
+class NotAssignment extends Error {}
 
 export function run(rawInput: string, opts: RunOptions = {}): Result {
   digitsDefault = Math.min(5000, Math.max(5, opts.digits ?? 25));
   hidden.length = 0;
-  let ans: Expr | null = null;
-  if (opts.ans) { try { ans = scalar(evaluate(parse(opts.ans), baseEnv(null)), 'ans'); } catch { ans = null; } }
-  const env = baseEnv(ans);
+  ws = new Workspace(opts.vars ?? {}, () => baseEnv(null));
+  assigned = {};
+  let ans: Value | null = null;
+  if (opts.ans) { try { ans = evaluate(parse(opts.ans, { limit: 60_000, assign: false }), baseEnv(null)); } catch { ans = null; } }
+  const env: Env = { ...baseEnv(ans), vars: ws };
+  spelled = spelling(rawInput, n => ws.saved[n]?.display);
   const interpreted = sugar(rawInput);
+  const names = ws.kinds();
   let node: Node;
-  try { node = parse(interpreted); } catch (err) { return { input: null, pods: [], error: message(err), interpreted }; }
-  const input: Row = { ml: nodeML(node), text: rawInput };
+  try { node = parse(interpreted, { names }); } catch (err) { return { input: null, pods: [], error: message(err), interpreted }; }
+  let input: Row = { ml: nodeML(node, spelled), text: rawInput };
   try {
-    const { pods, value } = top(node, env);
+    let out: Out;
+    try { out = top(node, env); } catch (err) {
+      if (!(err instanceof NotAssignment)) throw err;
+      node = parse(interpreted, { names, assign: false });
+      input = { ml: nodeML(node, spelled), text: rawInput };
+      ws.reset(); hidden.length = 0; assigned = {};
+      out = top(node, env);
+    }
+    const { pods, value } = out;
     const ansText = value && value.t === 'expr' ? toText(value.e) : undefined;
-    return { input, pods, ans: ansText, interpreted: interpreted !== rawInput.trim() ? interpreted : undefined };
+    const ansCode = value && value.t !== 'fn' && value.t !== 'str' && value.t !== 'rel' ? safe(() => save(value, baseEnv(null)).code) ?? undefined : undefined;
+    const used = usedText();
+    return {
+      input, pods, ans: ansText, ansCode, interpreted: interpreted !== rawInput.trim() ? interpreted : undefined,
+      ...(Object.keys(assigned).length ? { assigned } : {}), ...(used ? { used } : {}),
+    };
   } catch (err) {
     return { input, pods: [], error: message(err), interpreted };
   }
+}
+/** "n = 10, A (macierz 2×2)": the stored variables the answer used. */
+function usedText(): string {
+  return [...ws.used].filter(n => !ws.local.has(n)).map(n => {
+    const s = ws.saved[n];
+    const d = s.display ?? n;
+    return s.kind === 'scalar' && s.preview.length <= 24 ? `${d} = ${s.preview}` : `${d} (${s.label})`;
+  }).join(', ');
 }
 /** What the input asks of x that its simplified form doesn't show (x/x: x ≠ 0). */
 const guardOf = (x: string) => hidden.filter(g => variables(g).every(v => v === x));
@@ -85,14 +128,17 @@ function domain(e: Expr, x: string): IntervalSet {
 const zerosOf = (e: Expr, x: string): SolveResult => within(solveEquation(e, x), x, guardOf(x));
 const message = (err: unknown) => err instanceof CasError ? err.message : `Błąd wewnętrzny: ${(err as Error)?.message ?? String(err)}`;
 
-function baseEnv(ans: Expr | null): Env {
+function baseEnv(ans: Value | null): Env {
   return { ans, command: (name, args, env) => { const r = command(name, args, env); if (!r.value) fail(`Polecenia ${name} nie można użyć wewnątrz wyrażenia.`); return r.value!; } };
 }
 
 interface Out { pods: Pod[]; value?: Value }
 
 function top(node: Node, env: Env): Out {
+  if (node.t === 'assign') return statements([node], env);
+  if (node.t === 'list' && node.items.some(i => i.t === 'assign')) return statements(node.items, env);
   if (node.t === 'call' && Object.hasOwn(COMMANDS, node.n)) return command(node.n, node.args, env);
+  if (node.t === 'op' && node.o === '\\') return leftDivisionPods(node.a, node.b, env);
   if (node.t === 'rel') return relation(node, env, null);
   if (node.t === 'list' && node.items.length && node.items.every(i => i.t === 'rel')) return system(node.items, env, null);
   const v = evaluate(node, env);
@@ -104,9 +150,123 @@ function valuePods(v: Value): Out {
     case 'expr': return { pods: isConstant(v.e) ? numberPods(v.e) : expressionPods(v.e), value: v };
     case 'matrix': return { pods: matrixPods(v.rows), value: v };
     case 'list': return { pods: listPods(v), value: v };
+    case 'fn': return { pods: fnPods(v), value: v };
     case 'rel': return fail('Nieoczekiwane równanie.');
+    case 'str': return fail(`'${v.s}' to napis: nazwa opcji polecenia, np. norm(A, 'fro').`);
   }
 }
+
+// --- Variables ---
+
+/** The value name = … gives the variable, or null when = is an equation after all (y = 2x + 1). */
+function assignedValue(n: Extract<Node, { t: 'assign' }>, env: Env): Value | null {
+  if (reserved(n.name)) fail(`${n.name} to nazwa funkcji lub stałej; wybierz inną nazwę zmiennej.`);
+  const params = n.params ?? [];
+  const v = evaluate(n.value, shadow(env, params));
+  if (v.t === 'rel' || v.t === 'str') return null;
+  if (n.params && v.t === 'fn') fail(`Zapisz funkcję jako ${n.name}(${params.join(', ')}) = wyrażenie albo ${n.name} = @(${params.join(', ')}) wyrażenie.`);
+  const value: Value = n.params ? { t: 'fn', params, body: v } : v;
+  // = with letters left free is an equation (y = 2x + 1); := always assigns, a matrix or @(x) … always is an assignment
+  if (n.op === '=' && (value.t === 'expr' || n.params) && freeSymbols(value).length) return null;
+  return value;
+}
+
+function statements(items: Node[], env: Env): Out {
+  const done: [string, Value][] = [];
+  let last: Out | null = null;
+  items.forEach((item, k) => {
+    if (item.t !== 'assign') {
+      if (k !== items.length - 1) throw new NotAssignment();
+      last = top(item, env);
+      return;
+    }
+    const v = assignedValue(item, env);
+    if (!v) throw new NotAssignment();
+    ws.local.set(item.name, v);
+    done.push([item.name, v]);
+  });
+  const total = new Set([...Object.keys(ws.saved), ...done.map(([n]) => n)]).size;
+  if (total > MAX_VARS) fail(`Zmiennych może być najwyżej ${MAX_VARS}. Usuń niepotrzebne poleceniem clear.`);
+  for (const [n, v] of done) { const s = save(v, baseEnv(null)), d = spelled(n); assigned[n] = d !== n ? { ...s, display: d } : s; }
+  const pods: Pod[] = [{ title: done.length > 1 ? 'Zapisane zmienne' : 'Zapisana zmienna', rows: done.map(([n, v]) => assignRow(spelled(n), v)), note: assignNote(done.map(([n, v]) => [spelled(n), v])) }];
+  const end = last as Out | null;
+  if (end) pods.push(...end.pods);
+  else if (done.length === 1) pods.push(...(safe(() => valuePods(done[0][1]).pods.slice(1)) ?? []));
+  return { pods, value: end?.value ?? done[done.length - 1][1] };
+}
+const nameML = (n: string) => n.length > 1 ? `<mi mathvariant="normal">${n}</mi>` : mi(n);
+function valueML(v: Value): string {
+  switch (v.t) {
+    case 'expr': return toML(v.e);
+    case 'matrix': return matML(v.rows);
+    case 'list': return `${mo(v.set ? '{' : '[')}${v.items.map(valueML).join(mo(','))}${mo(v.set ? '}' : ']')}`;
+    case 'fn': return `${mo('(')}${v.params.map(nameML).join(mo(','))}${mo(')')}${mo('↦')}${valueML(v.body)}`;
+    default: return '';
+  }
+}
+function assignRow(n: string, v: Value): Row {
+  if (v.t === 'fn') return { ml: M(`${nameML(n)}${mo('(')}${v.params.map(nameML).join(mo(','))}${mo(')')}${mo('=')}${valueML(v.body)}`), text: `${n}(${v.params.join(', ')}) = ${valueText(v.body)}` };
+  if (v.t === 'matrix' && tooLarge(v.rows)) return { ...matRow(v.rows), text: `${n} = ${matText(v.rows)}` };
+  return { ml: M(`${nameML(n)}${mo('=')}${valueML(v)}`), text: `${n} = ${valueText(v)}` };
+}
+function assignNote(done: [string, Value][]): string {
+  const names = done.map(([n]) => n);
+  // a letter given a number may have been meant as an equation (x = 5), a short name as a product (xy = 6)
+  const one = done.find(([n, v]) => n.length === 1 && v.t === 'expr')?.[0];
+  const glued = done.find(([n, v]) => n.length > 1 && n.length <= 3 && /^[a-z]+$/i.test(n) && v.t === 'expr')?.[0];
+  return [
+    `Od teraz ${names.length > 1 ? 'te nazwy oznaczają te wartości' : `${names[0]} oznacza tę wartość`} w kolejnych obliczeniach; zmienne są w części Zmienne.`,
+    one ? `Równanie rozwiążesz poleceniem solve(${one} = …).` : '',
+    glued ? `Iloczyn zapisz ze znakiem mnożenia: ${[...glued].join('*')}.` : '',
+  ].filter(Boolean).join(' ');
+}
+function fnPods(f: FnValue): Pod[] {
+  const pods: Pod[] = [{ title: 'Funkcja', rows: [{ ml: M(valueML(f)), text: `(${f.params.join(', ')}) ↦ ${valueText(f.body)}` }] }];
+  const body = f.body;
+  if (f.params.length === 1 && body.t === 'expr' && !freeSymbols(f).length) pods.push(...(safe(() => expressionPods(subst(body.e, f.params[0], sym('x'))).slice(1)) ?? []));
+  return pods;
+}
+/** clear, clear x A: the names to remove (all of them without arguments). */
+function clearCommand(args: Node[]): Out {
+  const names: string[] = [];
+  const walk = (n: Node): void => {
+    if (n.t === 'id' || n.t === 'index') names.push(n.n);
+    else if (n.t === 'op' && n.o === '*') { walk(n.a); walk(n.b); }
+    else if (n.t === 'list') n.items.forEach(walk);
+    else fail('clear: podaj nazwy zmiennych, np. clear A x.');
+  };
+  args.forEach(walk);
+  const all = Object.keys(ws.saved);
+  const gone = args.length ? names : all;
+  for (const n of gone) if (!all.includes(n)) fail(`Nie ma zmiennej ${n}.`);
+  for (const n of gone) assigned[n] = null;
+  return { pods: [{ title: 'Usunięte zmienne', rows: [textRow(gone.length ? gone.map(n => ws.saved[n].display ?? n).join(', ') : 'Nie było żadnych zmiennych.')] }] };
+}
+function whoCommand(): Out {
+  const all = Object.entries(ws.saved);
+  if (!all.length) return { pods: [{ title: 'Zmienne', rows: [textRow('Nie ma jeszcze zmiennych. Zapisz je tak: A = [1 2; 3 4], n = 10, f(x) = x^2.')] }] };
+  return { pods: [{ title: 'Zmienne', rows: all.map(([n, s]) => ({ ml: M(`${nameML(s.display ?? n)}${s.params ? `${mo('(')}${s.params.map(nameML).join(mo(','))}${mo(')')}` : ''}${mo('=')}${mtext(s.preview)}`), text: `${s.display ?? n} = ${s.preview}`, note: s.label })) }] };
+}
+
+/** A\b: the solution of A·x = b, exact; with more equations than unknowns, the least-squares one. */
+function leftDivisionPods(a: Node, b: Node, env: Env): Out {
+  const A = evaluate(a, env);
+  const v = evaluate({ t: 'op', o: '\\', a, b }, env);
+  if (A.t !== 'matrix') return valuePods(v);
+  const [n, m] = dims(A.rows);
+  const note = n > m ? 'Równań jest więcej niż niewiadomych: to rozwiązanie najmniejszych kwadratów (minimalizuje ‖A·x − b‖), z równań normalnych AᵀA·x = Aᵀb, dokładne.' : 'Jedyne rozwiązanie, dokładne.';
+  // one right-hand side (a list, or a column as MATLAB writes it): x₁, x₂, … one per row
+  const column = v.t === 'list' ? v.items.map(i => scalar(i, 'Rozwiązanie')) : v.t === 'matrix' && v.rows[0]?.length === 1 ? v.rows.map(r => r[0]) : null;
+  if (column) {
+    const xs = column.map(x => simplify(x));
+    const value: Value = v.t === 'list' ? { t: 'list', items: xs.map(ex), set: false } : { t: 'matrix', rows: xs.map(x => [x]) };
+    return { pods: [{ title: 'Rozwiązanie układu A·x = b', rows: xs.map((x, k) => eqRow(`<msub>${mi('x')}<mn>${k + 1}</mn></msub>`, `x${k + 1}`, x, isConstant(x) && !isNum(x) ? shortApprox(x) : undefined)), note }], value };
+  }
+  if (v.t !== 'matrix') return valuePods(v);
+  const X = v.rows.map(r => r.map(c => simplify(c)));
+  return { pods: [{ title: 'Rozwiązanie układu A·X = B', rows: [matRow(X, mi('X'), 'X')], note }], value: { t: 'matrix', rows: X } };
+}
+
 
 // --- Decimal numbers ---
 
@@ -690,7 +850,12 @@ function matML(m: Expr[][]): string {
   return `<mrow>${mo('[')}<mtable>${m.map(r => `<mtr>${r.map(c => `<mtd>${toML(c)}</mtd>`).join('')}</mtr>`).join('')}</mtable>${mo(']')}</mrow>`;
 }
 const matText = (m: Expr[][]) => `[${m.map(r => `[${r.map(toText).join(', ')}]`).join(', ')}]`;
-const matRow = (m: Expr[][], lhs = '', lhsText = ''): Row => ({ ml: M(`${lhs}${lhs ? mo('=') : ''}${matML(m)}`), text: `${lhsText ? lhsText + ' = ' : ''}${matText(m)}` });
+/** More than 8 columns, 10 rows or 64 entries: a table of entries, not a typeset matrix that would run off the card. */
+const tooLarge = (m: Expr[][]) => m.length > 10 || (m[0]?.length ?? 0) > 8 || m.length * (m[0]?.length ?? 0) > 64;
+const GRID_ROWS = 200;
+const matRow = (m: Expr[][], lhs = '', lhsText = ''): Row => tooLarge(m)
+  ? { ml: '', text: `${lhsText ? lhsText + ' = ' : ''}${matText(m)}`, grid: m.slice(0, GRID_ROWS).map(r => r.map(toText)), note: `${m.length}×${m[0].length}${m.length > GRID_ROWS ? `, pokazuję ${GRID_ROWS} pierwszych wierszy` : ''}` }
+  : { ml: M(`${lhs}${lhs ? mo('=') : ''}${matML(m)}`), text: `${lhsText ? lhsText + ' = ' : ''}${matText(m)}` };
 
 function matrixPods(m: Expr[][]): Pod[] {
   const [n, k] = dims(m);
@@ -754,15 +919,19 @@ function eigen(m: Expr[][], cp: Expr): Pod[] | null {
   return out;
 }
 
+const LIST_SHOWN = 40;
 function listPods(v: Extract<Value, { t: 'list' }>): Pod[] {
   const items = v.items;
   if (!items.every(i => i.t === 'expr')) return [{ title: 'Lista', rows: [textRow(items.map(valueText).join('; '))] }];
   const xs = items.map(i => (i as { e: Expr }).e);
-  const pods: Pod[] = [{ title: v.set ? 'Zbiór' : 'Lista', rows: [{ ml: M(`${mo(v.set ? '{' : '[')}${xs.map(toML).join(mo(';'))}${mo(v.set ? '}' : ']')}`), text: `${v.set ? '{' : '['}${xs.map(toText).join('; ')}${v.set ? '}' : ']'}` }] }];
-  if (xs.length >= 2 && xs.every(isConstant) && xs.every(x => constSign(x) !== null)) pods.push(...statsPods(xs));
+  // a long list (1:1000) is shown by its beginning and end; all of it is in the copied text
+  const shown = xs.length > LIST_SHOWN ? [...xs.slice(0, LIST_SHOWN - 4).map(toML), mi('…'), ...xs.slice(-3).map(toML)] : xs.map(toML);
+  const pods: Pod[] = [{ title: v.set ? 'Zbiór' : 'Lista', rows: [{ ml: M(`${mo(v.set ? '{' : '[')}${shown.join(mo(';'))}${mo(v.set ? '}' : ']')}`), text: `${v.set ? '{' : '['}${xs.map(toText).join('; ')}${v.set ? '}' : ']'}` }], note: xs.length > LIST_SHOWN ? `${xs.length} elementów` : undefined }];
+  if (xs.length >= 2 && xs.length <= 5000 && xs.every(isConstant) && xs.every(x => constSign(x) !== null)) pods.push(...statsPods(xs));
   return pods;
 }
-const valueText = (v: Value): string => v.t === 'expr' ? toText(v.e) : v.t === 'list' ? `{${v.items.map(valueText).join('; ')}}` : v.t === 'matrix' ? matText(v.rows) : v.parts.map(toText).join(` ${v.ops[0]} `);
+const valueText = (v: Value): string => v.t === 'expr' ? toText(v.e) : v.t === 'list' ? `${v.set ? '{' : '['}${v.items.map(valueText).join('; ')}${v.set ? '}' : ']'}` : v.t === 'matrix' ? matText(v.rows)
+  : v.t === 'fn' ? `(${v.params.join(', ')}) ↦ ${valueText(v.body)}` : v.t === 'str' ? `'${v.s}'` : v.parts.map(toText).join(` ${v.ops[0]} `);
 
 function sortedConst(xs: Expr[]): Expr[] {
   return [...xs].sort((a, b) => constSign(sub(a, b)) ?? 0);
@@ -836,8 +1005,26 @@ const vecArg = (n: Node, env: Env): Expr[] => {
 const statsArgs = (args: Node[], env: Env) => args.length === 1 ? listArg(args[0], env) : args.map(a => exprArg(a, env));
 const one = (title: string, e: Expr, note?: string): Out => ({ pods: [{ title, rows: [row(e, note ?? (isConstant(e) && !isNum(e) ? shortApprox(e) : undefined))] }], value: ex(e) });
 
-function command(name: string, args: Node[], env: Env): Out {
+/** The argument a command binds as its variable: the x of diff(f, x), integrate(f, x, 0, 1), sum(f, k, 1, n). */
+const BINDS: Record<string, number> = { diff: 1, integrate: 1, limit: 1, taylor: 1, sum: 1, product: 1, solve: 1, roots: 1, subst: 1, analyze: 1, extrema: 1, domain: 1 };
+/** The variables a command binds: they stay symbols even when the workspace gives the letter a value. */
+function bound(name: string, args: Node[]): string[] {
+  const out: string[] = [];
+  const walk = (n: Node | undefined) => {
+    if (!n) return;
+    if (n.t === 'id') out.push(n.n);
+    else if (n.t === 'rel' && n.parts[0].t === 'id') out.push(n.parts[0].n);
+    else if (n.t === 'list') n.items.forEach(walk);
+  };
+  if (Object.hasOwn(BINDS, name)) walk(args[BINDS[name]]);
+  return out;
+}
+
+function command(name: string, args: Node[], env0: Env): Out {
+  const env = shadow(env0, bound(name, args));
   switch (name) {
+    case 'clear': return clearCommand(args);
+    case 'who': return whoCommand();
     case 'simplify': { const e = simplify(exprArg(args[0], env)); return one('Postać uproszczona', e); }
     case 'expand': { const e = expand(exprArg(args[0], env)); return one('Postać rozwinięta', e); }
     case 'together': { const e = together(exprArg(args[0], env)); return one('Wspólny mianownik', e); }

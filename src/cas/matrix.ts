@@ -2,9 +2,9 @@
  * Linear algebra. Matrices of rationals go through exact fraction arithmetic; symbolic entries through
  * expressions, with a pivot accepted only when it is provably nonzero after expansion.
  */
-import { Expr, ONE, ZERO, add, div, expand, isNum, isZero, mul, neg, num, sub, sym, together } from './expr';
+import { Expr, ONE, ZERO, add, div, expand, fn, isConstant, isNum, isZero, mul, neg, num, sub, sym, together } from './expr';
 import { cancel } from './simplify';
-import { identityM } from './evaluate';
+import { identityM, matMul } from './evaluate';
 import { Q, Q0, Q1, fail, qadd, qdiv, qmul, qneg, qsub } from './q';
 
 export type M = Expr[][];
@@ -110,6 +110,23 @@ export function inverse(A: M): M {
   return R.map(r => r.slice(n));
 }
 export const transpose = (A: M): M => A[0].map((_, j) => A.map(r => r[j]));
+
+/**
+ * X with A·X = B, exactly: A square and invertible, or with more rows than columns the least-squares solution from
+ * the normal equations AᵀA·X = AᵀB (in exact arithmetic they lose nothing, unlike in floats).
+ */
+export function leftSolve(A: M, B: M): M {
+  const n = A.length, m = A[0].length;
+  if (n < m) fail('A\\b: równań jest mniej niż niewiadomych, więc rozwiązań jest nieskończenie wiele. Użyj rref albo solve.');
+  let L = A, Rt = B;
+  // Aᴴ: complex numbers conjugated, variables are real
+  if (n > m) { const At = transpose(A).map(r => r.map(e => (isConstant(e) ? fn('conj', e) : e))); L = matMul(At, A); Rt = matMul(At, B); }
+  const { R, pivots } = rref(L.map((r, i) => [...r, ...Rt[i]]));
+  if (pivots.length < m || pivots[m - 1] !== m - 1) {
+    fail(n > m ? 'A\\b: kolumny A są liniowo zależne, więc rozwiązanie najmniejszych kwadratów nie jest jednoznaczne.' : 'A\\b: macierz jest osobliwa (det = 0), układ nie ma jednoznacznego rozwiązania.');
+  }
+  return R.slice(0, m).map(r => r.slice(m).map(clean));
+}
 export const rank = (A: M) => rref(A).pivots.length;
 export function trace(A: M): Expr { square(A, 'Ślad'); return add(...A.map((r, i) => r[i])); }
 

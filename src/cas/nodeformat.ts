@@ -27,21 +27,39 @@ export const COMMAND_NAMES: Record<string, string> = {
   norm: 'norma', identity: 'macierz jednostkowa', mean: 'średnia', median: 'mediana', variance: 'wariancja', stdev: 'odchylenie standardowe',
   sort: 'sortuj', total: 'suma', degree: 'stopień', coeffs: 'współczynniki', discriminant: 'Δ', quotient: 'iloraz', remainder: 'reszta',
   polygcd: 'NWD', resultant: 'rugownik', trigexpand: 'rozwiń trygonometrycznie', trigreduce: 'linearyzuj', expandlog: 'rozwiń logarytmy',
+  clear: 'usuń zmienne', who: 'zmienne',
 };
 const ID: Record<string, string> = { pi: 'π', inf: '∞', phi: 'φ', tau: 'τ', ans: 'ans' };
-const PREC: Record<string, number> = { rel: 0, '+': 1, '-': 1, '*': 2, '/': 2, neg: 3, '^': 4, post: 5 };
-const prec = (n: Node): number => n.t === 'op' ? PREC[n.o] : n.t === 'neg' ? 3 : n.t === 'rel' ? 0 : n.t === 'post' ? 5 : n.t === 'num' && n.v.startsWith('-') ? 3 : 6;
+const PREC: Record<string, number> = { rel: 0, '+': 1, '-': 1, '*': 2, '/': 2, '.*': 2, './': 2, '\\': 2, neg: 3, '^': 4, '.^': 4, post: 5 };
+const prec = (n: Node): number => n.t === 'op' ? PREC[n.o] : n.t === 'neg' ? 3 : n.t === 'rel' || n.t === 'range' || n.t === 'lambda' || n.t === 'assign' ? 0 : n.t === 'post' ? 5 : n.t === 'num' && n.v.startsWith('-') ? 3 : 6;
 const wrap = (n: Node, need: number) => (prec(n) < need ? paren(ml(n)) : ml(n));
 const startsNum = (n: Node): boolean => n.t === 'num' || (n.t === 'op' && (n.o === '*' || n.o === '^') && startsNum(n.a)) || (n.t === 'post' && startsNum(n.a));
 
-export function nodeML(n: Node): string { return `<math display="block">${ml(n)}</math>`; }
+/** Names as the input wrote them (A, Dane): the parser reads small letters only. */
+export function spelling(raw: string, fallback: (n: string) => string | undefined = () => undefined): (n: string) => string {
+  return n => (n === 'e' || n === 'i' ? n : raw.match(new RegExp(String.raw`(?<![\p{L}\d_])${n}(?![\p{L}\d_])`, 'iu'))?.[0] ?? fallback(n) ?? n);
+}
+let spell = (n: string) => n;
+export function nodeML(n: Node, spelled?: (n: string) => string): string {
+  spell = spelled ?? (s => s);
+  try { return `<math display="block">${ml(n)}</math>`; } finally { spell = s => s; }
+}
 
 function ml(n: Node): string {
   switch (n.t) {
     case 'num': return mn(n.v.replace('.', ','));
-    case 'id': return mi(ID[n.n] ?? n.n);
+    case 'id': return mi(ID[n.n] ?? spell(n.n));
     case 'neg': return row(mo('−'), wrap(n.a, 3));
-    case 'post': return n.o === "'" ? `<msup>${row(wrap(n.a, 6))}${mo('′')}</msup>` : row(wrap(n.a, 6), mo(n.o));
+    case 'post':
+      if (n.tr) return `<msup>${row(wrap(n.a, 6))}${mi('T')}</msup>`;
+      return n.o === "'" ? `<msup>${row(wrap(n.a, 6))}${mo('′')}</msup>` : n.o === ".'" ? ml(n.a) : row(wrap(n.a, 6), mo(n.o));
+    case 'range': return row(...[n.a, ...(n.step ? [n.step] : []), n.b].map(p => wrap(p, 1)).flatMap((p, k) => (k ? [mo(':'), p] : [p])));
+    case 'index': return row(mi(spell(n.n)), paren(n.args.map(ml).join(mo(','))));
+    case 'colon': return mo(':');
+    case 'end': return mi('end', true);
+    case 'lambda': return row(paren(n.params.map(p => mi(p)).join(mo(','))), mo('↦'), ml(n.body));
+    case 'assign': return row(mi(spell(n.name)), n.params ? paren(n.params.map(p => mi(spell(p))).join(mo(','))) : '', mo(n.op === ':=' ? '≔' : '='), ml(n.value));
+    case 'str': return `<mtext>‘${esc(n.v)}’</mtext>`;
     case 'rel': return row(n.parts.map((p, k) => (k ? mo(relSym(n.ops[k - 1])) : '') + ml(p)).join(''));
     case 'list': {
       if (n.items.length && n.items.every(i => i.t === 'list') && n.bracket === '[') {
@@ -55,7 +73,10 @@ function ml(n: Node): string {
       switch (n.o) {
         case '+': return row(ml(n.a), mo('+'), wrap(n.b, 2));
         case '-': return row(ml(n.a), mo('−'), wrap(n.b, 2));
-        case '/': return `<mfrac>${row(ml(n.a))}${row(ml(n.b))}</mfrac>`;
+        case '/': case './': return `<mfrac>${row(ml(n.a))}${row(ml(n.b))}</mfrac>`;
+        case '.*': return row(wrap(n.a, 2), mo('∘'), wrap(n.b, 3));
+        case '\\': return row(wrap(n.a, 2), mo('\\'), wrap(n.b, 3));
+        case '.^': return `<msup>${row(wrap(n.a, 6))}${row(ml(n.b))}</msup>`;
         case '*': {
           const dot = startsNum(n.b) || (n.b.t === 'op' && n.b.o === '/');
           return row(wrap(n.a, 2), dot ? mo('·') : TIMES, wrap(n.b, 3));
