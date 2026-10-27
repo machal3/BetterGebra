@@ -1,7 +1,11 @@
-/** The start screen: what the three parts do, one action each, over a slowly drifting grid. */
+/**
+ * The start screen: what the three parts do, one action each, over a slowly drifting grid that lights up under the
+ * pointer. It arrives in turn (shell.css): the logo draws its curve, then the name, the question and the parts.
+ */
 import { GridBackground } from '@/components/ui/grid-background';
 import { TextReveal } from '@/components/ui/text-reveal';
 import { TipsPanel, type Tip } from '@/components/ui/tips-panel-clean';
+import { Spotlight } from './Backdrop';
 import { openSection } from './navigation';
 import { HelpButton, Logo, ThemeButton } from './Shell';
 
@@ -36,6 +40,7 @@ const TIPS: Tip[] = [
 export function Home() {
   return (
     <GridBackground className="b-home" size={48} speed={4}>
+      <Spotlight />
       <div className="b-home-corner">
         <HelpButton />
         <ThemeButton />
@@ -45,7 +50,7 @@ export function Home() {
           <Logo size={44} />
           <span>Bettergebra</span>
         </h1>
-        <TextReveal as="p" className="b-home-lead" text="Co chcesz dziś robić?" stagger={60} />
+        <TextReveal as="p" className="b-home-lead" text="Co chcesz dziś robić?" stagger={60} delay={320} />
         <TipsPanel className="b-home-tips" title="Wybierz część" tips={TIPS} showCount={false} />
       </main>
     </GridBackground>

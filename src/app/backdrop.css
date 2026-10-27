@@ -11,6 +11,27 @@
 /* faded out: nothing left to composite every frame */
 .b-backdrop:not([data-shown]) .ui-gb-lines { animation-play-state: paused; }
 
+/* The lines around the pointer (Spotlight): a disc moved by a transform, its copy of the lines drifting with the grid */
+.b-spot {
+  position: absolute; top: 0; left: 0; z-index: 0; width: 640px; height: 640px; pointer-events: none;
+  opacity: 0; transition: opacity 700ms var(--b-ease); will-change: translate, opacity;
+  background: radial-gradient(circle closest-side, var(--b-wash), transparent);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 0%, transparent 100%);
+}
+.b-spot[data-on] { opacity: 1; }
+/* two cells larger on every side: the shift back (under one cell) and the drift (one cell) stay covered */
+.b-spot-lines {
+  position: absolute; inset: calc(var(--ui-gb-size) * -2);
+  background-image:
+    linear-gradient(to right, var(--b-faint) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--b-faint) 1px, transparent 1px);
+  background-size: var(--ui-gb-size) var(--ui-gb-size);
+  animation: ui-gb-drift var(--ui-gb-speed) linear infinite;
+  will-change: transform;
+}
+.b-backdrop:not([data-shown]) .b-spot-lines { animation-play-state: paused; }
+
 /* Kalkulator: fixed under the scrolling column, brightest around the field at the top */
 .b-calc-backdrop { position: fixed; top: var(--b-topbar-h); right: 0; bottom: var(--b-bottombar-h); left: 0; }
 .b-calc-backdrop .ui-gb-grid {
@@ -26,4 +47,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .b-backdrop, .b-backdrop[data-shown] { transition: none; animation: none; }
+  .b-spot { display: none; }
 }

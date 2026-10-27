@@ -20,7 +20,7 @@ export function Logo({ size = 28 }: { size?: number }) {
   return (
     <svg className="b-logo" viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="8" />
-      <path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14" />
+      <path d="M6 23c4.5 0 5.5-14 10-14s5.5 14 10 14" pathLength={1} />
     </svg>
   );
 }
@@ -29,7 +29,7 @@ export function ThemeButton() {
   const dark = useDark();
   const label = dark ? 'Jasny motyw' : 'Ciemny motyw';
   return (
-    <Button variant="ghost" icon={dark ? <IconSun /> : <IconMoon />} aria-label={label} title={dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'} onClick={toggleTheme} />
+    <Button variant="ghost" icon={dark ? <IconSun /> : <IconMoon />} aria-label={label} title={dark ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'} onClick={e => toggleTheme(e.currentTarget)} />
   );
 }
 

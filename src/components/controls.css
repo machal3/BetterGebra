@@ -141,8 +141,20 @@
   font: 400 var(--b-fs-md)/20px var(--b-font);
   max-height: calc(100dvh - 16px); overflow: auto; overscroll-behavior: contain;
 }
-.b-popover:popover-open { animation: b-pop-in var(--b-pop) var(--b-ease); }
-@keyframes b-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+/* in out of a slight blur, out by a quicker fade; the closed state is the one it leaves to (display and the top layer
+   are kept until then, allow-discrete), @starting-style the one it opens from */
+.b-popover {
+  opacity: 0; transform: translateY(4px) scale(0.98);
+  transition: opacity var(--b-leave) ease, transform var(--b-leave) ease, filter var(--b-leave) ease,
+    overlay var(--b-leave) allow-discrete, display var(--b-leave) allow-discrete;
+}
+.b-popover:popover-open {
+  opacity: 1; transform: none; filter: none;
+  transition: opacity var(--b-pop) ease, transform var(--b-normal) var(--b-ease), filter var(--b-pop) ease,
+    overlay var(--b-pop) allow-discrete, display var(--b-pop) allow-discrete;
+}
+@starting-style { .b-popover:popover-open { opacity: 0; transform: translateY(4px) scale(0.98); filter: blur(2px); } }
+@keyframes b-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.98); filter: blur(2px); } }
 .b-popover-title { margin: 0; padding: 12px 16px 6px; font-size: var(--b-fs-title); font-weight: 500; line-height: 24px; color: var(--b-strong); }
 /* Phones: a sheet from the bottom edge, with a grip */
 @media (max-width: 767px) {
@@ -153,10 +165,13 @@
   .b-popover::before {
     content: ""; display: block; width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--b-line-hover);
   }
-  .b-popover:popover-open { animation: b-sheet-in var(--b-slow) var(--b-ease); }
-  .b-popover::backdrop { background: var(--b-backdrop); }
+  .b-popover { transform: translateY(32px); }
+  .b-popover:popover-open { transition-duration: var(--b-slow); }
+  @starting-style { .b-popover:popover-open { transform: translateY(32px); filter: none; } }
+  .b-popover::backdrop { background: transparent; transition: background-color var(--b-slow) ease, overlay var(--b-slow) allow-discrete, display var(--b-slow) allow-discrete; }
+  .b-popover:popover-open::backdrop { background: var(--b-backdrop); }
+  @starting-style { .b-popover:popover-open::backdrop { background: transparent; } }
 }
-@keyframes b-sheet-in { from { transform: translateY(24px); opacity: 0; } }
 
 /* ---------- Menu (the option menu of Smart Recommendation) ---------- */
 .b-menu-trigger {
@@ -233,6 +248,7 @@
   background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   /* a short canvas (a phone on its side): the column scrolls rather than leaving it */
   max-height: calc(100% - var(--b-inset-bottom, 0px) - 24px); overflow-y: auto; scrollbar-width: none;
+  animation: b-enter-right var(--b-enter) var(--b-ease) 140ms backwards;
 }
 .b-tool-group { display: flex; flex-direction: column; gap: 2px; }
 .b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 0.5px 0 var(--b-line-hover); }
@@ -248,7 +264,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .b-switch-thumb, .b-switch-track, .b-disclosure-chevron, .b-disclosure-panel, .b-disclosure-inner, .b-field, .b-menu-chevron, .b-swatch, .b-chip { transition: none; }
-  .b-popover:popover-open { animation: none; }
+  .b-popover, .b-popover:popover-open, .b-popover::backdrop { transition: none; }
 }
 @media (pointer: coarse) {
   .b-switch, .b-row, .b-menu-option { min-height: 44px; }

@@ -3,8 +3,25 @@
   width: min(400px, calc(100% - 32px)); margin: auto; padding: 0; border: 0; border-radius: var(--b-r-xl);
   background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-pop); font: 400 var(--b-fs-md)/20px var(--b-font);
 }
-.b-dialog::backdrop { background: var(--b-backdrop); }
-.b-dialog[open] { animation: b-pop-in var(--b-pop) var(--b-ease); }
+/* in out of a blur, the page behind dimmed and softened; out by a quicker fade (allow-discrete keeps it until then) */
+.b-dialog {
+  opacity: 0; transform: translateY(8px) scale(0.97);
+  transition: opacity var(--b-leave) ease, transform var(--b-leave) ease, filter var(--b-leave) ease,
+    overlay var(--b-leave) allow-discrete, display var(--b-leave) allow-discrete;
+}
+.b-dialog[open] {
+  opacity: 1; transform: none; filter: none;
+  transition: opacity var(--b-slow) ease, transform var(--b-enter) var(--b-ease), filter var(--b-slow) ease,
+    overlay var(--b-slow) allow-discrete, display var(--b-slow) allow-discrete;
+}
+@starting-style { .b-dialog[open] { opacity: 0; transform: translateY(8px) scale(0.97); filter: blur(var(--b-blur)); } }
+.b-dialog::backdrop {
+  background: transparent; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
+  transition: background-color var(--b-slow) ease, backdrop-filter var(--b-slow) ease, -webkit-backdrop-filter var(--b-slow) ease,
+    overlay var(--b-slow) allow-discrete, display var(--b-slow) allow-discrete;
+}
+.b-dialog[open]::backdrop { background: var(--b-backdrop); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+@starting-style { .b-dialog[open]::backdrop { background: transparent; -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); } }
 .b-dialog-body { display: grid; gap: var(--b-s2); margin: 0; padding: var(--b-s4); }
 .b-dialog-title { margin-bottom: 4px; font-size: var(--b-fs-title); font-weight: 500; line-height: 24px; color: var(--b-strong); }
 .b-dialog-actions { display: flex; justify-content: flex-end; gap: var(--b-s2); margin-top: var(--b-s3); }
@@ -44,8 +61,9 @@
   background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-pop); pointer-events: none;
   font: 500 var(--b-fs-sm)/20px var(--b-font); white-space: pre-line;
 }
-.b-tooltip:popover-open { animation: b-tip-in 200ms var(--b-ease); }
-@keyframes b-tip-in { from { opacity: 0; transform: translateY(3px); } }
+.b-tooltip { opacity: 0; transition: opacity 100ms ease, overlay 100ms allow-discrete, display 100ms allow-discrete; }
+.b-tooltip:popover-open { opacity: 1; transform: none; transition: opacity var(--b-pop) ease, transform var(--b-normal) var(--b-ease), overlay var(--b-pop) allow-discrete, display var(--b-pop) allow-discrete; }
+@starting-style { .b-tooltip:popover-open { opacity: 0; transform: translateY(3px); } }
 
 @media (max-width: 767px) {
   .b-help { width: 100%; max-width: none; max-height: calc(100dvh - 24px); margin: auto 0 0; border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; }
@@ -55,5 +73,5 @@
   .b-toaster { left: 8px; right: 8px; width: auto; bottom: calc(var(--b-bottombar-h) + 8px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .b-dialog[open], .b-tooltip:popover-open { animation: none; }
+  .b-dialog, .b-dialog[open], .b-dialog::backdrop, .b-tooltip, .b-tooltip:popover-open { transition: none; }
 }

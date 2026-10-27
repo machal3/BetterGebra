@@ -1,17 +1,18 @@
 /**
  * The side panel as a floating card over the canvas: its header (the part's name and a button that folds the card
- * up to that header, remembered), and on phones a sheet with a grip that rests at a peek, half or full height.
- * Whatever part of the canvas the card covers becomes the inset of the Wykresy and Geometria views, measured with a
- * ResizeObserver and passed on outside React, so dragging the sheet never re-renders anything.
+ * up to that header, remembered; motion.ts moves it), and on phones a sheet with a grip that rests at a peek, half or
+ * full height. Whatever part of the canvas the card covers becomes the inset of the Wykresy and Geometria views,
+ * measured with a ResizeObserver and passed on outside React, so dragging the sheet never re-renders anything.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
 import { IconChevronDown, IconPanel } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { setGeometryInset } from '../geometry/controller';
 import { NO_INSET, type Inset } from '../render/viewport';
 import { setInset } from './graph-runtime';
+import { fold } from './motion';
 
 const STORE = 'bettergebra.dock';
 type Sheet = 'peek' | 'half' | 'full';
@@ -39,10 +40,10 @@ export function Dock({ title }: { title: string }) {
   useLayoutEffect(() => { document.body.dataset.dock = open ? 'open' : 'closed'; }, [open]);
   useEffect(() => () => { delete document.body.dataset.dock; }, []);
   const toggle = () => {
-    setOpen(o => {
-      try { localStorage.setItem(STORE, o ? 'closed' : 'open'); } catch { /* just don't remember */ }
-      return !o;
-    });
+    const next = !open, apply = () => flushSync(() => setOpen(next));
+    try { localStorage.setItem(STORE, next ? 'open' : 'closed'); } catch { /* just don't remember */ }
+    const dock = document.querySelector<HTMLElement>('.b-dock');
+    if (dock) fold(dock, apply, next); else apply();
   };
 
   // The sheet's height follows its resting place and the page's height

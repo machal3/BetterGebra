@@ -9,7 +9,13 @@
   background: var(--b-card);
   box-shadow: var(--b-shadow);
   transition: box-shadow var(--b-normal) ease;
+  /* a new row arrives; shown again, the list arrives row by row */
+  animation: b-enter var(--b-enter) var(--b-ease) backwards;
 }
+.b-fn:nth-child(2) { animation-delay: calc(var(--b-stagger) * 1); }
+.b-fn:nth-child(3) { animation-delay: calc(var(--b-stagger) * 2); }
+.b-fn:nth-child(4) { animation-delay: calc(var(--b-stagger) * 3); }
+.b-fn:nth-child(n + 5) { animation-delay: calc(var(--b-stagger) * 4); }
 @media (hover: hover) { .b-fn:hover { box-shadow: var(--b-shadow-hover); } }
 /* the analysed row: a line in its colour on the left */
 .b-fn::before {

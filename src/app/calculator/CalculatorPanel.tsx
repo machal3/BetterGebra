@@ -22,6 +22,7 @@ import { CalcPlot } from './CalcPlot';
 import { DIGITS, abort, clearHistory, compute, setDigits, useCalc } from './calc-store';
 import { EXAMPLES, KEYS } from './content';
 import { Backdrop } from '../Backdrop';
+import { cascade } from '../motion';
 import './calculator.css';
 
 
@@ -63,8 +64,11 @@ function PodCard({ pod, primary, run }: { pod: Pod; primary: boolean; run: (q: s
 }
 
 function Results({ result, query, busy, run }: { result: Result; query: string; busy: boolean; run: (q: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // each answer arrives card by card
+  useLayoutEffect(() => cascade(ref.current), [result]);
   return (
-    <div className="b-calc-results" aria-live="polite" aria-busy={busy}>
+    <div ref={ref} className="b-calc-results" aria-live="polite" aria-busy={busy}>
       {result.input && (
         // the question as understood: a heading over the results, not a card of its own
         <header className="b-calc-query" data-ui-message>

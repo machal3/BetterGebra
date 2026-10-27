@@ -13,6 +13,19 @@ body {
 math { font-family: var(--b-math); }
 [hidden] { display: none !important; }
 
+/* Entrances (tokens.css, Motion): out of a slight blur, rising, from the left or the right edge, or a pen stroke */
+@keyframes b-enter { from { opacity: 0; transform: translateY(var(--b-rise)); filter: blur(var(--b-blur)); } }
+@keyframes b-enter-left { from { opacity: 0; transform: translateX(-16px) scale(0.985); filter: blur(var(--b-blur)); } }
+@keyframes b-enter-right { from { opacity: 0; transform: translateX(16px) scale(0.985); filter: blur(var(--b-blur)); } }
+@keyframes b-enter-down { from { opacity: 0; transform: translateY(-100%); } }
+@keyframes b-enter-up { from { opacity: 0; transform: translateY(100%); } }
+@keyframes b-fade { from { opacity: 0; } }
+@keyframes b-draw { from { stroke-dashoffset: 1; } }
+
+/* The theme spreads from its button as a circle (theme.ts): the new page is clipped, not cross-faded */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

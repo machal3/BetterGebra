@@ -19,6 +19,7 @@
 .b-gtop {
   position: absolute; z-index: 3; top: var(--b-s3); left: calc(var(--b-inset-left) + var(--b-s3)); right: 72px;
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-s2); pointer-events: none;
+  animation: b-enter var(--b-enter) var(--b-ease) 200ms backwards; transition: top var(--b-fold) var(--b-ease);
 }
 .b-gtop > * { pointer-events: auto; }
 /* the folded panel is a pill in the same corner: the palette goes below it */
@@ -107,7 +108,11 @@
   --c: var(--b-text);
   display: flex; align-items: center; gap: 2px; min-height: 48px; padding: 4px 4px 4px 4px; border-radius: var(--b-r-lg);
   background: var(--b-card); box-shadow: var(--b-shadow); transition: box-shadow var(--b-fast) ease;
+  animation: b-enter var(--b-enter) var(--b-ease) backwards;
 }
+.b-gobj:nth-child(2) { animation-delay: calc(var(--b-stagger) * 1); }
+.b-gobj:nth-child(3) { animation-delay: calc(var(--b-stagger) * 2); }
+.b-gobj:nth-child(n + 4) { animation-delay: calc(var(--b-stagger) * 3); }
 .b-gobj[data-free="true"] { --c: var(--b-solid); }
 .b-gobj[data-kind="polygon"], .b-gobj[data-kind="sector"] { --c: var(--geo-polygon); }
 .b-gobj[data-kind="angle"] { --c: var(--geo-angle); }

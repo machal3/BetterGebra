@@ -11,7 +11,9 @@
 /* ---------- Logo ---------- */
 .b-logo { display: block; flex: none; }
 .b-logo rect { fill: var(--b-strong); }
-.b-logo path { fill: none; stroke: var(--b-on-solid); stroke-width: 2.6; stroke-linecap: round; }
+.b-logo path { fill: none; stroke: var(--b-on-solid); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 1; }
+/* the curve draws itself again when the logo is pointed at (pathLength 1, so the dash is the whole curve) */
+@media (hover: hover) { .b-brand:hover .b-logo path { animation: b-draw 900ms var(--b-ease); } }
 
 /* ---------- Top bar: logo · mode switch (centred) · help and theme ---------- */
 .b-topbar {
@@ -26,6 +28,7 @@
   background: var(--b-panel);
   box-shadow: inset 0 -1px 0 var(--b-line);
   color: var(--b-ink);
+  animation: b-enter-down var(--b-enter) var(--b-ease) backwards;
 }
 .b-brand {
   justify-self: start;
@@ -86,6 +89,7 @@
   padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   background: var(--b-panel);
   box-shadow: inset 0 1px 0 var(--b-line);
+  animation: b-enter-up var(--b-enter) var(--b-ease) backwards;
 }
 /* Icon above a short label, so four sections fit a 360px screen with 52px targets */
 /* (the component sets its sizes on .ui-segc[data-size], also for a coarse pointer, so these need more classes) */
@@ -136,6 +140,26 @@
 }
 /* three tips: the list never needs its own scroll (the component's documented variable) */
 .ui-tpc.b-home-tips { width: min(100%, 760px); --ui-tpc-max-height: none; }
+
+/* The arrival: the logo, its curve drawn, the name, the question (TextReveal), the card and its three parts in turn */
+.b-home-brand .b-logo { animation: b-logo-in 900ms var(--b-ease) backwards; }
+.b-home-brand .b-logo path { animation: b-draw 1200ms var(--b-ease) 280ms backwards; }
+.b-home-brand > span { animation: b-enter var(--b-enter) var(--b-ease) 180ms backwards; }
+.ui-tpc.b-home-tips { animation: b-enter 720ms var(--b-ease) 480ms backwards; }
+.b-home-corner { animation: b-fade 900ms ease 700ms backwards; }
+@keyframes b-logo-in { from { opacity: 0; transform: scale(0.7) rotate(-6deg); filter: blur(6px); } }
+@media (prefers-reduced-motion: no-preference) {
+  /* the component times its tips from its own mount; here they follow the card */
+  .b-home-tips .ui-tpc__tip { animation: b-enter var(--b-enter) var(--b-ease) backwards !important; }
+  .b-home-tips .ui-tpc__tip:nth-child(1) { animation-delay: 640ms !important; }
+  .b-home-tips .ui-tpc__tip:nth-child(2) { animation-delay: 710ms !important; }
+  .b-home-tips .ui-tpc__tip:nth-child(3) { animation-delay: 780ms !important; }
+}
+/* a part pointed at lifts out of the card */
+@media (hover: hover) {
+  .b-home-tips .ui-tpc__tip { transition: background-color var(--b-normal) ease, box-shadow var(--b-normal) ease, transform var(--b-slow) var(--b-ease); }
+  .b-home-tips .ui-tpc__tip:hover { transform: translateY(-2px); background: var(--b-card); box-shadow: inset 0 0 0 0.5px var(--b-line-hover), var(--b-shadow-hover); }
+}
 
 @media (max-width: 767px) {
   .b-home-main { justify-content: flex-start; padding-top: 88px; }
