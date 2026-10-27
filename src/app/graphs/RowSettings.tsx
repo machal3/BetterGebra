@@ -180,7 +180,7 @@ export function RowSettings({ f, n, mode, onOpenChange }: { f: FnState; n: numbe
   }, [f.id, onOpenChange]);
   // Its own colour, so the heading of the sheet says which row it belongs to
   return (
-    <div ref={pop} id={`fn-settings-${f.id}`} className="b-popover b-rowset-pop" popover="auto" role="dialog" aria-label={`Ustawienia funkcji ${n}`} style={{ '--c': f.color } as React.CSSProperties} data-mode={mode}>
+    <div ref={pop} id={`fn-settings-${f.id}`} className="b-popover b-settings b-rowset-pop" popover="auto" role="dialog" aria-label={`Ustawienia funkcji ${n}`} style={{ '--c': f.color } as React.CSSProperties} data-mode={mode}>
       {open && <Settings f={f} close={() => pop.current?.hidePopover()} />}
     </div>
   );

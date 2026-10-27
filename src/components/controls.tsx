@@ -111,6 +111,45 @@ export function placePopover(pop: HTMLElement, anchor: HTMLElement, side: 'left'
   pop.style.top = `${Math.max(gap, Math.min(top, innerHeight - h - gap))}px`;
 }
 
+/**
+ * Phones, where a popover is a sheet from the bottom edge: a finger on its top (the grip, the title) drags it down,
+ * and letting go low or with a flick puts it away. Touch events, so the drag can keep the page from scrolling.
+ */
+export function initSheetDrag(): void {
+  let drag: { pop: HTMLElement; y: number; dy: number; t: number; v: number } | null = null;
+  document.addEventListener('touchstart', e => {
+    const pop = (e.target as Element).closest?.<HTMLElement>('.b-popover:popover-open'), y = e.touches[0]?.clientY;
+    if (!pop || e.touches.length > 1 || !matchMedia('(max-width: 767px)').matches || (e.target as Element).closest('button, input, [role="slider"]')) return;
+    if (y - pop.getBoundingClientRect().top > 52) return;
+    drag = { pop, y, dy: 0, t: e.timeStamp, v: 0 };
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!drag) return;
+    e.preventDefault();
+    const dy = Math.max(0, e.touches[0].clientY - drag.y);
+    drag.v = 0.6 * drag.v + 0.4 * (dy - drag.dy) / Math.max(1, e.timeStamp - drag.t);
+    drag.dy = dy;
+    drag.t = e.timeStamp;
+    drag.pop.style.translate = `0 ${dy}px`;
+  }, { passive: false });
+  const end = (e: TouchEvent) => {
+    if (!drag) return;
+    const { pop, dy, v, t } = drag;
+    drag = null;
+    if (!dy) return;
+    if (dy > 96 || (v > 0.5 && e.timeStamp - t < 120)) {
+      // it leaves from where the finger let go
+      pop.addEventListener('toggle', () => { pop.style.translate = ''; }, { once: true });
+      pop.hidePopover();
+    } else {
+      pop.style.translate = '';
+      pop.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    }
+  };
+  document.addEventListener('touchend', end);
+  document.addEventListener('touchcancel', end);
+}
+
 /** Places a popover under its anchor (above it when there is no room below), inside the window; phones: a sheet. */
 export function placeBelow(pop: HTMLElement, anchor: HTMLElement): void {
   if (matchMedia('(max-width: 767px)').matches) { pop.style.left = pop.style.top = ''; return; }

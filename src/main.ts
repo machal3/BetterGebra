@@ -12,6 +12,7 @@ import { addFunction, commit, on, restore, save, state } from './state';
 import { redrawCalcPlots } from './app/calculator/plot-engine';
 import { fitY, initCanvasInput } from './ui/canvas-input';
 import { initTooltips } from './app/tooltips';
+import { initSheetDrag } from './components/controls';
 import { openHelp } from './app/Help';
 
 if (!restore()) {
@@ -71,6 +72,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) save(
 initCanvasInput(scene);
 initGeometry();
 initTooltips();
+initSheetDrag();
 syncPanel();
 document.body.dataset.mode = state.mode;
 applyTheme();

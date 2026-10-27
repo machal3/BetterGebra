@@ -160,6 +160,8 @@
   .b-ledger { grid-template-columns: 1fr 1fr; column-gap: var(--b-s3); }
   .b-ledger > div { grid-template-columns: 1fr; gap: 2px; padding: 6px 0; }
   .b-ledger > div:nth-last-child(-n + 2) { grid-column: 1 / -1; }
+  /* an open sheet takes the lower half: the card would leave no graph to see */
+  body[data-sheet="open"] .b-analysis { display: none; }
   .b-ledger dt { font-size: var(--b-fs-sm); }
   .b-rowset-pop, .b-view { width: auto; }
 }

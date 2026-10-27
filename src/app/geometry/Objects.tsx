@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { Disclosure, ErrorText, Field, cx } from '@/components/controls';
 import { IconEye, IconEyeOff, IconSliders, IconTrash } from '@/components/icons';
+import { PHONE, useMedia } from '@/hooks/use-media';
 import { REFERENCE, definition } from '../../geometry/commands';
 import { describe, type GeoObject } from '../../geometry/construct';
 import { define, remove, select, toggleHidden } from '../../geometry/controller';
@@ -42,6 +43,8 @@ function DefinitionEditor({ o, text, done }: { o: GeoObject; text: string; done:
 
 export function Objects({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null> }) {
   const geo = useGeo();
+  // a phone names the catalogue after its button in the pane bar
+  const phone = useMedia(PHONE);
   const [problem, setProblem] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
   const names = new Map(geo.objects.map(o => [o.id, o.name]));
@@ -121,7 +124,7 @@ export function Objects({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
             <circle cx="16" cy="52" r="2.5" />
             <circle cx="76" cy="52" r="2.5" />
           </svg>
-          <p>Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>Tworzenie</b>.</p>
+          <p>Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>{phone ? 'Narzędzia' : 'Tworzenie'}</b>.</p>
         </div>
       )}
     </div>

@@ -55,7 +55,7 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
   }, [onOpenChange]);
   const close = () => pop.current?.hidePopover();
   return (
-    <div ref={pop} id="geo-view" className="b-popover b-gview" popover="auto" role="dialog" aria-labelledby="geo-view-title">
+    <div ref={pop} id="geo-view" className="b-popover b-settings b-gview" popover="auto" role="dialog" aria-labelledby="geo-view-title">
       <h3 id="geo-view-title" className="b-popover-title">Widok</h3>
       <div className="b-gview-body">
         <Switch checked={geo.grid} onChange={toggleGrid}>Kratka</Switch>

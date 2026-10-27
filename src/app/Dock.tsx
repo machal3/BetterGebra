@@ -2,13 +2,15 @@
  * The side panel as a floating card over the canvas: its header (the part's name and a button that folds the card
  * up to that header, remembered; motion.ts moves it). On phones the card is away until a button of the pane bar
  * (over the bottom of the canvas) opens one part of it as a sheet — Funkcje, Obiekty, Historia… — with a grip, a
- * half or full height and a close button, so the canvas is free the rest of the time. Whatever part of the canvas
- * the card covers becomes the inset of the Wykresy and Geometria views, measured with a ResizeObserver and passed on
- * outside React, so dragging the sheet never re-renders anything.
+ * half or full height and a close button, so the canvas is free the rest of the time. The sheet's header has tabs
+ * for the panel's other parts, and the sheet stays above the on-screen keyboard (--b-kb). Whatever part of the
+ * canvas the card covers becomes the inset of the Wykresy and Geometria views, measured with a ResizeObserver and
+ * passed on outside React, so dragging the sheet never re-renders anything.
  */
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
+import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Count } from '@/components/controls';
 import { IconChevronDown, IconClose, IconPanel } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
@@ -38,6 +40,8 @@ let pane: string | null = null;
 let lastPane: string | null = null;
 /** How high the sheet rests; a closed sheet opens at half height next time. */
 let sheet: Sheet = 'half';
+/** The parts the shown panel's pane bar opens as the sheet: the sheet's tabs. */
+let tabs: { label: string; count?: number }[] = [];
 const paneListeners = new Set<() => void>();
 export function setPane(next: string | null): void {
   if (next === pane) return;
@@ -68,6 +72,14 @@ export type PaneButton = { label: string; icon?: ReactNode; count?: number; onCl
 export function PaneBar({ panel, items }: { panel: Panel; items: PaneButton[] }) {
   const phone = useMedia(PHONE), open = usePane(), shown = usePanel() === panel;
   const host = document.getElementById('panebar');
+  // the sheet's tabs are this bar's sheet buttons
+  const key = JSON.stringify(items.filter(b => !b.onClick && !b.popover).map(({ label, count }) => ({ label, count })));
+  useLayoutEffect(() => {
+    if (!phone || !shown) return;
+    tabs = JSON.parse(key);
+    paneListeners.forEach(f => f());
+    return () => { tabs = []; };
+  }, [phone, shown, key]);
   if (!phone || !shown || !host) return null;
   return createPortal(
     <nav className="b-panebar" aria-label="Części panelu">
@@ -99,6 +111,7 @@ export function Dock({ title }: { title: string }) {
   const open = usePane();
   const [card, setCard] = useState(savedOpen);
   const height = useSyncExternalStore(subscribePane, () => sheet);
+  const parts = useSyncExternalStore(subscribePane, () => tabs);
   /** The canvas size at the last measure: the views keep what they show still only when the card alone moved. */
   const last = useRef<{ w: number; h: number; phone: boolean } | null>(null);
 
@@ -135,12 +148,13 @@ export function Dock({ title }: { title: string }) {
       const a = app.getBoundingClientRect(), d = dock.getBoundingClientRect();
       let inset: Inset = NO_INSET;
       if (a.width && d.width) {
-        // a phone: the open sheet's height (its layout height: it may still be sliding in), never more than half the
-        // canvas; with the sheet away, the pane bar. Elsewhere the open card's right edge
+        // Layout sizes, not the box on screen: the card may still be sliding in (its entrance, a sheet opening).
+        // A phone: the open sheet's height, never more than half the canvas; with the sheet away, the pane bar.
+        // Elsewhere the open card's right edge
         if (matchMedia(PHONE).matches) {
           const bar = parseFloat(getComputedStyle(app).getPropertyValue('--b-panebar-h')) || 0;
           inset = { left: 0, bottom: Math.round(open ? Math.min(dock.offsetHeight, a.height / 2) : bar) };
-        } else if (card) inset = { left: Math.round(d.right - a.left), bottom: 0 };
+        } else if (card) inset = { left: dock.offsetLeft + dock.offsetWidth, bottom: 0 };
       }
       app.style.setProperty('--b-inset-left', `${inset.left}px`);
       app.style.setProperty('--b-inset-bottom', `${inset.bottom}px`);
@@ -158,6 +172,29 @@ export function Dock({ title }: { title: string }) {
     return () => ro.disconnect();
   }, [card, phone, open]);
 
+  // The on-screen keyboard: what it covers of the page while a field is typed in, for the sheets to stay above it
+  useEffect(() => {
+    const vv = window.visualViewport, root = document.documentElement;
+    if (!vv || !phone) return;
+    const sync = () => {
+      const typing = document.activeElement?.matches('input:not([type="range"], [type="checkbox"]), textarea');
+      const kb = typing && vv.scale < 1.01 ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
+      root.style.setProperty('--b-kb', `${kb}px`);
+    };
+    sync();
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    document.addEventListener('focusin', sync);
+    document.addEventListener('focusout', sync);
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+      document.removeEventListener('focusin', sync);
+      document.removeEventListener('focusout', sync);
+      root.style.removeProperty('--b-kb');
+    };
+  }, [phone]);
+
   // Esc in the sheet puts it away
   useEffect(() => {
     const dock = document.querySelector<HTMLElement>('.b-dock');
@@ -167,13 +204,14 @@ export function Dock({ title }: { title: string }) {
     return () => dock.removeEventListener('keydown', key);
   }, [phone]);
 
-  // Dragging the sheet by its header: to the nearest height, or away when let go low; a short move is a tap
-  const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
+  // Dragging the sheet by its header: to the nearest height, or away when let go low; a flick goes one step its way
+  // (full, half, away); a short move is a tap
+  const drag = useRef<{ y: number; h: number; moved: boolean; t: number; v: number; last: number } | null>(null);
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!phone || (e.target as Element).closest('button')) return;
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { y: e.clientY, h: dock.offsetHeight, moved: false };
+    drag.current = { y: e.clientY, h: dock.offsetHeight, moved: false, t: e.timeStamp, v: 0, last: e.clientY };
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
@@ -181,6 +219,10 @@ export function Dock({ title }: { title: string }) {
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!, app = dock.parentElement!;
     if (!d.moved && Math.abs(e.clientY - d.y) < 4) return;
     d.moved = true;
+    // px per ms, downwards positive, mostly from the latest moves
+    d.v = 0.6 * d.v + 0.4 * (e.clientY - d.last) / Math.max(1, e.timeStamp - d.t);
+    d.last = e.clientY;
+    d.t = e.timeStamp;
     dock.classList.add('is-dragging');
     dock.style.setProperty('--b-sheet-h', `${Math.max(64, Math.min(app.clientHeight - 8, d.h + d.y - e.clientY))}px`);
   };
@@ -190,8 +232,10 @@ export function Dock({ title }: { title: string }) {
     if (!d?.moved) return;
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!, app = dock.parentElement!.clientHeight, h = dock.offsetHeight;
     dock.classList.remove('is-dragging');
-    if (h < sheetHeight('half', app) * 0.6) { setPane(null); return; }
-    const next: Sheet = Math.abs(sheetHeight('full', app) - h) < Math.abs(sheetHeight('half', app) - h) ? 'full' : 'half';
+    const flick = Math.abs(d.v) > 0.5 && e.timeStamp - d.t < 120 ? Math.sign(d.v) : 0;
+    if ((flick > 0 && sheet === 'half') || (!flick && h < sheetHeight('half', app) * 0.6)) { setPane(null); return; }
+    const next: Sheet = flick ? (flick < 0 ? 'full' : 'half')
+      : Math.abs(sheetHeight('full', app) - h) < Math.abs(sheetHeight('half', app) - h) ? 'full' : 'half';
     dock.style.setProperty('--b-sheet-h', `${sheetHeight(next, app)}px`);
     setSheet(next);
   };
@@ -202,7 +246,21 @@ export function Dock({ title }: { title: string }) {
     return createPortal(
       <div className="b-dock-bar" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <span className="b-dock-grip" aria-hidden="true" />
-        <h2 className="b-dock-title">{open ?? lastPane ?? title}</h2>
+        <h2 className={parts.length > 1 ? 'b-visually-hidden' : 'b-dock-title'}>{open ?? lastPane ?? title}</h2>
+        {parts.length > 1 && (
+          // the panel's other parts, one tap away
+          <SegmentedControl<string>
+            kind="tabs"
+            variant="tray"
+            size="sm"
+            fullWidth
+            className="b-dock-tabs"
+            aria-label="Części panelu"
+            value={open ?? lastPane ?? parts[0].label}
+            onChange={setPane}
+            options={parts.map(p => ({ value: p.label, label: p.label, count: p.count || undefined }))}
+          />
+        )}
         <Button
           variant="ghost"
           icon={<IconChevronDown className={full ? undefined : 'b-flip'} />}

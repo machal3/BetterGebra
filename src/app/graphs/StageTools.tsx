@@ -148,7 +148,7 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
   );
 
   return (
-    <div ref={pop} id="view-panel" className="b-popover b-view" popover="auto" role="dialog" aria-labelledby="view-title">
+    <div ref={pop} id="view-panel" className="b-popover b-settings b-view" popover="auto" role="dialog" aria-labelledby="view-title">
       <h3 id="view-title" className="b-popover-title">Widok</h3>
       {/* phones: what the short toolbar leaves out */}
       <div className="b-view-actions">

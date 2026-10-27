@@ -59,8 +59,11 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
 #panebar { display: contents; }
 @media (max-width: 767px) {
   .app { --b-panebar-h: 64px; height: calc(100dvh - var(--b-topbar-h) - var(--b-bottombar-h)); }
+  /* --b-kb: what the on-screen keyboard covers (Dock.tsx); the bottom bar is under it as well */
+  .app { --b-kb-over: max(0px, var(--b-kb, 0px) - var(--b-bottombar-h)); }
   body[data-dock] .b-dock {
-    top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: var(--b-sheet-h, 50%);
+    top: auto; left: 0; right: 0; bottom: var(--b-kb-over); width: auto; max-width: none;
+    height: var(--b-sheet-h, 50%); max-height: calc(100% - var(--b-kb-over) - 8px);
     border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; animation: none;
     transition: height var(--b-slow) var(--b-ease), transform var(--b-slow) var(--b-ease), visibility 0s;
   }
@@ -73,6 +76,8 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   body[data-dock] .b-dock.is-dragging { transition: none; }
   .b-dock-bar { position: relative; height: 52px; padding: 8px 6px 0 var(--b-s4); gap: 2px; touch-action: none; cursor: grab; }
   .b-dock-bar .ui-buttonc { --h: 40px; }
+  /* tabs for the panel's other parts, in place of the title */
+  .b-dock-tabs { flex: 1; min-width: 0; margin-right: var(--b-s2); }
   .b-dock-grip {
     display: block; position: absolute; top: 6px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--b-line-hover);
   }
