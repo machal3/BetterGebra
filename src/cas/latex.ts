@@ -24,7 +24,8 @@ const TEXT = new Set(['text', 'textrm', 'textit', 'textbf', 'mathrm', 'mathit', 
 const MATRIX = new Set(['matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'smallmatrix', 'array']);
 const LINES = new Set(['cases', 'aligned', 'align', 'align*', 'gather', 'gathered', 'split', 'eqnarray', 'system', 'alignat']);
 
-export const looksLikeLatex = (s: string) => /\\[a-zA-Z,;:! {}|[\]()]|\$|\{,\}/.test(s);
+// a command of two or more letters, or \, \{ \] …: not MATLAB's left division A\b, A \ b, A\[1; 2]
+export const looksLikeLatex = (s: string) => /\\(?:[a-zA-Z]{2,}|[,;:!{}|\])])|\$|\{,\}/.test(s);
 
 export function fromLatex(input: string): string {
   if (!looksLikeLatex(input)) return input;

@@ -50,7 +50,8 @@ export function compileDouble(e: Expr, x: string, params: Record<string, number>
       if (e.n === 'pi') return () => Math.PI;
       if (e.n === 'e') return () => Math.E;
       if (e.n === 'inf') return () => Infinity;
-      if (Object.hasOwn(params, e.n)) { const v = params[e.n]; return () => v; }
+      // read when called: an ODE or a fit changes the values without compiling again
+      if (Object.hasOwn(params, e.n)) return () => params[e.n];
       return () => NaN;
     }
     case '+': {

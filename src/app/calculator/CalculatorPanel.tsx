@@ -12,15 +12,16 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconHistory, IconList, IconStop, IconTrash } from '@/components/icons';
+import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row } from '../../cas/engine';
-import { nodeML } from '../../cas/nodeformat';
-import { parse, type Node } from '../../cas/parse';
+import { nodeML, spelling } from '../../cas/nodeformat';
+import { parse, type Node, type VarKind } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
 import { PaneBar, setPane, useShown } from '../Dock';
 import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
-import { DIGITS, abort, clearHistory, compute, setDigits, useCalc } from './calc-store';
+import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, useCalc } from './calc-store';
 import { EXAMPLES, KEYS } from './content';
 import { Backdrop } from '../Backdrop';
 import { cascade } from '../motion';
@@ -32,17 +33,29 @@ const LONG = /^[−-]?[\d.e+−-]{70,}$/;
 
 const subscribeHash = (notify: () => void) => { addEventListener('hashchange', notify); return () => removeEventListener('hashchange', notify); };
 
-/** The preview of what was typed, or why it can't be read. */
-function preview(value: string): { ml: string; error: string } {
+/** The preview of what was typed, or why it can't be read; the variables' names read as names. */
+function preview(value: string, names: Record<string, VarKind>, display: Record<string, string>): { ml: string; error: string } {
   const v = value.trim();
   if (!v) return { ml: '', error: '' };
-  try { return { ml: nodeML(parse(sugar(v))), error: '' }; } catch (e) { return { ml: '', error: (e as Error).message }; }
+  try { return { ml: nodeML(parse(sugar(v), { names }), spelling(v, n => display[n])), error: '' }; } catch (e) { return { ml: '', error: (e as Error).message }; }
+}
+
+/** A matrix too large to typeset: its entries in a table, numbered like a spreadsheet. */
+function Grid({ cells }: { cells: string[][] }) {
+  return (
+    <div className="b-pod-grid" role="region" aria-label={`Macierz, ${cells.length} wierszy`}>
+      <table>
+        <thead><tr><th scope="col" aria-label="Wiersz" />{cells[0].map((_, j) => <th key={j} scope="col">{j + 1}</th>)}</tr></thead>
+        <tbody>{cells.map((r, i) => <tr key={i}><th scope="row">{i + 1}</th>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  );
 }
 
 function RowView({ row }: { row: Row }) {
   return (
     <div className="b-pod-row">
-      {LONG.test(row.text) ? <div className="b-pod-long">{row.text}</div> : <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: row.ml }} />}
+      {row.grid ? <Grid cells={row.grid} /> : LONG.test(row.text) ? <div className="b-pod-long">{row.text}</div> : <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: row.ml }} />}
       {row.note && <span className="b-pod-row-note">{row.note}</span>}
     </div>
   );
@@ -77,6 +90,7 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
             <span className="b-calc-query-label">Wejście</span>
             <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
             {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: {result.interpreted}</p>}
+            {result.used && <p className="b-calc-query-note">Ze zmiennych: {result.used}</p>}
           </div>
           <MessageActions actions={['regenerate']} text={query} regenerating={busy} onRegenerate={() => run(query)} label="Działania na pytaniu" />
         </header>
@@ -142,10 +156,12 @@ const Placeholder = () => (
 );
 
 function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLInputElement | null> }) {
-  const { history, digits } = useCalc();
+  const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
-  const shown = preview(useDeferredValue(value));
+  const names = Object.fromEntries(Object.entries(vars).filter(([n]) => !n.startsWith('#')).map(([n, s]) => [n, s.kind]));
+  const display = Object.fromEntries(Object.entries(vars).flatMap(([n, s]) => (s.display ? [[n, s.display]] : [])));
+  const shown = preview(useDeferredValue(value), names, display);
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !history.length) return;
     e.preventDefault();
@@ -256,13 +272,40 @@ function Suggestions({ run }: { run: (q: string) => void }) {
   );
 }
 
-function Side({ run: compute }: { run: (q: string) => void }) {
-  const { history } = useCalc();
-  const shown = { history: useShown('Historia'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
+function Side({ run: compute, insert }: { run: (q: string) => void; insert: (text: string) => void }) {
+  const { history, vars } = useCalc();
+  const shown = { history: useShown('Historia'), vars: useShown('Zmienne'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
   // a question picked in a phone's sheet: the sheet steps aside for its answer
   const run = (q: string) => { setPane(null); compute(q); };
+  const entries = Object.entries(vars).filter(([n]) => !n.startsWith('#'));
   return (
     <>
+      {shown.vars && <Section
+        title="Zmienne"
+        aside={<>
+          <Button variant="ghost" icon={<IconPlus />} aria-label="Wklej dane z tabeli" title="Wklej dane z tabeli albo pliku CSV" popoverTarget={DATA_POPOVER} />
+          {entries.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Usuń wszystkie zmienne" title="Usuń wszystkie zmienne" onClick={clearVars} />}
+        </>}
+      >
+        {entries.length ? (
+          <ul className="b-vars">
+            {entries.map(([n, s]) => (
+              <li key={n} className="b-var">
+                <button type="button" className="b-row b-var-row" title={`Wstaw ${s.display ?? n} do pola`} onClick={() => { setPane(null); insert(s.display ?? n); }}>
+                  <span className="b-var-name">{s.display ?? n}{s.params ? `(${s.params.join(', ')})` : ''}</span>
+                  <span className="b-var-label">{s.label}</span>
+                  <span className="b-var-preview">{s.preview}</span>
+                </button>
+                <Button variant="ghost" className="b-var-remove" icon={<IconClose />} aria-label={`Usuń zmienną ${s.display ?? n}`} title={`Usuń ${s.display ?? n}`} onClick={() => removeVar(n)} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="b-empty">
+            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>. Dane z arkusza wkleisz przyciskiem +.</p>
+          </div>
+        )}
+      </Section>}
       {shown.history && <Section
         title="Historia"
         aside={history.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Wyczyść historię" title="Wyczyść historię" onClick={clearHistory} />}
@@ -318,7 +361,34 @@ function Side({ run: compute }: { run: (q: string) => void }) {
               <tr><td><code>limit(f, x-&gt;a)</code>, <code>granica f przy x-&gt;0+</code></td><td>granice (też jednostronne)</td></tr>
               <tr><td><code>taylor(f, x, a, n)</code>, <code>sum(f, k, 1, inf)</code></td><td>szeregi i sumy</td></tr>
               <tr><td><code>solve</code>, <code>factor</code>, <code>expand</code>, <code>simplify</code>, <code>apart</code></td><td>algebra (też po polsku: <code>rozwiąż</code>, <code>rozłóż</code>, <code>rozwiń</code>, <code>uprość</code>)</td></tr>
-              <tr><td><code>[[1, 2], [3, 4]]</code>, <code>det</code>, <code>inverse</code>, <code>eigenvalues</code></td><td>macierze</td></tr>
+              <tr><td><code>[[1, 2], [3, 4]]</code>, <code>[1 2; 3 4]</code>, <code>det</code>, <code>inverse</code>, <code>eigenvalues</code></td><td>macierze, także zapisem MATLAB-a</td></tr>
+              <tr><td><code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>p := x^2 − 1</code></td><td>zmienne; <code>=</code> z wolnymi literami po prawej to równanie, <code>:=</code> zawsze przypisuje; wielkość liter bez znaczenia</td></tr>
+              <tr><td><code>f(x) = x^2</code>, <code>g = @(x, y) x*y</code>, <code>f(3)</code></td><td>funkcje</td></tr>
+              <tr><td><code>1:5</code>, <code>0:0.5:2</code>, <code>A(2, :)</code>, <code>v(end)</code></td><td>zakresy i indeksy (od 1)</td></tr>
+              <tr><td><code>A'</code>, <code>A .* B</code>, <code>A .^ 2</code>, <code>A\b</code>, <code>[A B; C D]</code></td><td>transpozycja, działania na elementach, układ A·x = b, sklejanie</td></tr>
+              <tr><td><code>zeros(2, 3)</code>, <code>ones</code>, <code>eye</code>, <code>diag</code>, <code>linspace(0, 1, 5)</code>, <code>magic(4)</code>, <code>hilb</code></td><td>budowanie macierzy</td></tr>
+              <tr><td><code>reshape(A, 2, 3)</code>, <code>repmat</code>, <code>kron</code>, <code>triu</code>, <code>fliplr</code>, <code>circshift</code></td><td>zmiana kształtu (elementy w dół kolumn)</td></tr>
+              <tr><td><code>size</code>, <code>numel</code>, <code>length</code>, <code>find</code>, <code>any</code>, <code>all</code></td><td>pytania o macierz</td></tr>
+              <tr><td><code>sum(A)</code>, <code>sum(A, 2)</code>, <code>prod</code>, <code>cumsum</code>, <code>diff(v)</code>, <code>mean</code>, <code>sort(v, 'descend')</code></td><td>na wektorze cały, na macierzy kolumnami; <code>sum(f, k, 1, n)</code> i <code>diff(f, x)</code> jak dotąd</td></tr>
+              <tr><td><code>v &gt; 2</code>, <code>v(v &gt; 2)</code>, <code>sum(v &gt; 2)</code></td><td>porównanie elementów (1 lub 0) i wybór warunkiem</td></tr>
+              <tr><td><code>lu</code>, <code>qr</code>, <code>chol</code>, <code>svd</code>, <code>eig</code>, <code>[L, U, P] = lu(A)</code></td><td>rozkłady macierzy; dokładne, gdy się da, inaczej numeryczne i sprawdzone</td></tr>
+              <tr><td><code>cond</code>, <code>norm(A, 1)</code>, <code>pinv</code>, <code>expm</code>, <code>null</code>, <code>orth</code></td><td>uwarunkowanie, normy, pseudoodwrotność, eksponenta, jądro, baza kolumn</td></tr>
+              <tr><td><code>roots([1 -6 11 -6])</code>, <code>poly</code>, <code>polyval</code>, <code>polyder</code>, <code>conv</code>, <code>deconv</code>, <code>residue</code></td><td>wielomiany jako wektory współczynników (od najwyższej potęgi)</td></tr>
+              <tr><td><code>polyfit(x, y, 2)</code>, <code>fit(x, y, a*exp(b*x))</code></td><td>dopasowanie: wielomian (dokładnie dla danych wymiernych) i dowolny model</td></tr>
+              <tr><td><code>interp1(x, y, xq, 'spline')</code>, <code>spline</code>, <code>pchip</code>, <code>trapz</code></td><td>interpolacja (także <code>spline(x, y, 'natural')</code>) i całkowanie danych</td></tr>
+              <tr><td><code>plot(x, y)</code>, <code>scatter</code>, <code>stem</code>, <code>bar</code>, <code>histogram</code>, <code>errorbar</code>, <code>polarplot</code></td><td>wykresy danych</td></tr>
+              <tr><td><code>fzero(f, x0)</code>, <code>fminbnd(f, a, b)</code>, <code>fminsearch(@(v) …, v0)</code>, <code>fsolve</code></td><td>zera, minima, układy równań; <code>v(1)</code>, <code>v(2)</code> to składowe wektora</td></tr>
+              <tr><td><code>integral(@(x) …, a, b)</code>, <code>integral2(@(x, y) …, a, b, c, d)</code></td><td>całki (dokładnie, gdy się da)</td></tr>
+              <tr><td><code>ode45(@(t, y) …, [0 5], y0)</code>, <code>ode45(y'' = -y, [0 10], [1 0])</code>, <code>ode23</code>, <code>ode15s</code></td><td>równania różniczkowe numerycznie, sprawdzane drugim obliczeniem</td></tr>
+              <tr><td><code>dsolve(y'' + y = 0, y(0) = 1, y'(0) = 0)</code></td><td>równania różniczkowe dokładnie, sprawdzane podstawieniem</td></tr>
+              <tr><td><code>mode</code>, <code>prctile(v, 90)</code>, <code>iqr</code>, <code>skewness</code>, <code>cov</code>, <code>corrcoef</code>, <code>var(v, 1)</code></td><td>statystyka opisowa (dokładnie)</td></tr>
+              <tr><td><code>normcdf(x, μ, σ)</code>, <code>norminv</code>, <code>tcdf</code>, <code>chi2inv</code>, <code>binopdf</code>, <code>poisscdf</code>, …</td><td>rozkłady: …pdf, …cdf, …inv</td></tr>
+              <tr><td><code>fitlm(x, y)</code>, <code>rand(3)</code>, <code>randn</code>, <code>randi([1 6], 1, 10)</code>, <code>rng(42)</code></td><td>regresja z testami; liczby losowe (powtarzalne po rng)</td></tr>
+              <tr><td><code>fft(x)</code>, <code>ifft</code>, <code>fftshift</code>, <code>filter(b, a, x)</code>, <code>periodogram(x, fs)</code>, <code>angle</code></td><td>sygnały: widmo, filtry, gęstość widmowa mocy</td></tr>
+              <tr><td><code>surf(f)</code>, <code>mesh(f, [a b c d])</code>, <code>plot3([x(t), y(t), z(t)])</code>, <code>contour(f, n)</code>, <code>quiver([P, Q])</code>, <code>meshgrid</code></td><td>wykresy w przestrzeni (obrót przeciągnięciem) i pola</td></tr>
+              <tr><td>przycisk + w części Zmienne</td><td>wklejenie tabeli albo pliku CSV: kolumny jako wektory, całość jako <code>dane</code></td></tr>
+              <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
+              <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
               <tr><td><code>wykres sin x, cos x</code>, <code>wykres x^2 + y^2 = 25</code></td><td>wykresy funkcji i krzywych</td></tr>
               <tr><td><code>isprime</code>, <code>gcd</code>, <code>lcm</code>, <code>powmod</code>, <code>crt</code>, <code>totient</code></td><td>teoria liczb</td></tr>
@@ -334,12 +404,21 @@ function Side({ run: compute }: { run: (q: string) => void }) {
 
 export function CalculatorPanel() {
   const main = document.getElementById('calc'), side = document.getElementById('calc-side');
-  const { run: current, history } = useCalc();
+  const { run: current, history, vars } = useCalc();
   const [value, setValue] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const panel = usePanel();
   const hash = useSyncExternalStore(subscribeHash, () => location.hash);
   const run = (q: string) => { setValue(q); void compute(q); };
+  /** A variable's name at the caret of the field. */
+  const insert = (text: string) => {
+    const el = input.current;
+    if (!el) return;
+    const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
+    el.setRangeText(text, a, b, 'end');
+    setValue(el.value);
+    el.focus();
+  };
 
   // #kalkulator?q=… runs that question (a link to a result); otherwise the field takes the focus on wide screens
   useEffect(() => {
@@ -382,11 +461,13 @@ export function CalculatorPanel() {
         </>,
         main,
       )}
-      {side && createPortal(<Side run={run} />, side)}
+      {side && createPortal(<Side run={run} insert={insert} />, side)}
+      {createPortal(<DataImport />, document.body)}
       <PaneBar
         panel="calculator"
         items={[
           { label: 'Historia', icon: <IconHistory />, count: history.length },
+          { label: 'Zmienne', icon: <IconVariable />, count: Object.keys(vars).filter(n => !n.startsWith('#')).length },
           { label: 'Przykłady', icon: <IconList /> },
           { label: 'Zapis', icon: <IconBook /> },
         ]}

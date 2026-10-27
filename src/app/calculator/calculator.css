@@ -162,6 +162,7 @@
   position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 240px; max-height: 440px; overflow: hidden;
   border-radius: var(--b-r-lg); background: var(--plot-bg); box-shadow: inset 0 0 0 1px var(--b-line-hover);
 }
+.b-cplot-stage--3d { aspect-ratio: 4 / 3; }
 .b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
 .b-cplot-canvas.grabbing { cursor: grabbing; }
 .b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-solid); }
@@ -207,6 +208,40 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 .b-row.b-example { display: grid; gap: 1px; }
 .b-example-label { font-size: var(--b-fs-sm); color: var(--b-text); }
 .b-example-query { font: var(--b-fs-sm)/18px var(--b-mono); overflow-wrap: anywhere; }
+
+.b-vars { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.b-var { display: flex; align-items: center; gap: 2px; }
+.b-row.b-var-row { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 0; padding: 4px 8px; }
+.b-var-name { font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-strong); }
+.b-var-label { justify-self: end; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-muted); }
+.b-var-preview { grid-column: 1 / -1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-text); }
+.b-var-remove { flex: none; opacity: 0; transition: opacity var(--b-fast) ease; }
+.b-var:hover .b-var-remove, .b-var-remove:focus-visible { opacity: 1; }
+@media (hover: none) { .b-var-remove { opacity: 1; } }
+.b-empty code { font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-ink); }
+
+/* Wklej dane: a table becomes variables */
+.b-data-pop { width: min(380px, calc(100vw - 16px)); }
+.b-data-body { display: grid; gap: 10px; padding: 0 16px 16px; }
+.b-data-hint, .b-data-summary { margin: 0; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-text); }
+.b-data-hint code, .b-data-vars code { font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-ink); }
+.b-field.b-data-text { height: auto; min-height: 120px; padding: 8px 10px; resize: vertical; font-size: var(--b-fs-sm); line-height: 18px; }
+.b-data-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.b-data-file { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--b-fs-sm); color: var(--b-muted); }
+.b-data-preview { display: grid; gap: 6px; }
+.b-data-vars { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.b-data-vars li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 8px; border-radius: var(--b-r-sm); background: var(--b-wash); font-size: var(--b-fs-sm); color: var(--b-text); }
+.b-data-problem { margin: 0; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-warn); }
+.ui-buttonc.b-data-save { justify-self: end; }
+
+/* a matrix too large to typeset: its entries, numbered as in a spreadsheet */
+.b-pod-grid { min-width: 0; max-width: 100%; max-height: 360px; overflow: auto; border-radius: var(--b-r-sm); box-shadow: inset 0 0 0 1px var(--b-line); }
+.b-pod-grid table { border-collapse: separate; border-spacing: 0; font: var(--b-fs-sm)/18px var(--b-mono); font-variant-numeric: tabular-nums; color: var(--b-strong); }
+.b-pod-grid :is(th, td) { padding: 4px 10px; text-align: end; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--b-line); }
+.b-pod-grid th { position: sticky; background: var(--b-card); font-weight: 400; color: var(--b-muted); }
+.b-pod-grid thead th { top: 0; z-index: 1; }
+.b-pod-grid tbody th { left: 0; }
+.b-pod-grid thead th:first-child { left: 0; z-index: 2; }
 
 .b-syntax { width: calc(100% - 16px); margin: 4px 8px 0; border-collapse: collapse; }
 .b-syntax td { padding: 6px 0; vertical-align: top; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-text); box-shadow: inset 0 -1px 0 var(--b-line); }

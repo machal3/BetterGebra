@@ -95,6 +95,7 @@ export const IconUndo = make('Undo', <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0
 export const IconRedo = make('Redo', <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />);
 export const IconGrid = make('Grid', <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M4 12h16M12 4v16" /></>);
 export const IconAxes = make('Axes', <path d="M5.5 3.5v15h15M3.5 5.5l2-2 2 2M18.5 16.5l2 2-2 2" />);
+export const IconVariable = make('Variable', <path d="M8 4.5c-1.8 0-2.7.9-2.7 2.7v2.1c0 1.5-.8 2.4-2.3 2.7 1.5.3 2.3 1.2 2.3 2.7v2.1c0 1.8.9 2.7 2.7 2.7M16 4.5c1.8 0 2.7.9 2.7 2.7v2.1c0 1.5.8 2.4 2.3 2.7-1.5.3-2.3 1.2-2.3 2.7v2.1c0 1.8-.9 2.7-2.7 2.7M9.5 9l5 6M14.5 9l-5 6" />);
 export const IconList = make('List', <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />);
 export const IconBook = make('Book', <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11a1 1 0 0 1 1 1v15a2 2 0 0 0-2-2H4ZM20 5.5A1.5 1.5 0 0 0 18.5 4H13a1 1 0 0 0-1 1v15a2 2 0 0 1 2-2h6Z" />);
 export const IconStar = make('Star', <path d="m12 3.8 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8z" />);
