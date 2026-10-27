@@ -8,7 +8,7 @@
 import { format } from '../format';
 import { constant } from '../math';
 import { LABEL, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
-import { Viewport, minorOf, panned, tick, zoomed } from '../render/viewport';
+import { NO_INSET, Viewport, minorOf, panned, tick, zoomed, type Inset } from '../render/viewport';
 import type { View } from '../state';
 import { toast } from '../app/toast';
 import { angle as angleValue, parseInput, type Parsed } from './commands';
@@ -229,7 +229,16 @@ let pressed = false;
 let undoStack: string[] = [], redoStack: string[] = [];
 
 let canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, width = 0, height = 0, frame = 0, slop = 8;
-const vp = () => new Viewport(view, width, height);
+/** The part of the board a floating panel covers (see Inset). */
+let inset: Inset = NO_INSET;
+const vp = () => new Viewport(view, width, height, inset);
+/** The panel moved or folded: what is drawn stays where it is on screen (keep), else the view is the part beside it. */
+export function setGeometryInset(next: Inset, keep: boolean): void {
+  if (next.left === inset.left && next.bottom === inset.bottom) return;
+  if (keep && width) { const v = vp(); view = { ...view, min: view.min + (next.left - inset.left) / v.scale, cy: view.cy + (next.bottom - inset.bottom) / 2 / v.yscale }; }
+  inset = next;
+  request();
+}
 
 // --- What the panel around the board reads ---
 /** A question for a value (length, radius, angle…) the panel shows as a dialog. */
@@ -868,7 +877,7 @@ export function initGeometry(): void {
     if (!down.moved && Math.hypot(p.x - down.x, p.y - down.y) < 4) return;
     if (!down.moved && down.drag) checkpoint();
     down.moved = true;
-    if (!down.drag) { view = panned(down.view, width, down.x - p.x, p.y - down.y); request(); return; }
+    if (!down.drag) { view = panned(down.view, width, down.x - p.x, p.y - down.y, inset); request(); return; }
     const v = vp(), wx = v.fromX(p.x), wy = v.fromY(p.y);
     let dx = wx - down.drag.grab.x, dy = wy - down.drag.grab.y;
     // With the grid shown, the first point moved lands on a grid point when near one; the rest move with it.
@@ -959,8 +968,8 @@ export function exportPng(): void {
   }, 'image/png');
 }
 
-function zoom(f: number, x = width / 2, y = height / 2): void {
-  const next = zoomed(view, width, height, f, f, x, y);
+function zoom(f: number, x?: number, y?: number): void {
+  const next = zoomed(view, width, height, f, f, x, y, inset);
   if (next) { view = next; request(); clearTimeout(saveTimer); saveTimer = window.setTimeout(save, 400); }
 }
 

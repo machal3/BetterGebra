@@ -1,7 +1,7 @@
 /* Geometria: the board's overlays, the tool catalogue, the object list, the inspector and the value dialog. */
 
 /* ---------- Board ---------- */
-#geometry.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--plot-bg); }
+#geometry.stage { background: var(--plot-bg); }
 #geo-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; outline: none; }
 #geo-canvas[data-tool="move"] { cursor: default; }
 #geo-canvas[data-tool="delete"] { cursor: pointer; }
@@ -17,7 +17,7 @@
 
 /* Favourites palette and hint, top left of the board; the toolbar (graphs.css .b-toolbar) on the right */
 .b-gtop {
-  position: absolute; z-index: 3; top: var(--b-s3); left: var(--b-s3); right: 72px;
+  position: absolute; z-index: 3; top: var(--b-s3); left: calc(var(--b-inset-left) + var(--b-s3)); right: 72px;
   display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-s2); pointer-events: none;
 }
 .b-gtop > * { pointer-events: auto; }
@@ -44,8 +44,8 @@
 
 /* ---------- Inspector ---------- */
 .b-ginspect {
-  position: absolute; z-index: 3; left: var(--b-s3); bottom: var(--b-s3); display: grid; gap: var(--b-s3);
-  width: min(336px, calc(100% - 88px)); max-height: calc(100% - 120px); overflow-y: auto; overscroll-behavior: contain;
+  position: absolute; z-index: 3; left: calc(var(--b-inset-left) + var(--b-s3)); bottom: calc(var(--b-inset-bottom) + var(--b-s3)); display: grid; gap: var(--b-s3);
+  width: min(336px, calc(100% - var(--b-inset-left) - 88px)); max-height: calc(100% - var(--b-inset-bottom) - 120px); overflow-y: auto; overscroll-behavior: contain;
   padding: 8px 12px 12px; border-radius: var(--b-r-xl); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); animation: b-pop-in var(--b-slow) var(--b-ease);
 }
@@ -141,7 +141,7 @@
 @media (max-width: 767px) {
   .b-gtop { left: 8px; top: 8px; right: 60px; }
   .b-ghint { display: none; }
-  .b-ginspect { left: 8px; right: 60px; bottom: 8px; width: auto; max-height: calc(100% - 72px); }
+  .b-ginspect { left: 8px; right: 60px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(100% - var(--b-inset-bottom) - 72px); }
 }
 @media (pointer: coarse) {
   .b-gpalette-tool { width: 44px; height: 44px; }

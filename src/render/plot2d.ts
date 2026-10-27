@@ -68,11 +68,13 @@ export function drawAxes(ctx: CanvasRenderingContext2D, vp: Viewport, theme: The
   for (const y of multiples(vp.bottom, vp.top, ystep, true)) if (Math.abs(y) > ystep / 100) ys.push(y);
   // Long y labels push the pinned axis right instead of running off the canvas.
   const labelWidth = Math.max(0, ...ys.map(y => ctx.measureText(yLabel(y)).width));
-  const axisY = Math.max(14, Math.min(height - 40, vp.py(0))), axisX = Math.max(labelWidth + 14, Math.min(width - 12, vp.px(0)));
+  // An axis out of sight is pinned to the edge of the part no panel covers, with its labels
+  const { left, bottom } = vp.inset;
+  const axisY = Math.max(14, Math.min(height - bottom - 40, vp.py(0))), axisX = Math.max(left + labelWidth + 14, Math.min(width - 12, vp.px(0)));
   ctx.textAlign = 'center';
   for (const x of multiples(vp.min, vp.max, step, true)) {
     const p = vp.px(x);
-    if (Math.abs(x) > step / 100 && p > 16 && p < width - 24) text(xLabel(x), p, axisY + 16);
+    if (Math.abs(x) > step / 100 && p > left + 16 && p < width - 24) text(xLabel(x), p, axisY + 16);
   }
   ctx.textAlign = 'right';
   for (const y of ys) text(yLabel(y), axisX - 8, vp.py(y) + 4);

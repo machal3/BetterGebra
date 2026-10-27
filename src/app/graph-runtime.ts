@@ -6,7 +6,7 @@
 import { AnalysisClient } from '../analysis/client';
 import type { AnalysisResult } from '../analysis/compute';
 import { Scene } from '../render/scene';
-import { fits } from '../render/viewport';
+import { fits, type Inset } from '../render/viewport';
 import { state } from '../state';
 import { setView } from '../ui/canvas-input';
 
@@ -56,10 +56,28 @@ export const rangeChanged = range.bump;
 /** Calls back on every change of the visible range (read scene.vp for the numbers); returns the unsubscribe. */
 export const rangeSubscribe = range.subscribe;
 
+/**
+ * The floating panel moved or folded. keep: the graphs stay where they are on screen (the view grows or shrinks
+ * by what the panel uncovered or covered); otherwise (the first measure) the view simply becomes the part beside it.
+ */
+export function setInset(next: Inset, keep: boolean): void {
+  const was = scene.inset;
+  if (was.left === next.left && was.bottom === next.bottom) return;
+  if (keep && scene.width) {
+    const vp = scene.vp;
+    scene.inset = next;
+    setView({ ...state.view, min: state.view.min + (next.left - was.left) / vp.scale, cy: state.view.cy + (next.bottom - was.bottom) / 2 / vp.yscale });
+  } else {
+    scene.inset = next;
+    rangeChanged();
+    scene.request();
+  }
+}
+
 /** Sets the view from typed ranges; returns the problem, or '' when the view changed. */
 export function applyRange(x0: number, x1: number, y0: number, y1: number): string {
-  const ratio = (y1 - y0) * scene.width / (scene.height * (x1 - x0));
-  const ok = x1 > x0 && y1 > y0 && fits(x1 - x0, ratio, scene.width, scene.height) && Math.max(Math.abs(x0), Math.abs(x1)) <= 1e9 && Math.max(Math.abs(y0), Math.abs(y1)) <= 1e15
+  const { w, h } = scene.seen, ratio = (y1 - y0) * w / (h * (x1 - x0));
+  const ok = x1 > x0 && y1 > y0 && fits(x1 - x0, ratio, w, h) && Math.max(Math.abs(x0), Math.abs(x1)) <= 1e9 && Math.max(Math.abs(y0), Math.abs(y1)) <= 1e15
     // float64 must still tell the grid lines apart that far from 0
     && x1 - x0 >= 1e-10 * Math.max(Math.abs(x0), Math.abs(x1)) && y1 - y0 >= 1e-10 * Math.max(Math.abs(y0), Math.abs(y1));
   if (!ok) return 'Podaj rosnące zakresy: x o szerokości od 0,0001 do 10 000 000 (w granicach ±10⁹), y o wysokości od 0,0001 do 10¹² (w granicach ±10¹⁵), nie węższe niż 10⁻¹⁰ swoich wartości.';

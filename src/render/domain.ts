@@ -210,7 +210,7 @@ class GLPainter {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     const loc = (n: string) => p.locations.get(n) ?? null;
-    gl.uniform4f(loc('u_view'), vp.min, vp.scale, vp.view.cy, vp.yscale);
+    gl.uniform4f(loc('u_view'), vp.min, vp.scale, vp.fromY(vp.height / 2), vp.yscale);
     gl.uniform2f(loc('u_size'), vp.width, vp.height);
     gl.uniform1f(loc('u_dpr'), dpr);
     for (const u of p.uniforms) gl.uniform1f(loc(`p_${u}`), Object.hasOwn(params, u) ? params[u] : 1);

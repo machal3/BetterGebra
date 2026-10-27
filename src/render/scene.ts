@@ -11,11 +11,13 @@ import { activeFn, state, type AxisUnit, type FnState } from '../state';
 import { paintDomain } from './domain';
 import { dashPattern, dot, drawAxes, drawGrid, readTheme, traceCurve, type Theme } from './plot2d';
 import { drawParametric, paintCondition, type SetFound } from './sets';
-import { Viewport, axisSteps, minorOf } from './viewport';
+import { NO_INSET, Viewport, axisSteps, minorOf, type Inset } from './viewport';
 
 export class Scene {
   width = 0;
   height = 0;
+  /** The part of the canvas a floating panel covers (see Inset). */
+  inset: Inset = NO_INSET;
   theme: Theme = readTheme();
   analysis: AnalysisResult | null = null;
   /** The analysis, if it was made in this mode (each set's points are kept by row). */
@@ -47,7 +49,9 @@ export class Scene {
     this.hoverCtx = hover.getContext('2d')!;
   }
 
-  get vp(): Viewport { return new Viewport(state.view, this.width, this.height); }
+  get vp(): Viewport { return new Viewport(state.view, this.width, this.height, this.inset); }
+  /** Width and height of the part no panel covers. */
+  get seen(): { w: number; h: number } { return { w: this.width - this.inset.left, h: this.height - this.inset.bottom }; }
 
   resize(width: number, height: number): void {
     this.width = width; this.height = height;

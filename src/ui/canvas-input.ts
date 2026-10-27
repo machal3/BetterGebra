@@ -1,7 +1,7 @@
 /** Pan, zoom and pinch on the plot, plus its keyboard shortcuts. Every gesture just writes state.view. */
 import { compiled } from '../model';
 import type { Scene } from '../render/scene';
-import { fits, panned, zoomed } from '../render/viewport';
+import { Viewport, anchored, fits, panned, zoomed } from '../render/viewport';
 import { DEFAULT_VIEW, TRIG_VIEW, commit, state, type View } from '../state';
 import { toast } from '../app/toast';
 
@@ -21,7 +21,7 @@ export function setView(view: View): void {
 }
 
 export function zoom(fx: number, fy = fx, x?: number, y?: number): void {
-  const next = zoomed(state.view, scene.width, scene.height, fx, fy, x, y);
+  const next = zoomed(state.view, scene.width, scene.height, fx, fy, x, y, scene.inset);
   if (next) setView(next);
 }
 
@@ -42,7 +42,7 @@ export function fitY(): void {
   const p = high - low;
   if (ys[0] >= low - 3 * p) low = ys[0];
   if (ys[ys.length - 1] <= high + 3 * p) high = ys[ys.length - 1];
-  const k = scene.height * (max - min) / scene.width, span = (high - low) * 1.2 || Math.max(2, Math.abs(low) / 2);
+  const k = scene.seen.h * (max - min) / scene.seen.w, span = (high - low) * 1.2 || Math.max(2, Math.abs(low) / 2);
   setView({ ...state.view, cy: (low + high) / 2, ratio: Math.min(1e12 / k, Math.max(1e-4 / k, span / k)) });
 }
 
@@ -88,10 +88,9 @@ export function initCanvasInput(s: Scene): void {
     pointers.set(e.pointerId, p);
     const [a, b = a] = pointers.values(), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, d = Math.hypot(a.x - b.x, a.y - b.y);
     const v = gesture.view, range = (v.max - v.min) * (gesture.d && d ? gesture.d / d : 1);
-    if (!fits(range, v.ratio, scene.width, scene.height)) return;
-    const sx = scene.width / (v.max - v.min), anchorX = v.min + gesture.x / sx, anchorY = v.cy + (scene.height / 2 - gesture.y) * v.ratio / sx;
-    const min = anchorX - mx * range / scene.width;
-    setView({ ...v, min, max: min + range, cy: anchorY - (scene.height / 2 - my) * range * v.ratio / scene.width });
+    if (!fits(range, v.ratio, scene.seen.w, scene.seen.h)) return;
+    const at = new Viewport(v, scene.width, scene.height, scene.inset);
+    setView(anchored(range, v.ratio, at.fromX(gesture.x), at.fromY(gesture.y), mx, my, scene.width, scene.height, scene.inset));
   });
   const end = (e: PointerEvent) => {
     if (!pointers.delete(e.pointerId)) return;
@@ -108,7 +107,7 @@ export function initCanvasInput(s: Scene): void {
 
   canvas.addEventListener('keydown', e => {
     const moves: Record<string, [number, number]> = { ArrowLeft: [-40, 0], ArrowRight: [40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] };
-    if (moves[e.key]) { e.preventDefault(); setView(panned(state.view, scene.width, ...moves[e.key])); }
+    if (moves[e.key]) { e.preventDefault(); setView(panned(state.view, scene.width, ...moves[e.key], scene.inset)); }
     else if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(0.75); }
     else if (e.key === '-' || e.key === '−') { e.preventDefault(); zoom(4 / 3); }
     else if (e.key === '0') resetView();

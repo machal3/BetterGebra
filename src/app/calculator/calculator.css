@@ -1,6 +1,6 @@
 /* Kalkulator: the composer at the centre, result cards, plots in results, history and examples. Tokens: styles/tokens.css. */
 
-#calc.calc { position: relative; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; background: var(--b-page); }
+#calc.calc { overflow-y: auto; scrollbar-gutter: stable; background: var(--b-page); }
 .b-calc {
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-s4);
   width: min(100%, 860px); margin: 0 auto; padding: 40px 32px 72px;
@@ -184,7 +184,6 @@ button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-of
 
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
-  #calc.calc { order: -1; overflow: visible; }
   .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
   .b-calc-hero { padding-top: 8px; }
   .b-calc-hero h2 { font-size: 20px; }

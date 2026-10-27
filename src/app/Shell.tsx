@@ -8,6 +8,7 @@ import { IconCalculator, IconComplex, IconGeometry, IconGraph, IconHelp, IconMoo
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { useStore } from '@/hooks/use-store';
 import { CalculatorPanel } from './calculator/CalculatorPanel';
+import { Dock } from './Dock';
 import { GeometryPanel } from './geometry/GeometryPanel';
 import { GraphsPanel } from './graphs/GraphsPanel';
 import { openHelp } from './Help';
@@ -78,6 +79,7 @@ export function Shell({ panel }: { panel: Exclude<Panel, 'home'> }) {
         </div>
       </header>
       {phone && <nav className="b-bottombar" aria-label="Części aplikacji"><ModeSwitch section={section} bottom /></nav>}
+      <Dock title={TITLES[section]} />
       <GraphsPanel />
       <CalculatorPanel />
       <GeometryPanel />

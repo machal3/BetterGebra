@@ -92,7 +92,7 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
     // The typed range follows the view, except in the field being typed in.
     const sync = () => {
       if (!scene.width) return;
-      const vp = scene.vp;
+      const vp = scene.vp.visible;
       [vp.min, vp.max, vp.bottom, vp.top].forEach((v, i) => { const f = fields.current[i]; if (f && document.activeElement !== f) f.value = short(v); });
     };
     sync();
@@ -166,7 +166,7 @@ export function RangeCaption() {
   useEffect(() => {
     const sync = () => {
       if (!scene.width || !ref.current) return;
-      const vp = scene.vp;
+      const vp = scene.vp.visible;
       const xd = labelDigits(Math.max(Math.abs(vp.min), Math.abs(vp.max)), (vp.max - vp.min) / 10), yd = labelDigits(Math.max(Math.abs(vp.bottom), Math.abs(vp.top)), (vp.top - vp.bottom) / 10);
       ref.current.textContent = `x ∈ [${format(vp.min, xd)}; ${format(vp.max, xd)}]   y ∈ [${format(vp.bottom, yd)}; ${format(vp.top, yd)}]`;
     };
