@@ -16,7 +16,7 @@ import { cancel, expandLog, factorExpr, simplify, trigExpand } from './simplify'
 import { constSign } from './functions';
 import { det, rref, nonzero } from './matrix';
 import { CasError, Q, fail, q, qsign } from './q';
-import { BZERO, bfDiv, bfFromNumber, bfSub, bfToNumber, top } from './bigfloat';
+import { BF, BZERO, bfDiv, bfFromNumber, bfPi, bfSub, bfToNumber, top } from './bigfloat';
 import { diff } from './calculus';
 
 export interface Sol {
@@ -83,7 +83,9 @@ export function solveEquation(f: Expr, x: string): SolveResult {
       const r = numericReal(N, x, -50, 50);
       sols = r;
       numericRange = [-50, 50];
-      note = 'Nie znalazłem rozwiązania dokładnego; poniżej rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne).';
+      note = !r.length ? 'Nie znalazłem rozwiązań rzeczywistych w przedziale ⟨−50; 50⟩ (poza nim mogą istnieć).'
+        : r.some(s => s.exact) ? 'Rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne); wartości dokładne rozpoznane i sprawdzone z dokładnością do 60 cyfr.'
+        : 'Nie znalazłem rozwiązania dokładnego; poniżej rozwiązania rzeczywiste znalezione numerycznie w przedziale ⟨−50; 50⟩ (mogą istnieć inne).';
     }
   }
   // drop what isn't a solution of the original equation (zeros of the denominator, extraneous roots)
@@ -487,44 +489,124 @@ function logBothSides(N: Expr, x: string): Sol[] | null {
 
 // --- Numeric real roots ---
 
-/** Sign changes and touching zeros of f on [lo, hi], refined to ~90 digits. */
+/**
+ * Real roots of f on [lo, hi]: sign changes and touching zeros (a local minimum of |f| that reaches 0: x² = sin²x)
+ * of 4000 samples, each refined to ~90 digits with its multiplicity, and given exactly when it is a simple fraction
+ * or fraction of π at which f vanishes (sin x = x at 0). A sample that is 0 only in doubles (underflow) is dropped.
+ */
 export function numericReal(f: Expr, x: string, lo: number, hi: number): Sol[] {
-  const g = compileDouble(f, x);
-  const n = 4000, h = (hi - lo) / n;
-  const out: number[] = [];
-  let prevX = lo, prevY = g(lo);
-  for (let k = 1; k <= n; k++) {
-    const X = lo + k * h, Y = g(X);
-    if (Number.isFinite(prevY) && Number.isFinite(Y)) {
-      if (prevY === 0) out.push(prevX);
-      else if (Math.sign(prevY) !== Math.sign(Y) && Y !== 0) {
-        // bisection, then reject poles (|f| growing as the bracket shrinks)
-        let a = prevX, b = X, fa = prevY;
-        for (let j = 0; j < 80; j++) { const m = (a + b) / 2, fm = g(m); if (!Number.isFinite(fm)) break; if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
-        const m = (a + b) / 2;
-        if (Math.abs(g(m)) < 1e-6 * Math.max(1, Math.abs(prevY), Math.abs(Y))) out.push(m);
-      }
+  const g = compileDouble(f, x), abs = Math.abs;
+  const n = 4000, h = (hi - lo) / n, at = (k: number) => lo + k * h;
+  const ys = Array.from({ length: n + 1 }, (_, k) => g(at(k)));
+  const near: number[] = [];
+  for (let k = 0; k <= n; k++) {
+    const y = ys[k], p = ys[k - 1], nx = ys[k + 1];
+    if (y === 0) { near.push(at(k)); continue; }
+    if (k && Number.isFinite(p) && Number.isFinite(y) && p !== 0 && Math.sign(p) !== Math.sign(y)) {
+      // bisection, then reject poles (|f| growing as the bracket shrinks)
+      let a = at(k - 1), b = at(k), fa = p;
+      for (let j = 0; j < 80; j++) { const m = (a + b) / 2, fm = g(m); if (!Number.isFinite(fm)) break; if (Math.sign(fm) === Math.sign(fa)) { a = m; fa = fm; } else b = m; }
+      const m = (a + b) / 2;
+      if (abs(g(m)) < 1e-6 * Math.max(1, abs(p), abs(y))) near.push(m);
     }
-    prevX = X; prevY = Y;
+    // a touching zero never changes sign: the smallest |f| between the neighbours, by golden section
+    if (k && k < n && abs(y) < abs(p) && abs(y) <= abs(nx) && Math.sign(p) === Math.sign(y) && Math.sign(nx) === Math.sign(y)) {
+      let a = at(k - 1), b = at(k + 1);
+      for (let j = 0; j < 100 && b - a > 1e-15 * Math.max(1, abs(a)); j++) {
+        const c = b - (b - a) * 0.618034, d = a + (b - a) * 0.618034;
+        if (abs(g(c)) < abs(g(d))) b = d; else a = c;
+      }
+      const m = (a + b) / 2;
+      if (abs(g(m)) < 1e-8 * Math.max(1, abs(p), abs(nx))) near.push(m);
+    }
   }
-  return out.map(v => ({ exact: null, approx: refineReal(f, x, v), mult: 1, family: false }));
+  const ds: Expr[] = [f], der = (j: number): Expr | null => {
+    try { while (ds.length <= j) ds.push(diff(ds[ds.length - 1], x)); return ds[j]; } catch { return null; }
+  };
+  const out: Sol[] = [];
+  for (const v of near) {
+    const s = rootNear(f, x, v, h, der);
+    const t = s && bfToNumber(s.approx!.re);
+    if (s && !out.some(o => abs(bfToNumber(o.approx!.re) - t!) <= 1e-12 * Math.max(1, abs(t!)))) out.push(s);
+  }
+  return out.sort((a, b) => bfToNumber(a.approx!.re) - bfToNumber(b.approx!.re));
 }
-function refineReal(f: Expr, x: string, v: number): C {
-  // Newton in BigFloat on the exact expression and its exact derivative
-  let z: C = { re: bfFromNumber(v), im: BZERO };
-  let df: Expr;
-  try { df = diff(f, x); } catch { return z; }
-  for (let it = 0; it < 30; it++) {
-    try {
-      const xv = numFromBF(z);
-      const a = evalC(subst(f, x, xv), 340), b = evalC(subst(df, x, xv), 340);
-      if (!b.re.m) break;
-      const step = bfDiv(a.re, b.re, 340);
-      z = { re: bfSub(z.re, step, 340), im: BZERO };
-      if (!step.m || top(step) < top(z.re) - 320) break;
-    } catch { break; }
+
+/**
+ * The root of f near v, or null when f doesn't vanish there. Newton runs on f, then on f′, f″, …: at a root of
+ * multiplicity m it crawls on the first m − 1 of them (and would stop at the m-th root of the precision, sin x − x
+ * at 0.37 giving 0.37000000002), on f⁽ᵐ⁻¹⁾ it converges fast, and f with its first m − 1 derivatives vanishes there.
+ * Corners have no Newton (|sin x| = x/3 at 0): only an exact value can show the root there.
+ */
+function rootNear(f: Expr, x: string, v: number, h: number, der: (j: number) => Expr | null): Sol | null {
+  let z: BF | null = null;
+  for (let m = 1; m <= 5 && !z; m++) {
+    const g = der(m - 1), dg = der(m);
+    if (!g || !dg) break;
+    const r = newton(g, dg, x, v);
+    if (r && Math.abs(bfToNumber(r) - v) <= h && Array.from({ length: m }, (_, j) => der(j)!).every(d => zeroAt(d, x, numFromBF({ re: r, im: BZERO })))) z = r;
   }
-  return z;
+  const exact = recognize(f, x, z ?? bfFromNumber(v), z ? 200 : 40);
+  if (!exact && !z) return null;
+  // the multiplicity is how many of f, f′, f″, … vanish there (sin x − x at 0: 3); floor and sign have f′ = 0 everywhere
+  const at = exact ?? numFromBF({ re: z!, im: BZERO });
+  let mult = 1;
+  if (!hasStep(f)) while (mult < 5 && der(mult) && zeroAt(der(mult)!, x, at)) mult++;
+  return { exact, approx: exact ? approxOf(exact) : { re: z!, im: BZERO }, mult, family: false };
+}
+const hasStep = (e: Expr): boolean => ['floor', 'ceil', 'round', 'sign', 'frac'].some(n => isFn(e, n)) || children(e).some(hasStep);
+/** Newton in BigFloat from v, or null unless it converges quadratically (each step at least ~3 bits finer). */
+function newton(g: Expr, dg: Expr, x: string, v: number): BF | null {
+  let z = bfFromNumber(v), last = Infinity;
+  for (let it = 0; it < 40; it++) {
+    let a: C, b: C;
+    try {
+      const xv = numFromBF({ re: z, im: BZERO });
+      a = evalC(subst(g, x, xv), 340); b = evalC(subst(dg, x, xv), 340);
+    } catch { return null; }
+    if (!a.re.m) return z;
+    if (!b.re.m) return null;
+    const step = bfDiv(a.re, b.re, 340), s = top(step);
+    z = bfSub(z, step, 340);
+    if (s < Math.max(top(z), 0) - 320) return z;
+    if (it >= 3 && s > last - 3) return null;
+    last = s;
+  }
+  return null;
+}
+/** f vanishes at the constant c, up to the size of its terms there (the test checkSolution makes). */
+function zeroAt(f: Expr, x: string, c: Expr): boolean {
+  try {
+    const z = evalC(subst(f, x, c), 300);
+    return Math.max(top(z.re), top(z.im)) <= -200 + scaleOf(f, x, c);
+  } catch { return false; }
+}
+/** p/q or pπ/q (q ≤ 1000) within 2^−bits of z at which f vanishes, else null. */
+function recognize(f: Expr, x: string, z: BF, bits: number): Expr | null {
+  for (const pi of [false, true]) {
+    const r = smallFraction(pi ? bfDiv(z, bfPi(400), 400) : z, bits);
+    const c = r && (pi ? mul(num(r), PI) : num(r));
+    if (c && !(pi && isZero(c)) && zeroAt(f, x, c)) return c;
+  }
+  return null;
+}
+/** The fraction with the smallest denominator (at most 1000) within 2^−bits·max(1, |t|) of t, from its continued fraction. */
+function smallFraction(t: BF, bits: number): Q | null {
+  let n = t.m, d = 1n;
+  if (t.e >= 0) n <<= BigInt(t.e); else d <<= BigInt(-t.e);
+  const scale = (n < 0n ? -n : n) > d ? (n < 0n ? -n : n) : d;
+  let [p0, p1, q0, q1] = [0n, 1n, 1n, 0n], a = n, b = d;
+  while (b) {
+    let c = a / b;
+    if (a % b && a < 0n) c -= 1n; // floor (b > 0)
+    [p0, p1] = [p1, c * p1 + p0];
+    [q0, q1] = [q1, c * q1 + q0];
+    if (q1 > 1000n) return null;
+    const e = n * q1 - p1 * d;
+    if ((e < 0n ? -e : e) << BigInt(bits) < scale * q1) return q(p1, q1);
+    [a, b] = [b, a - c * b];
+  }
+  return null;
 }
 
 // --- Systems ---

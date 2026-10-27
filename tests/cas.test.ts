@@ -56,6 +56,28 @@ test('equations', () => {
   expect(card('(x - 1)/(x + 2) >= 0', 'Rozwiązanie')).toBe('x ∈ (−∞; −2) ∪ ⟨1; +∞)');
 });
 
+test('numeric roots: exact values, touching and multiple roots', () => {
+  const rows = (q: string) => {
+    const r = run(q);
+    if (r.error) throw new Error(`${q}: ${r.error}`);
+    return r.pods.find(p => p.title === 'Rozwiązania' || p.title === 'Rozwiązanie')!.rows.map(r => r.text + (r.note ? ` (${r.note})` : '')).join(' | ');
+  };
+  // found on purpose, not because a sample lands on 0
+  expect(rows('sin(x) = x')).toBe('x = 0 (pierwiastek 3-krotny)');
+  expect(rows('sin(x - 0.37) = x - 0.37')).toBe('x = 37/100 (pierwiastek 3-krotny)');
+  expect(rows('e^(x - 0.3) = x + 0.7')).toBe('x = 3/10 (pierwiastek 2-krotny)');
+  // touching roots don't change sign
+  expect(rows('(x - 1/3)^2 = sin(x - 1/3)^2')).toBe('x = 1/3 (pierwiastek 4-krotny)');
+  // fractions of π are recognised too
+  expect(rows('cos(x) = 1 - 2x/pi')).toBe('x = 0 | x = π/2 (≈ 1,57079632679) | x = π (≈ 3,14159265359)');
+  // no exact value: the digits of a multiple root are right all the same
+  expect(rows('e^(x - sqrt(2)) = x - sqrt(2) + 1')).toBe('x ≈ 1.4142135623730950488 (pierwiastek 2-krotny)');
+  expect(rows('sin(x - sqrt(3)) = x - sqrt(3)')).toBe('x ≈ 1.7320508075688772935 (pierwiastek 3-krotny)');
+  // a near miss is not a root
+  expect(rows('x^2 + 10^(-12) = sin(x)^2')).toBe('Brak rozwiązań.');
+  expect(rows('sin(x) = x/2')).toBe('x ≈ −1.8954942670339809471 | x = 0 | x ≈ 1.8954942670339809471');
+});
+
 test('calculus', () => {
   expect(card('granica sin(x)/x przy x->0', 'Granica')).toBe('1');
   expect(card('limit((1+1/n)^n, n->inf)', 'Granica')).toBe('e');
