@@ -25,6 +25,8 @@ export type Node =
   | { t: 'lambda'; params: string[]; body: Node }
   /** name = value, f(x, y) = body; = is an assignment only when the engine finds the right side defined */
   | { t: 'assign'; name: string; params: string[] | null; op: '=' | ':='; value: Node }
+  /** [L, U, P] = lu(A): the outputs of a command, one name each */
+  | { t: 'massign'; names: string[]; value: Node }
   | { t: 'str'; v: string };
 
 /** What a name of the workspace holds, as far as reading the input needs to know. */
@@ -60,7 +62,7 @@ export const COMMANDS: Record<string, [number, number]> = {
   fibonacci: [1, 1], lucas: [1, 1], catalan: [1, 1], powmod: [3, 3], modinv: [2, 2], crt: [2, 2], base: [2, 3], digits: [1, 2],
   contfrac: [1, 2], rationalize: [1, 2],
   det: [1, 1], inverse: [1, 1], transpose: [1, 1], rank: [1, 1], rref: [1, 1], trace: [1, 1], eigenvalues: [1, 1],
-  eigenvectors: [1, 1], charpoly: [1, 2], nullspace: [1, 1], dot: [2, 2], cross: [2, 2], norm: [1, 1], identity: [1, 1],
+  eigenvectors: [1, 1], charpoly: [1, 2], nullspace: [1, 1], dot: [2, 2], cross: [2, 2], norm: [1, 2], identity: [1, 1],
   mean: [1, Infinity], median: [1, Infinity], variance: [1, Infinity], stdev: [1, Infinity], sort: [1, Infinity], total: [1, Infinity],
   degree: [1, 2], coeffs: [1, 2], discriminant: [1, 2], quotient: [2, 3], remainder: [2, 3], polygcd: [2, 3], resultant: [3, 3],
   trigexpand: [1, 1], trigreduce: [1, 1], expandlog: [1, 1],
@@ -70,6 +72,8 @@ export const COMMANDS: Record<string, [number, number]> = {
   vander: [1, 1], toeplitz: [1, 2], repmat: [2, 3], reshape: [2, 3], kron: [2, 2], triu: [1, 2], tril: [1, 2], fliplr: [1, 1],
   flipud: [1, 1], circshift: [2, 3], size: [1, 2], numel: [1, 1], length: [1, 1], isempty: [1, 1], find: [1, 2], any: [1, 2],
   all: [1, 2], cumsum: [1, 2], cumprod: [1, 2],
+  lu: [1, 1], qr: [1, 1], chol: [1, 1], svd: [1, 1], eig: [1, 1], cond: [1, 2], pinv: [1, 1], expm: [1, 1], null: [1, 1], orth: [1, 1],
+  double: [1, 1],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -114,6 +118,8 @@ export const ALIAS: Record<string, string> = {
   zerowa: 'zeros', jedynki: 'ones', diagonalna: 'diag', przekatna: 'diag', magiczny: 'magic', hilbert: 'hilb', vandermonde: 'vander',
   kronecker: 'kron', powiel: 'repmat', przeksztalc: 'reshape', rozmiar: 'size', wymiar: 'size', znajdz: 'find', pusta: 'isempty',
   sumyczesciowe: 'cumsum', przesun: 'circshift',
+  rozkladlu: 'lu', rozkladqr: 'qr', cholesky: 'chol', rozkladsvd: 'svd', wartosciszczegolne: 'svd', uwarunkowanie: 'cond',
+  pseudoodwrotna: 'pinv', przyblizona: 'double',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;
@@ -215,16 +221,19 @@ function statements(src: string): string[] {
   return out;
 }
 const HEAD = /^\s*([a-z][a-z0-9_]*)\s*(?:\(([^()]*)\))?\s*:?=(?![=>])/;
+/** [L, U, P] = … at the start of a statement. */
+const MULTI = /^\s*\[([a-z0-9_,\s]*)\]\s*:?=(?![=>])/;
 const nameList = (s: string) => s.split(',').map(p => p.trim()).filter(p => NAME.test(p));
 /** Names the input itself defines: a = 1; b = a + 1, f(x) = …, @(t, y) …; their words must be read whole. */
 function definedNames(src: string): string[] {
   const out: string[] = [];
   for (const m of src.matchAll(/@\s*\(([^()]*)\)/g)) out.push(...nameList(m[1]));
   const first = src.match(HEAD);
-  if (first && !reserved(first[1])) {
+  if ((first && !reserved(first[1])) || MULTI.test(src)) {
     for (const piece of statements(src)) {
-      const m = piece.match(HEAD);
+      const m = piece.match(HEAD), many = piece.match(MULTI);
       if (m) out.push(m[1], ...(m[2] ? nameList(m[2]) : []));
+      if (many) out.push(...many[1].split(/[\s,]+/).filter(p => NAME.test(p)));
     }
   }
   return out.filter(n => !reserved(n));
@@ -413,6 +422,8 @@ export function parse(input: string, opts: ParseOptions = {}): Node {
       return { t: 'id', n: t };
     }
     if (Object.hasOwn(CONSTANT_WORDS, t)) return { t: 'id', n: CONSTANT_WORDS[t] };
+    // lu and qr are decompositions only when called: elsewhere l·u, q·r as before
+    if ((t === 'lu' || t === 'qr') && peek() !== '(') return { t: 'op', o: '*', a: { t: 'id', n: t[0] }, b: { t: 'id', n: t[1] } };
     if (isAlias(t)) return call(t);
     if (isWord(t) && t.length === 1) return { t: 'id', n: t };
     return fail(`Nie rozpoznaję „${t}”.`);
@@ -469,8 +480,28 @@ export function parse(input: string, opts: ParseOptions = {}): Node {
     while (RELATIONS.includes(peek())) { ops.push(take()); parts.push(range()); }
     return ops.length ? { t: 'rel', ops, parts } : parts[0];
   }
+  /** [a, b, c] = f(…), or null (the input read from where it was). */
+  function multiAssign(): Node | null {
+    const save = i, names: string[] = [];
+    take();
+    while (peek() !== undefined && NAME.test(peek()!) && !reserved(peek()!)) { names.push(take()); if (peek() === ',') take(); }
+    if (names.length && peek() === ']') {
+      take();
+      if ((peek() === '=' || peek() === ':=') && i + 1 < tokens.length) {
+        take();
+        const value = range();
+        if (i >= tokens.length || peek() === ',' || peek() === ';') {
+          if (new Set(names).size !== names.length) fail('Nazwy po lewej stronie muszą być różne.');
+          return { t: 'massign', names, value };
+        }
+      }
+    }
+    i = save;
+    return null;
+  }
   /** name = value, f(x, y) = body, name := value; anything else is a relation. */
   function statement(): Node {
+    if (opts.assign !== false && peek() === '[') { const m = multiAssign(); if (m) return m; }
     const name = peek();
     if (opts.assign === false || !name || !NAME.test(name) || reserved(name)) return relation();
     const save = i;

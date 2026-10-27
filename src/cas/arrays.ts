@@ -266,6 +266,13 @@ export function arrayReading(name: string, vals: Value[]): boolean {
   return vals.length === 1 || (vals.length === 2 && (second.t === 'str' || (second.t === 'expr' && isNum(second.e))));
 }
 
+/** [s, k] = sort(v): where each sorted element was (counted from 1; equal ones keep their order). */
+export function sortPlaces([v, o]: Value[]): Value {
+  const descend = o?.t === 'str' && /^(descend|malejaco)$/.test(o.s);
+  const A = grid(v, 'sort');
+  return along(A, dimOf(A, undefined), xs => xs.map((x, k) => [x, k] as const).sort((a, b) => (descend ? -1 : 1) * compare(a[0], b[0]) || a[1] - b[1]).map(([, k]) => num(k + 1)));
+}
+
 /** Where max(v) and min(v) are (the first place, counted from 1). */
 export function placeOf(v: Value, which: 'max' | 'min'): number | null {
   if (v.t !== 'list' || !v.items.length || !v.items.every(i => i.t === 'expr')) return null;

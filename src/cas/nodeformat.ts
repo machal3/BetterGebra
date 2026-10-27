@@ -31,7 +31,7 @@ export const COMMAND_NAMES: Record<string, string> = {
 };
 const ID: Record<string, string> = { pi: 'π', inf: '∞', phi: 'φ', tau: 'τ', ans: 'ans' };
 const PREC: Record<string, number> = { rel: 0, '+': 1, '-': 1, '*': 2, '/': 2, '.*': 2, './': 2, '\\': 2, neg: 3, '^': 4, '.^': 4, post: 5 };
-const prec = (n: Node): number => n.t === 'op' ? PREC[n.o] : n.t === 'neg' ? 3 : n.t === 'rel' || n.t === 'range' || n.t === 'lambda' || n.t === 'assign' ? 0 : n.t === 'post' ? 5 : n.t === 'num' && n.v.startsWith('-') ? 3 : 6;
+const prec = (n: Node): number => n.t === 'op' ? PREC[n.o] : n.t === 'neg' ? 3 : n.t === 'rel' || n.t === 'range' || n.t === 'lambda' || n.t === 'assign' || n.t === 'massign' ? 0 : n.t === 'post' ? 5 : n.t === 'num' && n.v.startsWith('-') ? 3 : 6;
 const wrap = (n: Node, need: number) => (prec(n) < need ? paren(ml(n)) : ml(n));
 const startsNum = (n: Node): boolean => n.t === 'num' || (n.t === 'op' && (n.o === '*' || n.o === '^') && startsNum(n.a)) || (n.t === 'post' && startsNum(n.a));
 
@@ -43,7 +43,7 @@ let spell = (n: string) => n;
 export function nodeML(n: Node, spelled?: (n: string) => string): string {
   spell = spelled ?? (s => s);
   // statements (a = 1; b = a + 1) one after another, not a set in braces
-  const body = n.t === 'list' && n.items.some(i => i.t === 'assign') ? n.items.map(ml).join(`${mo(';')}<mspace width="0.6em"/>`) : null;
+  const body = n.t === 'list' && n.items.some(i => i.t === 'assign' || i.t === 'massign') ? n.items.map(ml).join(`${mo(';')}<mspace width="0.6em"/>`) : null;
   try { return `<math display="block">${body ?? ml(n)}</math>`; } finally { spell = s => s; }
 }
 
@@ -61,6 +61,7 @@ function ml(n: Node): string {
     case 'end': return mi('end', true);
     case 'lambda': return row(paren(n.params.map(p => mi(p)).join(mo(','))), mo('↦'), ml(n.body));
     case 'assign': return row(mi(spell(n.name)), n.params ? paren(n.params.map(p => mi(spell(p))).join(mo(','))) : '', mo(n.op === ':=' ? '≔' : '='), ml(n.value));
+    case 'massign': return row(fence('[', ']', n.names.map(p => mi(spell(p))).join(mo(','))), mo('='), ml(n.value));
     case 'str': return `<mtext>‘${esc(n.v)}’</mtext>`;
     case 'rel': return row(n.parts.map((p, k) => (k ? mo(relSym(n.ops[k - 1])) : '') + ml(p)).join(''));
     case 'list': {

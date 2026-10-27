@@ -8,6 +8,7 @@ import { identityM, matMul } from './evaluate';
 import { Q, Q0, Q1, fail, qadd, qdiv, qmul, qneg, qsub } from './q';
 
 export type M = Expr[][];
+export { matMul as matMulE };
 const isQM = (m: M) => m.every(r => r.every(isNum));
 const toQ = (m: M): Q[][] => m.map(r => r.map(e => (e as { v: Q }).v));
 const fromQ = (m: Q[][]): M => m.map(r => r.map(v => num(v)));
@@ -171,4 +172,109 @@ export function dot(a: Expr[], b: Expr[]): Expr {
 export function cross(a: Expr[], b: Expr[]): Expr[] {
   if (a.length !== 3 || b.length !== 3) fail('Iloczyn wektorowy jest określony dla wektorów w ℝ³.');
   return [sub(mul(a[1], b[2]), mul(a[2], b[1])), sub(mul(a[2], b[0]), mul(a[0], b[2])), sub(mul(a[0], b[1]), mul(a[1], b[0]))];
+}
+
+// --- Exact factorizations (MATLAB's lu, chol, qr, pinv where exact arithmetic can give them) ---
+
+/** |e| roughly, to choose pivots as MATLAB does (the largest); 0 for an expression with letters. */
+const magnitude = (e: Expr, approxAbs: (e: Expr) => number) => (isConstant(e) ? approxAbs(e) : 0);
+
+/** P·A = L·U by elimination with the largest pivot of each column (provably nonzero), exactly. */
+export function luExact(A: M, approxAbs: (e: Expr) => number): { L: M; U: M; P: M } {
+  const n = A.length, m = A[0].length, k = Math.min(n, m);
+  const W = A.map(r => r.map(clean)), L: M = Array.from({ length: n }, () => Array<Expr>(k).fill(ZERO));
+  const perm = [...Array(n).keys()];
+  for (let j = 0; j < k; j++) {
+    let p = -1, best = -1;
+    for (let i = j; i < n; i++) {
+      if (!nonzero(W[i][j])) continue;
+      const g = magnitude(W[i][j], approxAbs);
+      if (p < 0 || g > best) { p = i; best = g; }
+    }
+    if (p < 0) continue;
+    [W[p], W[j]] = [W[j], W[p]]; [L[p], L[j]] = [L[j], L[p]]; [perm[p], perm[j]] = [perm[j], perm[p]];
+    for (let i = j + 1; i < n; i++) {
+      if (!nonzero(W[i][j])) { W[i][j] = ZERO; continue; }
+      const f = clean(div(W[i][j], W[j][j]));
+      L[i][j] = f;
+      W[i] = W[i].map((v, c) => (c < j ? v : c === j ? ZERO : clean(sub(v, mul(f, W[j][c])))));
+    }
+  }
+  for (let i = 0; i < k; i++) L[i][i] = ONE;
+  const U = W.slice(0, k).map((r, i) => r.map((v, j) => (j < i ? ZERO : v)));
+  const P: M = perm.map(r => Array.from({ length: n }, (_, c) => (c === r ? ONE : ZERO)));
+  return { L, U, P };
+}
+
+/**
+ * A = Rᵀ·R for a symmetric matrix of rationals, through A = L·D·Lᵀ over ℚ: R = √D·Lᵀ, so each entry has one square
+ * root at most. null when A is not positive definite.
+ */
+export function cholExact(A: M): M | null {
+  if (!isQM(A)) fail('chol: dokładnie liczę dla macierzy liczb wymiernych.');
+  const n = A.length, a = toQ(A);
+  for (let i = 0; i < n; i++) for (let j = 0; j < i; j++) if (qsub(a[i][j], a[j][i]).n) fail('chol: macierz nie jest symetryczna.');
+  const d: Q[] = [], L: Q[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? Q1 : Q0)));
+  for (let j = 0; j < n; j++) {
+    let dj = a[j][j];
+    for (let k = 0; k < j; k++) dj = qsub(dj, qmul(qmul(L[j][k], L[j][k]), d[k]));
+    if (dj.n <= 0n) return null;
+    d.push(dj);
+    for (let i = j + 1; i < n; i++) {
+      let s = a[i][j];
+      for (let k = 0; k < j; k++) s = qsub(s, qmul(qmul(L[i][k], L[j][k]), d[k]));
+      L[i][j] = qdiv(s, dj);
+    }
+  }
+  return Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (j < i ? ZERO : mul({ k: '^', b: num(d[i]), e: num(1, 2) } as Expr, num(L[j][i])))));
+}
+
+/**
+ * The QR of the classroom, exactly: Gram–Schmidt on the columns of a rational matrix of full column rank, Q with
+ * orthonormal columns (m×n), R upper triangular with a positive diagonal. null when the columns are dependent.
+ */
+export function qrExact(A: M): { Q: M; R: M } | null {
+  if (!isQM(A)) return null;
+  const a = toQ(A), m = a.length, n = a[0].length;
+  const col = (j: number) => a.map(r => r[j]);
+  const dotQ = (x: Q[], y: Q[]) => x.reduce((s, v, i) => qadd(s, qmul(v, y[i])), Q0);
+  const vs: Q[][] = [], vv: Q[] = [];
+  const R: M = Array.from({ length: n }, () => Array<Expr>(n).fill(ZERO));
+  for (let j = 0; j < n; j++) {
+    let v = col(j);
+    for (let k = 0; k < j; k++) {
+      const c = qdiv(dotQ(col(j), vs[k]), vv[k]);
+      v = v.map((x, i) => qsub(x, qmul(c, vs[k][i])));
+      // R(k, j) = aⱼ·qₖ = (aⱼ·vₖ)/‖vₖ‖
+      R[k][j] = div(num(dotQ(col(j), vs[k])), { k: '^', b: num(vv[k]), e: num(1, 2) } as Expr);
+    }
+    const nn = dotQ(v, v);
+    if (!nn.n) return null;
+    vs.push(v); vv.push(nn);
+    R[j][j] = { k: '^', b: num(nn), e: num(1, 2) } as Expr;
+  }
+  const Q: M = Array.from({ length: m }, (_, i) => Array.from({ length: n }, (_, j) => div(num(vs[j][i]), { k: '^', b: num(vv[j]), e: num(1, 2) } as Expr)));
+  return { Q, R };
+}
+
+/** Aᴴ: transposed, complex numbers conjugated (variables are real). */
+export const adjoint = (A: M): M => transpose(A).map(r => r.map(e => (isConstant(e) ? fn('conj', e) : e)));
+
+/**
+ * The Moore–Penrose inverse, exactly, from a full-rank factorization A = F·G (F the pivot columns, G the rows of the
+ * reduced echelon form): A⁺ = Gᴴ(G·Gᴴ)⁻¹(Fᴴ·F)⁻¹Fᴴ.
+ */
+export function pinvExact(A: M): M {
+  const { R, pivots } = rref(A);
+  const n = A.length, m = A[0].length, r = pivots.length;
+  if (!r) return Array.from({ length: m }, () => Array<Expr>(n).fill(ZERO));
+  const F = A.map(row => pivots.map(p => row[p])), G = R.slice(0, r);
+  const X = matMul(matMul(matMul(adjoint(G), inverse(matMul(G, adjoint(G)))), inverse(matMul(adjoint(F), F))), adjoint(F));
+  return X.map(row => row.map(clean));
+}
+/** Whether X is the Moore–Penrose inverse of A: the four Penrose equations, checked exactly. */
+export function isPinv(A: M, X: M): boolean {
+  const eq = (P: M, Q: M) => P.every((row, i) => row.every((v, j) => !nonzero(sub(v, Q[i][j]))));
+  const AX = matMul(A, X), XA = matMul(X, A);
+  return eq(matMul(AX, A), A) && eq(matMul(XA, X), X) && eq(adjoint(AX), AX) && eq(adjoint(XA), XA);
 }

@@ -3,18 +3,23 @@
  * inside expressions (diff(x³; x) + 1) are run through the hook the engine installs; variables come from the
  * workspace the engine hands over. MATLAB's notation reads as MATLAB means it: a:h:b, A(2, :), A', A .* B, A\b.
  */
-import { E, Expr, HALF, I, INF, MINUS_ONE, ONE, PI, TWO, add, div, fn, isConstant, isInt, isNum, mul, neg, num, pow, sqrt, sub, subst, sym, variables } from './expr';
+import { E, Expr, HALF, I, INF, MINUS_ONE, ONE, PI, TWO, add, div, fn, infSign, isConstant, isInt, isNum, mul, neg, num, pow, sqrt, sub, subst, sym, variables } from './expr';
+import * as D from './dense';
 import { diff } from './calculus';
 import { complexParts, constSign } from './functions';
 import { approx } from './numeric';
 import { COMMANDS, FUNCTIONS, Node } from './parse';
-import { fail, parseDecimal, qdiv, qfloor, qsub } from './q';
+import { fail, parseDecimal, qFromDouble, qToNumber, qdiv, qfloor, qsub } from './q';
 
+/**
+ * approx: numbers computed in floating point (svd of a 5×5 matrix, double(A)), as MATLAB's doubles. Their entries are
+ * the doubles' exact values; what is computed from them is rounded to doubles again and stays approximate.
+ */
 export type Value =
-  | { t: 'expr'; e: Expr }
+  | { t: 'expr'; e: Expr; approx?: true }
   /** logical: the 0 and 1 of a comparison (v > 2); as an index it picks the places of its 1s */
-  | { t: 'list'; items: Value[]; set: boolean; logical?: boolean }
-  | { t: 'matrix'; rows: Expr[][]; logical?: boolean }
+  | { t: 'list'; items: Value[]; set: boolean; logical?: boolean; approx?: true }
+  | { t: 'matrix'; rows: Expr[][]; logical?: boolean; approx?: true }
   | { t: 'rel'; ops: string[]; parts: Expr[] }
   /** @(x, y) body, f(x) = body: the body is an expression, or a list or matrix of them */
   | { t: 'fn'; params: string[]; body: Value }
@@ -93,18 +98,8 @@ export function evaluate(n: Node, env: Env): Value {
     case 'call': {
       if (Object.hasOwn(FUNCTIONS, n.n)) {
         const vals = n.args.map(a => evaluate(a, env));
-        // max(v): the largest element; of a matrix, the largest of each column, as in MATLAB
-        if ((n.n === 'max' || n.n === 'min') && vals.length === 1 && (vals[0].t === 'list' || vals[0].t === 'matrix')) {
-          const v = vals[0];
-          if (v.t === 'list') return ex(fn(n.n, ...v.items.map(x => scalar(x, n.n))));
-          if (v.rows.length === 1) return ex(fn(n.n, ...v.rows[0]));
-          return listOf(transpose(v.rows).map(col => fn(n.n, ...col)));
-        }
-        // sin(A), abs(v): each element
-        return broadcast(vals, args => {
-          if (Object.hasOwn(PARTIAL, n.n)) note(PARTIAL[n.n](args));
-          return fn(n.n, ...args);
-        }, n.n);
+        if (vals.some(isApprox)) return approxValue(functionOf(n.n, vals.map(exactly)));
+        return functionOf(n.n, vals);
       }
       if (Object.hasOwn(COMMANDS, n.n)) return env.command(n.n, n.args, env);
       return fail(`Nie znam funkcji ${n.n}.`);
@@ -130,9 +125,24 @@ export function evaluate(n: Node, env: Env): Value {
       if (body.t === 'fn' || body.t === 'rel' || body.t === 'str') fail('Wartość funkcji to wyrażenie, lista albo macierz.');
       return { t: 'fn', params: n.params, body };
     }
-    case 'assign': return fail('Przypisanie zapisz na początku, np. a = 2; a + 1.');
+    case 'assign': case 'massign': return fail('Przypisanie zapisz na początku, np. a = 2; a + 1.');
     case 'str': return { t: 'str', s: n.v };
   }
+}
+
+/** sin(A), abs(v), max(v): a function of the input's elements. */
+function functionOf(name: string, vals: Value[]): Value {
+  // max(v): the largest element; of a matrix, the largest of each column, as in MATLAB
+  if ((name === 'max' || name === 'min') && vals.length === 1 && (vals[0].t === 'list' || vals[0].t === 'matrix')) {
+    const v = vals[0];
+    if (v.t === 'list') return ex(fn(name, ...v.items.map(x => scalar(x, name))));
+    if (v.rows.length === 1) return ex(fn(name, ...v.rows[0]));
+    return listOf(transpose(v.rows).map(col => fn(name, ...col)));
+  }
+  return broadcast(vals, args => {
+    if (Object.hasOwn(PARTIAL, name)) note(PARTIAL[name](args));
+    return fn(name, ...args);
+  }, name);
 }
 
 function identifier(n: string, env: Env): Value {
@@ -162,6 +172,12 @@ export function scalar(v: Value, what: string): Expr {
 type Op = '+' | '-' | '*' | '/' | '^' | 'neg';
 
 export function arith(op: Op, a: Value, b?: Value): Value {
+  if (!isApprox(a) && !(b && isApprox(b))) return arithExact(op, a, b);
+  // approximate matrices multiply, divide and take powers in floating point, as MATLAB does
+  if (b && (a.t === 'matrix' || b.t === 'matrix')) { const r = denseOp(op, a, b); if (r) return r; }
+  return approxValue(arithExact(op, exactly(a), b && exactly(b)));
+}
+function arithExact(op: Op, a: Value, b?: Value): Value {
   for (const v of b ? [a, b] : [a]) {
     if (v.t === 'fn') fail('Funkcję wywołaj z argumentem, np. f(2); działania wykonuję na jej wartościach.');
     if (v.t === 'str') fail(`Napis '${v.s}' to nazwa opcji polecenia, nie liczba.`);
@@ -231,6 +247,7 @@ function broadcast(vals: Value[], f: (es: Expr[]) => Expr, what: string): Value 
 
 /** A .* B, A ./ B, A .^ 2: element by element (for numbers and lists the same as *, /, ^). */
 function elementwise(op: '.*' | './' | '.^', a: Value, b: Value): Value {
+  if (isApprox(a) || isApprox(b)) return approxValue(elementwise(op, exactly(a), exactly(b)));
   const o = op === '.*' ? '*' : op === './' ? '/' : '^';
   if (a.t !== 'matrix' && b.t !== 'matrix') return arith(o, a, b);
   const asMatrix = (v: Value): Value => v.t === 'list' ? { t: 'matrix', rows: [v.items.map(i => scalar(i, 'Element'))] } : v;
@@ -247,7 +264,8 @@ function conj(e: Expr): Expr {
 function transposed(v: Extract<Value, { t: 'list' | 'matrix' }>, conjugate: boolean): Value {
   const rows = v.t === 'matrix' ? v.rows : [v.items.map(i => scalar(i, 'Transpozycja'))];
   const t = transpose(rows);
-  return fromRows(conjugate ? t.map(r => r.map(conj)) : t);
+  const out = fromRows(conjugate ? t.map(r => r.map(conj)) : t);
+  return isApprox(v) ? approxValue(out) : out;
 }
 
 const HOLDS: Record<string, (s: number) => boolean> = { '=': s => s === 0, '!=': s => s !== 0, '<': s => s < 0, '>': s => s > 0, '<=': s => s <= 0, '>=': s => s >= 0 };
@@ -260,6 +278,91 @@ function compareEach(ops: string[], vals: Value[]): Value {
     return holds(s!) ? ONE : num(0);
   }, 'Porównanie');
   return v.t === 'list' || v.t === 'matrix' ? { ...v, logical: true } : v;
+}
+
+
+// --- Approximate values (≈) ---
+
+export const isApprox = (v: Value): boolean =>
+  v.t === 'expr' || v.t === 'matrix' ? !!v.approx : v.t === 'list' ? !!v.approx || v.items.some(isApprox) : false;
+/** The value with its approximate mark taken off (its entries are exact values of doubles already). */
+function exactly(v: Value): Value {
+  if (v.t === 'expr' || v.t === 'matrix') { const { approx: _, ...rest } = v; return rest as Value; }
+  if (v.t === 'list') { const { approx: _, ...rest } = v; return { ...rest, items: v.items.map(exactly) }; }
+  return v;
+}
+/** The double nearest to a real constant. */
+export function toNumber(e: Expr, what = 'Liczba'): number {
+  if (isNum(e)) return qToNumber(e.v);
+  const s = infSign(e);
+  if (s) return s * Infinity;
+  if (!isConstant(e)) return fail(`${what}: numerycznie liczę liczby, nie wyrażenia z literami.`);
+  const z = approx(e);
+  if (Math.abs(z.im) > 1e-12 * (1 + Math.abs(z.re))) fail(`${what}: numerycznie liczę tu tylko liczby rzeczywiste.`);
+  return z.re;
+}
+const fromDouble = (x: number): Expr => {
+  if (Number.isNaN(x)) return fail('Wynik numeryczny jest nieokreślony (NaN).');
+  return Number.isFinite(x) ? num(qFromDouble(x)) : x > 0 ? INF : neg(INF);
+};
+/** e rounded to doubles (both parts of a complex number), kept as the doubles' exact values. */
+export function rounded(e: Expr): Expr {
+  if (isNum(e)) return fromDouble(qToNumber(e.v));
+  if (infSign(e)) return e;
+  if (!isConstant(e)) return fail('Liczby przybliżone (≈) nie łączą się z literami; najpierw podstaw liczby.');
+  const z = approx(e);
+  const re = fromDouble(z.re);
+  return Math.abs(z.im) > 1e-300 && Math.abs(z.im) > 1e-15 * Math.abs(z.re) ? add(re, mul(I, fromDouble(z.im))) : re;
+}
+/** Every number of the value rounded to a double and marked approximate. */
+export function approxValue(v: Value): Value {
+  switch (v.t) {
+    case 'expr': return { t: 'expr', e: rounded(v.e), approx: true };
+    case 'list': return { ...v, items: v.items.map(approxValue), approx: true };
+    case 'matrix': return { ...v, rows: v.rows.map(r => r.map(rounded)), approx: true };
+    default: return v;
+  }
+}
+export const toMat = (rows: Expr[][], what = 'Macierz'): D.Mat => rows.map(r => r.map(e => toNumber(e, what)));
+/** Doubles as an approximate value: one row a list, 1×1 a number. */
+export function fromMat(M: D.Mat): Value {
+  if (M.length === 1 && M[0].length === 1) return { t: 'expr', e: fromDouble(M[0][0]), approx: true };
+  const v = fromRows(M.map(r => r.map(fromDouble)));
+  return v.t === 'list' ? { ...v, items: v.items.map(i => ({ ...i, approx: true as const })), approx: true } : { ...v, approx: true } as Value;
+}
+const matOf = (v: Value, what: string): D.Mat =>
+  v.t === 'matrix' ? toMat(v.rows, what) : v.t === 'list' ? [v.items.map(i => toNumber(scalar(i, what), what))] : [[toNumber(scalar(v, what), what)]];
+
+/** A·B, A/B and A^k with an approximate matrix: in floating point. null for what goes element by element. */
+function denseOp(op: Op, a: Value, b: Value): Value | null {
+  if (op === '*' && a.t === 'matrix' && b.t === 'matrix') return fromMat(D.mul(matOf(a, 'Macierz'), matOf(b, 'Macierz')));
+  if (op === '/' && b.t === 'matrix') {
+    const Bi = D.inverse(matOf(b, 'Macierz'));
+    if (!Bi) fail('Macierz jest (numerycznie) osobliwa, nie ma odwrotnej.');
+    return a.t === 'expr' ? fromMat(Bi!.map(r => r.map(x => x * toNumber(a.e)))) : fromMat(D.mul(matOf(a, 'Macierz'), Bi!));
+  }
+  if (op === '^' && a.t === 'matrix' && b.t === 'expr') {
+    if (!isInt(b.e)) fail('Wykładnik potęgi macierzy musi być liczbą całkowitą.');
+    let k = (b.e as { v: { n: bigint } }).v.n, base = matOf(a, 'Macierz');
+    if (base.length !== base[0].length) fail('Potęgować można tylko macierze kwadratowe.');
+    if (k < 0n) { const inv = D.inverse(base); if (!inv) fail('Macierz jest (numerycznie) osobliwa, nie ma odwrotnej.'); base = inv!; k = -k; }
+    if (k > 100000n) fail('Za duży wykładnik.');
+    let out = D.eye(base.length);
+    while (k) { if (k & 1n) out = D.mul(out, base); k >>= 1n; if (k) base = D.mul(base, base); }
+    return fromMat(out);
+  }
+  return null;
+}
+/** A\b with approximate numbers: LU for a square A, least squares through QR for a tall one. */
+function denseSolve(a: Value, b: Value): Value {
+  const A = matOf(a, 'Macierz układu');
+  const B = b.t === 'list' ? b.items.map(i => [toNumber(scalar(i, 'Prawa strona'))]) : b.t === 'matrix' ? toMat(b.rows, 'Prawa strona') : [[toNumber(scalar(b, 'Prawa strona'))]];
+  const [n, m] = [A.length, A[0].length];
+  if (B.length !== n) fail(`A\\b: A ma ${n} ${n === 1 ? 'wiersz' : 'wierszy'}, a b ${B.length}.`);
+  if (n < m) fail('A\\b: równań jest mniej niż niewiadomych, więc rozwiązań jest nieskończenie wiele.');
+  const X = n === m ? D.solve(A, B) : D.leastSquares(A, B);
+  if (!X) fail(n === m ? 'A\\b: macierz jest (numerycznie) osobliwa.' : 'A\\b: kolumny A są (numerycznie) liniowo zależne.');
+  return b.t === 'list' ? fromMat([X!.map(r => r[0])]) : fromMat(X!);
 }
 
 // --- Matrices written out: [1 2; 3 4], [A B; C D], [v w] ---
@@ -285,9 +388,14 @@ function below(blocks: Expr[][][]): Expr[][] {
 }
 
 function listValue(n: Extract<Node, { t: 'list' }>, env: Env): Value {
+  let ap = false;
+  const out = listOfItems(n, c => { const v = evaluate(c, env); if (isApprox(v)) { ap = true; return exactly(v); } return v; });
+  return ap ? approxValue(out) : out;
+}
+function listOfItems(n: Extract<Node, { t: 'list' }>, evaluate: (n: Node) => Value): Value {
   // rows written out: [[1, 2], [3, 4]], [1 2; 3 4], [A B; C D]; each row's elements as they are, not yet laid side by side
   if (n.bracket === '[' && n.items.length && n.items.every(i => i.t === 'list' && i.bracket === '[' && i.items.length)) {
-    const rows = n.items.map(r => (r as Extract<Node, { t: 'list' }>).items.map(c => evaluate(c, env)));
+    const rows = n.items.map(r => (r as Extract<Node, { t: 'list' }>).items.map(c => evaluate(c)));
     if (rows.every(r => r.every(v => v.t === 'expr'))) {
       const m = rows.map(r => r.map(v => (v as { e: Expr }).e));
       if (m.every(r => r.length === m[0].length)) return { t: 'matrix', rows: m };
@@ -299,7 +407,7 @@ function listValue(n: Extract<Node, { t: 'list' }>, env: Env): Value {
       return m.length ? fromRows(m) : { t: 'list', items: [], set: false };
     }
   }
-  const items = n.items.map(i => evaluate(i, env));
+  const items = n.items.map(i => evaluate(i));
   if (n.bracket === '[' && items.length) {
     // [A B], [v 4]: a matrix or a list computed (not written out) is laid in the row whole
     if (items.some((v, k) => v.t === 'matrix' || (v.t === 'list' && !v.set && n.items[k].t !== 'list'))) {
@@ -317,8 +425,9 @@ function listValue(n: Extract<Node, { t: 'list' }>, env: Env): Value {
 
 const MAX_RANGE = 100_000;
 function rangeValue(n: Extract<Node, { t: 'range' }>, env: Env): Value {
-  const a = scalar(evaluate(n.a, env), 'Zakres'), b = scalar(evaluate(n.b, env), 'Zakres');
-  const h = n.step ? scalar(evaluate(n.step, env), 'Krok zakresu') : ONE;
+  const vals = [evaluate(n.a, env), evaluate(n.b, env), ...(n.step ? [evaluate(n.step, env)] : [])];
+  const [a, b] = vals.map(v => scalar(v, 'Zakres')), h = n.step ? scalar(vals[2], 'Krok zakresu') : ONE;
+  const ap = vals.some(isApprox);
   if (![a, b, h].every(isConstant)) fail('Zakres a:h:b potrzebuje liczb, np. 0:0.5:3.');
   let count: number;
   if (isNum(a) && isNum(b) && isNum(h)) {
@@ -336,13 +445,15 @@ function rangeValue(n: Extract<Node, { t: 'range' }>, env: Env): Value {
     count = steps < -1e-10 ? 0 : Math.floor(steps + 1e-10) + 1;
     if (count > MAX_RANGE) fail('Zakres ma ponad 100 000 elementów.');
   }
-  return listOf(Array.from({ length: count }, (_, k) => add(a, mul(num(k), h))));
+  const out = listOf(Array.from({ length: count }, (_, k) => add(a, mul(num(k), h))));
+  return ap ? approxValue(out) : out;
 }
 
 // --- A(i, j), v(k), f(x) ---
 
 /** f applied to arguments; f(1:3) to each element when its value is a number. */
 export function apply(f: FnValue, args: Value[], name = 'Funkcja'): Value {
+  if (args.some(isApprox)) return approxValue(apply(f, args.map(exactly), name));
   if (args.length !== f.params.length) fail(`${name} przyjmuje ${f.params.length} ${f.params.length === 1 ? 'argument' : 'argumenty'}: ${name}(${f.params.join(', ')}).`);
   // all at once: f(x, y) at (y, x) swaps them
   const marks = f.params.map((_, k) => sym(`#${k}`));
@@ -356,6 +467,7 @@ export function apply(f: FnValue, args: Value[], name = 'Funkcja'): Value {
 }
 
 function indexValue(name: string, v: Value, args: Node[], env: Env): Value {
+  if (isApprox(v)) return approxValue(indexValue(name, exactly(v), args, env));
   if (v.t === 'fn') return apply(v, args.map(a => evaluate(a, env)), name);
   if (v.t === 'expr') {
     // n(2) of a number: a product, as it was before there were variables
@@ -419,6 +531,7 @@ export function setLeftSolve(f: typeof hooks.leftSolve) { hooks.leftSolve = f; }
 /** A\b: the x of A·x = b (a\b of numbers is b/a). */
 function leftDivide(a: Value, b: Value): Value {
   if (a.t === 'expr') return arith('/', b, a);
+  if (isApprox(a) || isApprox(b)) return denseSolve(a, b);
   if (a.t !== 'matrix') return fail('A\\b: po lewej stronie macierz układu, np. [2 1; 1 3]\\[3; 5].');
   const B = b.t === 'matrix' ? b.rows
     : b.t === 'list' ? b.items.map(i => [scalar(i, 'Prawa strona')])

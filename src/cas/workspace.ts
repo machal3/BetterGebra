@@ -4,10 +4,11 @@
  * The worker holds nothing between questions (a newer question ends it), so the page sends the workspace with each.
  */
 import { Expr, same, variables } from './expr';
-import { Env, Value, Vars, evaluate } from './evaluate';
+import { Env, Value, Vars, evaluate, isApprox } from './evaluate';
 import { toCode, toText } from './format';
 import { VarKind, parse } from './parse';
 import { fail } from './q';
+import { approx as approxNum } from './numeric';
 
 export interface Saved {
   kind: VarKind;
@@ -35,7 +36,8 @@ function code(v: Value): string {
       const inner = v.items.map(code).join(', ');
       return v.set ? `{${inner}}` : `[${inner}]`;
     }
-    case 'matrix': return `[${v.rows.map(r => `[${r.map(toCode).join(', ')}]`).join(', ')}]`;
+    // rows split by ; so that a column [a; b] reads back as a column, not as the list [a, b]
+    case 'matrix': return `[${v.rows.map(r => r.map(toCode).join(', ')).join('; ')}]`;
     default: return fail('Tej wartości nie umiem zapamiętać jako zmiennej.');
   }
 }
@@ -50,13 +52,22 @@ export function load(s: Saved, env: Env): Value {
 function sameValue(a: Value, b: Value): boolean {
   if (a.t === 'expr' && b.t === 'expr') return same(a.e, b.e);
   if (a.t === 'list' && b.t === 'list') return a.set === b.set && a.items.length === b.items.length && a.items.every((x, k) => sameValue(x, b.items[k]));
+  // a matrix of one row is the list of its entries (a row vector)
+  if (a.t === 'matrix' && a.rows.length === 1 && b.t === 'list') return sameValue({ t: 'list', items: a.rows[0].map(e => ({ t: 'expr', e })), set: false }, b);
   if (a.t === 'matrix' && b.t === 'matrix') return a.rows.length === b.rows.length && a.rows.every((r, i) => r.length === b.rows[i].length && r.every((x, j) => same(x, b.rows[i][j])));
   if (a.t === 'fn' && b.t === 'fn') return a.params.join() === b.params.join() && sameValue(a.body, b.body);
   return false;
 }
 
 const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+/** An approximate number as MATLAB's short format shows it. */
+const approxShort = (e: Expr) => { const z = approxNum(e); const f = (x: number) => (Number.isInteger(x) ? String(x) : String(Number(x.toPrecision(5)))); return z.im ? `${f(z.re)}${z.im < 0 ? '−' : '+'}${f(Math.abs(z.im))}i` : f(z.re); };
 function textOf(v: Value): string {
+  if (isApprox(v)) {
+    if (v.t === 'expr') return approxShort(v.e);
+    if (v.t === 'list') return `[${v.items.slice(0, 12).map(i => (i.t === 'expr' ? approxShort(i.e) : '…')).join(', ')}${v.items.length > 12 ? ', …' : ''}]`;
+    if (v.t === 'matrix') return `[${v.rows.slice(0, 4).map(r => r.slice(0, 6).map(approxShort).join(' ') + (r.length > 6 ? ' …' : '')).join('; ')}${v.rows.length > 4 ? '; …' : ''}]`;
+  }
   switch (v.t) {
     case 'expr': return toText(v.e);
     case 'list': return `${v.set ? '{' : '['}${v.items.slice(0, 12).map(textOf).join(', ')}${v.items.length > 12 ? ', …' : ''}${v.set ? '}' : ']'}`;
@@ -78,7 +89,9 @@ function labelOf(v: Value): string {
 /** The value as stored, or an error saying why it can't be. */
 export function save(v: Value, env: Env): Saved {
   const params = v.t === 'fn' ? v.params : undefined;
-  const s: Saved = { kind: kindOf(v), code: code(v.t === 'fn' ? v.body : v), ...(params ? { params } : {}), label: labelOf(v), preview: short(textOf(v)) };
+  // an approximate value is stored as double(…) of the doubles' exact values, and read back approximate
+  const body = code(v.t === 'fn' ? v.body : v);
+  const s: Saved = { kind: kindOf(v), code: isApprox(v) ? `double(${body})` : body, ...(params ? { params } : {}), label: labelOf(v) + (isApprox(v) ? ' ≈' : ''), preview: short(textOf(v)) };
   if (s.code.length > MAX_CODE) fail('Ta wartość jest za duża, by ją zapamiętać jako zmienną.');
   let back: Value | null = null;
   try { back = load(s, env); } catch { back = null; }

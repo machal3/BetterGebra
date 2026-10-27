@@ -367,6 +367,9 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>size</code>, <code>numel</code>, <code>length</code>, <code>find</code>, <code>any</code>, <code>all</code></td><td>pytania o macierz</td></tr>
               <tr><td><code>sum(A)</code>, <code>sum(A, 2)</code>, <code>prod</code>, <code>cumsum</code>, <code>diff(v)</code>, <code>mean</code>, <code>sort(v, 'descend')</code></td><td>na wektorze cały, na macierzy kolumnami; <code>sum(f, k, 1, n)</code> i <code>diff(f, x)</code> jak dotąd</td></tr>
               <tr><td><code>v &gt; 2</code>, <code>v(v &gt; 2)</code>, <code>sum(v &gt; 2)</code></td><td>porównanie elementów (1 lub 0) i wybór warunkiem</td></tr>
+              <tr><td><code>lu</code>, <code>qr</code>, <code>chol</code>, <code>svd</code>, <code>eig</code>, <code>[L, U, P] = lu(A)</code></td><td>rozkłady macierzy; dokładne, gdy się da, inaczej numeryczne i sprawdzone</td></tr>
+              <tr><td><code>cond</code>, <code>norm(A, 1)</code>, <code>pinv</code>, <code>expm</code>, <code>null</code>, <code>orth</code></td><td>uwarunkowanie, normy, pseudoodwrotność, eksponenta, jądro, baza kolumn</td></tr>
+              <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
               <tr><td><code>wykres sin x, cos x</code>, <code>wykres x^2 + y^2 = 25</code></td><td>wykresy funkcji i krzywych</td></tr>

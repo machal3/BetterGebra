@@ -78,6 +78,15 @@ export function qToNumber(a: Q): number {
   return Number(n) / Number(d);
 }
 
+/** The exact value of a finite double, m·2^e, as a fraction (0.1 is 3602879701896397/36028797018963968). */
+export function qFromDouble(x: number): Q {
+  if (!Number.isFinite(x)) fail('Liczba nieskończona albo nieokreślona.');
+  if (Number.isInteger(x)) return q(BigInt(x));
+  let m = x, e = 0;
+  while (!Number.isInteger(m)) { m *= 2; e++; }
+  return q(BigInt(m), 1n << BigInt(e));
+}
+
 /** Exact value of a decimal literal: "2.5", ".5", "1e-3", "1,5". */
 export function parseDecimal(s: string): Q {
   const m = s.replace(',', '.').match(/^(\d*)\.?(\d*)(?:e([+-]?\d+))?$/i);
