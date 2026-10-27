@@ -14,11 +14,13 @@ import { paintCondition } from '../../render/sets';
 import { Viewport, axisSteps, panned, zoomed } from '../../render/viewport';
 import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../../state';
 import { toast } from '../toast';
+import { redraw3dPlots } from './plot3d';
 
 /** Every plot on the page redraws when the theme changes; plots no longer in the page drop out. */
 const live = new Set<() => void>();
 export function redrawCalcPlots(): void {
   for (const draw of live) draw();
+  redraw3dPlots();
 }
 
 export const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];

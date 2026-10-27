@@ -385,6 +385,7 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>normcdf(x, μ, σ)</code>, <code>norminv</code>, <code>tcdf</code>, <code>chi2inv</code>, <code>binopdf</code>, <code>poisscdf</code>, …</td><td>rozkłady: …pdf, …cdf, …inv</td></tr>
               <tr><td><code>fitlm(x, y)</code>, <code>rand(3)</code>, <code>randn</code>, <code>randi([1 6], 1, 10)</code>, <code>rng(42)</code></td><td>regresja z testami; liczby losowe (powtarzalne po rng)</td></tr>
               <tr><td><code>fft(x)</code>, <code>ifft</code>, <code>fftshift</code>, <code>filter(b, a, x)</code>, <code>periodogram(x, fs)</code>, <code>angle</code></td><td>sygnały: widmo, filtry, gęstość widmowa mocy</td></tr>
+              <tr><td><code>surf(f)</code>, <code>mesh(f, [a b c d])</code>, <code>plot3([x(t), y(t), z(t)])</code>, <code>contour(f, n)</code>, <code>quiver([P, Q])</code>, <code>meshgrid</code></td><td>wykresy w przestrzeni (obrót przeciągnięciem) i pola</td></tr>
               <tr><td>przycisk + w części Zmienne</td><td>wklejenie tabeli albo pliku CSV: kolumny jako wektory, całość jako <code>dane</code></td></tr>
               <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>

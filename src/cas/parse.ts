@@ -86,6 +86,7 @@ export const COMMANDS: Record<string, [number, number]> = {
   expinv: [1, 2], unifpdf: [1, 3], unifcdf: [1, 3], unifinv: [1, 3], gampdf: [2, 3], gamcdf: [2, 3], gaminv: [2, 3], betapdf: [3, 3],
   betacdf: [3, 3], betainv: [3, 3],
   fft: [1, 2], ifft: [1, 2], fftshift: [1, 1], ifftshift: [1, 1], filter: [3, 3], periodogram: [1, 2],
+  meshgrid: [1, 2], contour: [1, 4], quiver: [1, 4], surf: [1, 4], mesh: [1, 4], plot3: [1, 4],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -136,6 +137,7 @@ export const ALIAS: Record<string, string> = {
   slupkowy: 'bar', biegunowy: 'polarplot', quadgk: 'integrate',
   dominanta: 'mode', rozstep: 'range', percentyl: 'prctile', kwantyl: 'quantile', skosnosc: 'skewness', kurtoza: 'kurtosis',
   kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance', angle: 'arg', filtr: 'filter', widmo: 'fft',
+  fsurf: 'surf', fmesh: 'mesh', fcontour: 'contour', fplot3: 'plot3', powierzchnia: 'surf', poziomice: 'contour',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;
@@ -179,7 +181,7 @@ export const isStr = (t: string | undefined) => t !== undefined && t[0] === '"';
 const endsOperand = (t: string | undefined) => t !== undefined && !isStr(t) && (/^\.?\d|^[a-zα-ω]/i.test(t) || [')', ']', '}', "'", ".'", '!', '°'].includes(t));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** MATLAB's names with a digit in them, read whole (interp1 is not interp·1). */
-const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv)(?![a-z0-9_])/y;
+const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv|fplot3|plot3)(?![a-z0-9_])/y;
 
 /** Tokens, each with whether a space came before it (inside [ ] a space can separate elements). */
 function lex(source: string, names: readonly string[]): { toks: string[]; space: boolean[] } {

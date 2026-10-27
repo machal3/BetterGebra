@@ -14,6 +14,7 @@ import { odeCommand } from './ode';
 import { dsolveCommand } from './dsolve';
 import { RandomSource, STATS, setRandom } from './stats';
 import { SIGNAL } from './signal';
+import { FIELDS } from './fields';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -37,7 +38,7 @@ import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } fr
 import { Interval, IntervalSet, Sol, SolveResult, SystemResult, chooseUnknowns, domain as domainOf, setDomainText, solveEquation, solveInequality, solveSystem, intersect, within, zeroIntervals } from './solve';
 import { product as prodOf, sum as sumOf, ratioHint, numericSum } from './sums';
 import { type HandoffRow, type MarkKind, type Plot, argandPlot, combine, curveRow, features, fmt, graphText, implicitPlot, matrixPlot, parametricSeries, plotOf, regionPlot, rootsPlot, sequencePlot, statsPlot, zText } from './plot';
-export type { Bar, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Series, Shape, Vector } from './plot';
+export type { Bar, Curve3, Fill, Handoff, HandoffRow, Mark, MarkKind, PanelMode, Plot, Ref, Scene3, Series, Shape, Surface3, Vector } from './plot';
 
 setInverse(LA.inverse);
 setLeftSolve(LA.leftSolve);
@@ -1221,6 +1222,12 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
   }
   if (name === 'ode45' || name === 'ode23' || name === 'ode15s') return linalgOut(odeCommand(name, args, env, nout));
   if (name === 'dsolve') return linalgOut(dsolveCommand(args, env));
+  if (Object.hasOwn(FIELDS, name)) {
+    // surf(x^2 - y^2): the letters of an expression are its own; surf(X, Y, Z) of variables reads the workspace
+    const read = (a: Node) => evaluate(a, a.t === 'id' || a.t === 'index' || a.t === 'list' && a.items.every(i => i.t === 'num' || i.t === 'neg') ? env : shadow(env, letters(a)));
+    const r = FIELDS[name](args.map(read), nout);
+    if (r) return linalgOut(r);
+  }
   if (Object.hasOwn(SIGNAL, name)) {
     const r = SIGNAL[name](args.map(a => evaluate(a, env)), nout);
     if (r) return linalgOut(r);

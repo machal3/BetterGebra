@@ -6,12 +6,38 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { IconDownload, IconOpen, IconReset, IconSnap, IconZoomIn, IconZoomOut } from '@/components/icons';
-import type { Plot } from '../../cas/engine';
+import type { Plot, Scene3 } from '../../cas/engine';
+import { mount3d, type Plot3Handle } from './plot3d';
 import { PANEL, color, handoff, mountPlot, snapping, toggleSnap, type PlotHandle } from './plot-engine';
 
 const WHAT = { graph: 'wykresy, krzywe, obszary i punkty, z analizą i parametrami', complex: 'funkcję zespoloną, z kolorowaniem płaszczyzny' };
 
+/** A plot in space: the canvas of plot3d, turned by dragging, and its toolbar. */
+function CalcPlot3D({ scene }: { scene: Scene3 }) {
+  const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), handle = useRef<Plot3Handle | null>(null);
+  useEffect(() => {
+    handle.current = mount3d(scene, canvas.current!, stage.current!);
+    return () => { handle.current?.destroy(); handle.current = null; };
+  }, [scene]);
+  const what = [...scene.surfaces.map(s => (s.label ? `z = ${s.label}` : 'powierzchnia')), ...scene.curves.map(c => c.label)].join('; ');
+  return (
+    <div className="b-cplot">
+      <div ref={stage} className="b-cplot-stage b-cplot-stage--3d">
+        <canvas ref={canvas} className="b-cplot-canvas" tabIndex={0} role="img" aria-label={`Wykres przestrzenny: ${what}. Przeciągnij albo strzałki obracają, kółko, plus i minus przybliżają, 0 przywraca widok.`} />
+        <div className="b-cplot-tools" role="toolbar" aria-label="Widok wykresu">
+          <Button variant="ghost" icon={<IconReset />} aria-label="Widok domyślny" title="Widok domyślny  0" onClick={() => handle.current?.reset()} />
+          <Button variant="ghost" icon={<IconDownload />} aria-label="Zapisz wykres jako PNG" title="Zapisz wykres jako PNG" onClick={() => handle.current?.png()} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalcPlot({ plot }: { plot: Plot }) {
+  return plot.three ? <CalcPlot3D scene={plot.three} /> : <CalcPlot2D plot={plot} />;
+}
+
+function CalcPlot2D({ plot }: { plot: Plot }) {
   const canvas = useRef<HTMLCanvasElement>(null), stage = useRef<HTMLDivElement>(null), tip = useRef<HTMLDivElement>(null);
   const handle = useRef<PlotHandle | null>(null);
   const [shown, setShown] = useState<boolean[]>(() => plot.series.map(() => true));

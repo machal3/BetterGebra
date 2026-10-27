@@ -46,8 +46,17 @@ export interface HandoffRow { expr: string; series?: number; color?: number; das
 /** How the plot moves to the graph panel; without it, the curves y = f(x) go to Wykresy. */
 export interface Handoff { mode: PanelMode; rows: HandoffRow[] }
 
+/** A surface z(x, y) sampled on a grid (z[i][j] at ys[i], xs[j]; NaN where it is not drawn); wire: mesh, not surf. */
+export interface Surface3 { xs: number[]; ys: number[]; z: number[][]; label: string; wire?: boolean }
+/** A curve in space as flat [x0, y0, z0, x1, …]. */
+export interface Curve3 { pts: number[]; label: string; color?: number }
+/** What a 3D card draws: surfaces and curves in the box [x0, x1, y0, y1, z0, z1]. */
+export interface Scene3 { surfaces: Surface3[]; curves: Curve3[]; box: [number, number, number, number, number, number] }
+
 export interface Plot {
   x: [number, number]; y: [number, number];
+  /** A plot in space (surf, mesh, plot3): drawn by the 3D card, the rest of the plot is empty. */
+  three?: Scene3;
   /** Equal scale on both axes, so circles stay round; `plane` names the axes Re and Im. */
   equal?: boolean; plane?: boolean;
   /** Ticks on the x axis in multiples of π (trigonometric functions). */
@@ -63,7 +72,7 @@ export interface Plot {
   refs: Ref[]; fills: Fill[]; vectors: Vector[]; shapes: Shape[]; bars: Bar[];
 }
 
-const blank = (x: [number, number], y: [number, number]): Plot =>
+export const blank = (x: [number, number], y: [number, number]): Plot =>
   ({ x, y, series: [], marks: [], bands: [], vlines: [], hlines: [], refs: [], fills: [], vectors: [], shapes: [], bars: [] });
 
 const gcdInt = (a: number, b: number): number => (b ? gcdInt(b, a % b) : a);
@@ -610,6 +619,8 @@ export interface DataExtras {
   errors?: { xs: number[]; ys: number[]; es: number[] };
   /** A smooth curve f over the x range of the data (a fit, an interpolant), drawn as a line. */
   curve?: { f: RealFn; label: string; expr?: string; color?: number };
+  /** Arrows of a vector field (quiver). */
+  arrows?: Vector[];
   equal?: boolean;
 }
 /** A plot of data series (and bars, error bars, a fitted curve), framed around the data. */
@@ -618,6 +629,7 @@ export function dataPlot(series: DataSeries[], o: DataExtras = {}): Plot | null 
   for (const s of series) s.xs.forEach((x, i) => { if (Number.isFinite(x) && Number.isFinite(s.ys[i])) { xs.push(x); ys.push(s.ys[i]); } });
   if (o.bars) o.bars.xs.forEach((x, i) => { xs.push(x - o.bars!.width / 2, x + o.bars!.width / 2); ys.push(0, o.bars!.hs[i]); });
   if (o.errors) o.errors.xs.forEach((x, i) => { xs.push(x); ys.push(o.errors!.ys[i] - o.errors!.es[i], o.errors!.ys[i] + o.errors!.es[i]); });
+  if (o.arrows) for (const a of o.arrows) { xs.push(a.x1, a.x2); ys.push(a.y1, a.y2); }
   if (!xs.length) return null;
   let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
   if (x1 - x0 < 1e-12) { x0 -= 1; x1 += 1; }
@@ -647,6 +659,7 @@ export function dataPlot(series: DataSeries[], o: DataExtras = {}): Plot | null 
   });
   if (curve) p.series.push({ ...curve, color: curve.color ?? series.length });
   if (o.bars) o.bars.xs.forEach((x, i) => { if (o.bars!.hs[i]) p.bars.push({ x0: x - o.bars!.width / 2, x1: x + o.bars!.width / 2, h: o.bars!.hs[i], label: o.bars!.labels[i] }); });
+  if (o.arrows) p.vectors.push(...o.arrows);
   if (o.errors) o.errors.xs.forEach((x, i) => {
     const y = o.errors!.ys[i], e = o.errors!.es[i];
     if ([x, y, e].every(Number.isFinite)) p.vectors.push({ x1: x, y1: y - e, x2: x, y2: y + e, label: `${fmt(y)} ± ${fmt(e)}`, color: 0 });
