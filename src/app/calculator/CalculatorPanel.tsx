@@ -206,7 +206,7 @@ function Side({ run }: { run: (q: string) => void }) {
           <ol className="b-history">
             {history.map(q => (
               <li key={q}>
-                <button type="button" className="b-history-row" title={q} onClick={() => run(q)}>
+                <button type="button" className="b-row b-history-row" title={q} onClick={() => run(q)}>
                   <span className="b-history-icon" aria-hidden="true"><IconHistory /></span>
                   <span className="b-history-text">{q}</span>
                   <span className="b-history-go" aria-hidden="true"><IconArrowRight /></span>
@@ -217,8 +217,10 @@ function Side({ run }: { run: (q: string) => void }) {
         ) : (
           <div className="b-empty">
             <svg className="b-empty-art" viewBox="0 0 96 64" aria-hidden="true">
-              <rect x="20" y="6" width="56" height="52" rx="8" />
-              <path d="M30 20h36M30 30h22M30 40h28M30 50h14" />
+              <rect className="b-empty-soft" x="26" y="12" width="52" height="46" rx="8" />
+              <rect x="18" y="6" width="52" height="46" rx="8" />
+              <path d="M28 18h24M28 26h32M28 34h18" />
+              <circle cx="58" cy="40" r="4" />
             </svg>
             <p>Tu pojawią się Twoje obliczenia. Strzałki ↑ ↓ w polu wpisywania przywołują poprzednie.</p>
           </div>
@@ -229,7 +231,7 @@ function Side({ run }: { run: (q: string) => void }) {
           <Disclosure key={group} title={group} aside={<Count>{items.length}</Count>} defaultOpen={false}>
             <div className="b-examples">
               {items.map(([q, label]) => (
-                <button key={q} type="button" className="b-example" title={q} onClick={() => run(q)}>
+                <button key={q} type="button" className="b-row b-example" title={q} onClick={() => run(q)}>
                   <span className="b-example-label">{label}</span>
                   <span className="b-example-query">{q}</span>
                 </button>

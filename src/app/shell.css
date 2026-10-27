@@ -36,9 +36,9 @@
   padding: 4px 8px 4px 4px;
   border-radius: var(--b-r-md);
   color: var(--b-ink);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: var(--b-fs-title);
+  font-weight: 500;
+ 
   text-decoration: none;
   transition: background-color var(--b-fast) ease;
 }
@@ -73,7 +73,7 @@
   }
   .b-topbar-title {
     position: static; width: auto; height: auto; margin: 0; overflow: hidden; clip: auto;
-    font-size: 16px; font-weight: 600; letter-spacing: -0.01em; text-overflow: ellipsis;
+    font-size: var(--b-fs-title); font-weight: 500; text-overflow: ellipsis;
   }
   .b-topbar .ui-buttonc, .b-home-corner .ui-buttonc { --h: 44px; }
 }
@@ -122,15 +122,15 @@
   gap: var(--b-s3);
   margin: 0;
   font-size: var(--b-fs-2xl);
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-weight: 500;
+ 
   color: var(--b-strong);
 }
 .b-home-lead {
   margin: 0 0 var(--b-s5);
   font-size: var(--b-fs-xl);
   font-weight: 500;
-  letter-spacing: -0.01em;
+ 
   color: var(--b-text);
   text-align: center;
 }
@@ -139,6 +139,6 @@
 
 @media (max-width: 767px) {
   .b-home-main { justify-content: flex-start; padding-top: 88px; }
-  .b-home-brand { font-size: 24px; }
+  .b-home-brand { font-size: var(--b-fs-xl); }
   .b-home-lead { font-size: var(--b-fs-title); margin-bottom: var(--b-s4); }
 }

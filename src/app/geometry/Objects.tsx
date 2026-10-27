@@ -67,7 +67,7 @@ export function Objects({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
         <ul className="b-gref">
           {REFERENCE.map(({ usage, what }) => (
             <li key={usage}>
-              <button type="button" title="Wstaw do pola" onClick={() => { inputRef.current!.value = usage.replace('; …', ''); setProblem(''); inputRef.current!.focus(); }}>
+              <button type="button" className="b-row" title="Wstaw do pola" onClick={() => { inputRef.current!.value = usage.replace('; …', ''); setProblem(''); inputRef.current!.focus(); }}>
                 <code>{usage}</code><span>{what}</span>
               </button>
             </li>
@@ -114,8 +114,12 @@ export function Objects({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
       ) : (
         <div className="b-empty">
           <svg className="b-empty-art" viewBox="0 0 96 64" aria-hidden="true">
-            <path d="M48 8 80 56H16Z" />
-            <circle cx="48" cy="40" r="12" />
+            <path className="b-empty-soft" d="M52 14 82 58H22Z" />
+            <path d="M46 8 76 52H16Z" />
+            <circle cx="46" cy="36" r="11" />
+            <circle cx="46" cy="8" r="2.5" />
+            <circle cx="16" cy="52" r="2.5" />
+            <circle cx="76" cy="52" r="2.5" />
           </svg>
           <p>Brak obiektów. Wpisz definicję powyżej albo narysuj coś narzędziami z panelu <b>Tworzenie</b>.</p>
         </div>

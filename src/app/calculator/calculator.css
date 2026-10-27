@@ -10,27 +10,27 @@
 /* ---------- Empty state ---------- */
 .b-calc-hero { display: grid; justify-items: center; gap: var(--b-s2); padding: 24px 0 4px; text-align: center; }
 .b-calc-hero-icon {
-  display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: 14px;
-  background: var(--b-solid); color: #ffffff; box-shadow: 0 6px 18px -6px var(--b-line-hover);
+  display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 6px; border-radius: var(--b-r-xl);
+  background: var(--b-solid); color: var(--b-on-solid); box-shadow: var(--b-shadow);
 }
-.b-calc-hero h2 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; color: var(--b-strong); }
+.b-calc-hero h2 { margin: 0; font-size: var(--b-fs-xl); line-height: 28px; font-weight: 500; color: var(--b-strong); }
 .b-calc-hero p { max-width: 560px; margin: 0; color: var(--b-text); }
 
 /* ---------- Composer: the centre of the page ---------- */
 .b-composer {
-  border-radius: var(--b-r-2xl); background: var(--b-card); box-shadow: var(--b-shadow-pop);
-  transition: box-shadow var(--b-normal) ease;
+  border-radius: var(--b-r-xl); background: var(--b-card); box-shadow: var(--b-shadow-pop);
+  outline: 2px solid transparent; outline-offset: 1px; transition: outline-color var(--b-fast) ease;
 }
-.b-composer:focus-within { box-shadow: 0 0 0 1px var(--b-solid), 0 0 0 4px var(--b-focus), var(--b-shadow-pop); }
+.b-composer:focus-within { outline-color: var(--b-focus); }
 .b-composer-field { display: flex; align-items: center; gap: var(--b-s2); padding: 8px 8px 4px 20px; }
 .b-composer-field input {
   flex: 1; min-width: 0; height: 52px; margin: 0; padding: 0; border: 0; outline: none; background: transparent;
-  font: 400 18px/24px var(--b-mono); color: var(--b-ink);
+  font: 400 var(--b-fs-title)/24px var(--b-mono); color: var(--b-ink);
 }
-.b-composer-field input::placeholder { font-family: var(--b-font); font-size: 16px; color: var(--b-muted); opacity: 1; }
-.ui-buttonc.b-composer-go { --h: 40px; --radius: 10px; flex: none; }
+.b-composer-field input::placeholder { font-family: var(--b-font); color: var(--b-faint); opacity: 1; }
+.ui-buttonc.b-composer-go { --h: 36px; --radius: var(--b-r-md); flex: none; }
 .b-composer-preview {
-  min-height: 0; padding: 0 20px 12px; overflow-x: auto; overflow-y: hidden; font-size: 17px; color: var(--b-ink);
+  min-height: 0; padding: 0 20px 12px; overflow-x: auto; overflow-y: hidden; font-size: var(--b-fs-math); color: var(--b-ink);
 }
 .b-composer-preview:empty { padding-bottom: 4px; }
 .b-composer-preview math { font-family: var(--b-math); }
@@ -44,10 +44,10 @@
 .b-keys-group + .b-keys-group { margin-left: 4px; padding-left: 6px; box-shadow: inset 1px 0 0 var(--b-line); }
 .b-key {
   min-width: 32px; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); background: none;
-  font: 400 15px/1 var(--b-math); color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
+  font: 400 var(--b-fs-math-sm)/1 var(--b-math); color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease, transform var(--b-press) var(--b-ease);
 }
 @media (hover: hover) { .b-key:hover { background: var(--b-wash); } }
-.b-key:active { background: var(--b-fill); }
+.b-key:active { background: var(--b-fill); transform: scale(0.97); }
 .b-key:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
 .b-digits { display: flex; flex: none; align-items: center; gap: var(--b-s2); font-size: var(--b-fs-sm); color: var(--b-text); }
 
@@ -57,7 +57,6 @@
 /* ---------- Examples in the empty state ---------- */
 .b-calc-suggest { display: grid; gap: var(--b-s3); margin-top: var(--b-s2); }
 .b-calc-suggest > .ui-segc { justify-self: center; }
-.b-code { padding: 1px 6px; border-radius: 5px; background: var(--b-fill); font: 12.5px/18px var(--b-mono); color: var(--b-ink); overflow-wrap: anywhere; }
 
 /* ---------- Results ---------- */
 .b-calc-results { display: grid; gap: var(--b-s2); container-type: inline-size; transition: opacity var(--b-normal) ease; }
@@ -65,7 +64,7 @@
 .b-calc-query { display: flex; align-items: flex-start; gap: var(--b-s3); padding: 8px 4px 6px; }
 .b-calc-query-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .b-calc-query-label { font-size: var(--b-fs-sm); font-weight: 500; color: var(--b-text); }
-.b-calc-query .b-pod-math { font-size: 22px; }
+.b-calc-query .b-pod-math { font-size: var(--b-fs-math-lg); }
 .b-calc-query-note { margin: 0; font-size: var(--b-fs-sm); color: var(--b-text); }
 
 .b-pod {
@@ -78,16 +77,16 @@
 .b-pod-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; color: var(--b-text); }
 .b-pod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; padding: 6px 0; }
 .b-pod-row + .b-pod-row { box-shadow: inset 0 1px 0 var(--b-line); }
-.b-pod-math { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: 18px; color: var(--b-strong); }
+.b-pod-math { min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 0; font-size: var(--b-fs-math); color: var(--b-strong); }
 .b-pod-math math { font-family: var(--b-math); }
-.b-pod-long { min-width: 0; font: 13px/20px var(--b-mono); overflow-wrap: anywhere; color: var(--b-strong); }
-.b-pod-row-note { padding: 1px 8px; border-radius: 6px; background: var(--b-fill); font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
+.b-pod-long { min-width: 0; font: var(--b-fs-md)/20px var(--b-mono); overflow-wrap: anywhere; color: var(--b-strong); }
+.b-pod-row-note { padding: 1px 8px; border-radius: var(--b-r-xs); background: var(--b-fill); font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
 .b-pod-note { margin: 4px 0 0; font-size: var(--b-fs-sm); color: var(--b-text); }
 .ui-buttonc.b-pod-more { justify-self: start; margin-top: 6px; }
 /* The answer: a line in the accent colour and larger type */
 .b-pod.is-primary { padding: 14px 20px 16px; box-shadow: inset 3px 0 0 var(--b-solid), var(--b-shadow-hover); }
 .b-pod.is-primary .b-pod-head h3 { color: var(--b-strong); }
-.b-pod.is-primary .b-pod-math { font-size: 26px; }
+.b-pod.is-primary .b-pod-math { font-size: var(--b-fs-math-xl); }
 .b-pod.is-error { display: flex; padding: 12px 16px; background: var(--b-danger-bg); box-shadow: inset 0 0 0 1px var(--b-danger-line); color: var(--b-ink); }
 .b-pod.is-error p { margin: 0; }
 .b-pod-skeleton { gap: 10px; }
@@ -119,10 +118,10 @@
 .b-cplot-stage:hover .b-cplot-tools, .b-cplot-stage:focus-within .b-cplot-tools { opacity: 1; translate: 0 0; }
 @media (hover: none) { .b-cplot-tools { opacity: 1; translate: 0 0; } }
 .b-cplot-tools .ui-buttonc { --h: 28px; }
-.b-cplot-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--b-line-hover); }
+.b-cplot-sep { width: 0.5px; height: 18px; margin: 0 3px; background: var(--b-line-hover); }
 .b-cplot-tip {
   position: absolute; z-index: 1; display: grid; gap: 2px; max-width: min(320px, 70%); padding: 6px 10px; pointer-events: none;
-  border-left: 3px solid var(--b-line-hover); border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
+  border-radius: var(--b-r-sm); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
 }
 .b-cplot-tip .row { display: flex; align-items: center; gap: 6px; }
@@ -130,65 +129,40 @@
 .b-cplot-tip .head { color: var(--b-text); }
 .b-cplot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
 .b-cplot-legend { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
-.b-cplot-key {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm);
-  background: none; font: 400 var(--b-fs-sm)/16px var(--b-font); color: var(--b-ink);
-}
-button.b-cplot-key { cursor: pointer; transition: background-color var(--b-fast) ease, opacity var(--b-fast) ease; }
-@media (hover: hover) { button.b-cplot-key:hover { background: var(--b-wash); } }
-button.b-cplot-key[aria-pressed="false"] { color: var(--b-muted); }
-button.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.35; }
-button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+/* a series that can be hidden is a chip; a fill or shape is only named */
+span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-ink); }
+.b-chip.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.35; }
 .b-sw { flex: none; width: 16px; height: 3px; border-radius: 2px; background: var(--c); }
 .b-sw.is-dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
 .b-sw.is-dot { width: 8px; height: 8px; border-radius: 50%; }
 .b-sw.is-area { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: inset 0 0 0 1.5px var(--c); }
 .b-cplot-points { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.b-cplot-points button {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 10px; border: 0; border-radius: var(--b-r-full);
-  background: var(--b-wash); box-shadow: inset 0 0 0 1px var(--b-line); font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums;
-  color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
-}
-@media (hover: hover) { .b-cplot-points button:hover { background: var(--b-fill); } }
-.b-cplot-points button:focus-visible { outline: 2px solid var(--b-focus); outline-offset: 1px; }
+
 .b-pt { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 
 /* ---------- Side panel: history and examples ---------- */
 .b-history { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.b-history-row {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; margin: 0; padding: 4px 8px 4px 6px; border: 0;
-  border-radius: var(--b-r-md); background: none; text-align: start; color: var(--b-ink); cursor: pointer;
-  transition: background-color var(--b-fast) ease;
-}
-@media (hover: hover) { .b-history-row:hover { background: var(--b-wash); } }
-.b-history-row:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
-.b-history-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 6px; background: var(--b-fill); color: var(--b-icon); }
-.b-history-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 12.5px/18px var(--b-mono); }
+.b-history-row { padding: 4px 8px 4px 6px; }
+.b-history-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: var(--b-r-sm); background: var(--b-fill); color: var(--b-icon); }
+.b-history-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: var(--b-fs-sm)/18px var(--b-mono); }
 .b-history-go { flex: none; display: grid; color: var(--b-icon); opacity: 0; transition: opacity var(--b-fast) ease; }
 .b-history-row:hover .b-history-go, .b-history-row:focus-visible .b-history-go { opacity: 1; }
 
 .b-examples { display: grid; gap: 2px; padding: 2px 0 2px 24px; }
-.b-example {
-  display: grid; gap: 1px; margin: 0; padding: 6px 8px; border: 0; border-radius: var(--b-r-sm); background: none;
-  text-align: start; color: var(--b-ink); cursor: pointer; transition: background-color var(--b-fast) ease;
-}
-@media (hover: hover) { .b-example:hover { background: var(--b-wash); } }
-.b-example:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-row.b-example { display: grid; gap: 1px; }
 .b-example-label { font-size: var(--b-fs-sm); color: var(--b-text); }
-.b-example-query { font: 12.5px/18px var(--b-mono); overflow-wrap: anywhere; }
+.b-example-query { font: var(--b-fs-sm)/18px var(--b-mono); overflow-wrap: anywhere; }
 
 .b-syntax { width: calc(100% - 16px); margin: 4px 8px 0; border-collapse: collapse; }
 .b-syntax td { padding: 6px 0; vertical-align: top; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-text); box-shadow: inset 0 -1px 0 var(--b-line); }
 .b-syntax td:first-child { padding-right: 8px; color: var(--b-ink); }
-.b-syntax code, .b-hint code { padding: 0 4px; border-radius: 4px; background: var(--b-fill); font: 12px/18px var(--b-mono); color: var(--b-ink); }
 
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
   .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
   .b-calc-hero { padding-top: 8px; }
-  .b-calc-hero h2 { font-size: 20px; }
   .b-composer-field { padding-left: 14px; }
-  .b-composer-field input { font-size: 17px; height: 48px; }
+  .b-composer-field input { font-size: 16px; height: 48px; }
   .b-composer-preview { padding: 0 14px 10px; }
   /* one scrolling row of symbols instead of wrapped ones */
   .b-composer-bar { flex-wrap: wrap; padding-left: 6px; }
@@ -200,9 +174,7 @@ button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-of
 }
 @media (pointer: coarse) {
   .b-key { height: 44px; min-width: 44px; }
-  .b-history-row, .b-example { min-height: 44px; }
   .b-cplot-tools .ui-buttonc { --h: 40px; }
-  button.b-cplot-key, .b-cplot-points button { min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .b-composer, .b-calc-results, .b-cplot-tools, .b-history-go { transition: none; }

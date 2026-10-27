@@ -52,7 +52,7 @@ export function CalcPlot({ plot }: { plot: Plot }) {
             <button
               key={i}
               type="button"
-              className="b-cplot-key"
+              className="b-chip b-cplot-key"
               aria-pressed={shown[i]}
               title="Pokaż lub ukryj"
               style={{ '--c': color(s.color ?? i) } as React.CSSProperties}
@@ -82,6 +82,7 @@ export function CalcPlot({ plot }: { plot: Plot }) {
             <li key={i}>
               <button
                 type="button"
+                className="b-chip"
                 title="Pokaż na wykresie"
                 style={{ '--c': color(m.color ?? 0) } as React.CSSProperties}
                 onPointerEnter={() => handle.current?.focus(m)}

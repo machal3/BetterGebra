@@ -36,20 +36,20 @@
 .b-fn.is-hidden .b-fn-field { opacity: 0.55; }
 
 .b-fn-field { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; height: 40px; cursor: text; }
-.b-fn-prefix { flex: none; padding-left: 4px; font: italic 16px/1 var(--b-math); color: var(--b-text); white-space: nowrap; }
+.b-fn-prefix { flex: none; padding-left: 4px; font: italic var(--b-fs-math-sm)/1 var(--b-math); color: var(--b-text); white-space: nowrap; }
 .b-fn-input {
   flex: 1; min-width: 0; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); outline: none;
-  background: transparent; font: 400 14px/20px var(--b-mono); color: var(--b-ink);
+  background: transparent; font: 400 var(--b-fs-md)/20px var(--b-mono); color: var(--b-ink);
   transition: background-color var(--b-fast) ease, box-shadow var(--b-fast) ease;
 }
-.b-fn-input::placeholder { color: var(--b-muted); opacity: 1; }
+.b-fn-input::placeholder { color: var(--b-faint); opacity: 1; }
 @media (hover: hover) { .b-fn-input:hover:not(:focus) { background: var(--b-wash); } }
-.b-fn-input:focus { background: var(--b-card); box-shadow: inset 0 0 0 1px var(--b-solid), 0 0 0 3px var(--b-focus); }
-.b-fn-input[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 1px var(--b-danger), 0 0 0 3px var(--b-danger-line); }
+.b-fn-input:focus { background: var(--b-card); box-shadow: var(--b-shadow-field); outline: 2px solid var(--b-focus); outline-offset: 1px; }
+.b-fn-input[aria-invalid="true"]:focus { box-shadow: 0 0 0 1px var(--b-danger); outline-color: var(--b-danger-line); }
 /* A finished formula is typeset; the transparent field lies over it, so a click still lands in the field */
 .b-fn-math {
   flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 8px; overflow: hidden; white-space: nowrap;
-  font-size: 17px; color: var(--b-ink); pointer-events: none;
+  font-size: var(--b-fs-math); color: var(--b-ink); pointer-events: none;
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
 }
@@ -73,16 +73,15 @@
 
 /* ---------- Row settings (popover; a bottom sheet on phones) ---------- */
 .b-rowset-pop { width: 344px; }
-.b-rowset-pop::before { content: ""; display: block; height: 3px; background: var(--c); border-radius: var(--b-r-xl) var(--b-r-xl) 0 0; }
 .b-rowset { display: grid; gap: var(--b-s5); padding: var(--b-s4); }
 .b-rowset-group { display: grid; gap: var(--b-s2); }
 .b-rowset-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-s2); }
-.b-rowset-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 600; color: var(--b-strong); }
+.b-rowset-head h3 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; color: var(--b-strong); }
 .b-rowset-preview { font-size: var(--b-fs-sm); color: var(--b-text); font-variant-numeric: tabular-nums; }
 .b-interval { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--b-s2); }
 .b-interval > label { color: var(--b-text); }
 .b-brackets { font-family: var(--b-math); }
-.b-brackets .ui-segc__label { font-size: 15px; }
+.b-brackets .ui-segc__label { font-size: var(--b-fs-math-sm); }
 .b-width { display: grid; grid-template-columns: 1fr 76px; gap: var(--b-s3); align-items: center; margin-top: 4px; }
 .b-rowset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-s2); }
 
@@ -92,22 +91,24 @@
   display: grid; grid-template-columns: 44px 1fr 80px; gap: var(--b-s3); align-items: center;
   padding: 6px 8px 6px 12px; border-radius: var(--b-r-lg); background: var(--b-card); box-shadow: var(--b-shadow);
 }
-.b-param-name { font: 16px var(--b-math); color: var(--b-ink); white-space: nowrap; }
+.b-param-name { font: var(--b-fs-math-sm) var(--b-math); color: var(--b-ink); white-space: nowrap; }
 .b-param-error { grid-column: 1 / -1; padding-bottom: 2px; }
 
 /* ---------- Canvas ---------- */
-#plot:focus-visible { box-shadow: inset 0 0 0 2px var(--b-solid); }
+#plot:focus-visible { box-shadow: inset 0 0 0 2px var(--b-focus); }
 .b-caption {
   position: absolute; z-index: 1; right: var(--b-s3); bottom: calc(var(--b-inset-bottom) + 10px); margin: 0; padding: 2px 8px; border-radius: var(--b-r-sm);
   background: color-mix(in srgb, var(--plot-bg) 85%, transparent); pointer-events: none;
   font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-text); white-space: pre;
 }
-/* the hover readout drawn by the renderer */
+/* The hover readout, placed by the renderer: the tooltip of Message Actions, with a dot in the colour of what is read */
 #readout.readout {
-  padding: 4px 10px 6px 12px; border-radius: var(--b-r-md); background: var(--b-raised);
-  box-shadow: inset 3px 0 0 var(--c), var(--b-shadow-pop);
+  --c: var(--b-text);
+  position: absolute; z-index: 2; pointer-events: none; white-space: pre;
+  padding: 4px 10px 4px 24px; border-radius: var(--b-r-sm); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
   font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
 }
+#readout.readout::before { content: ""; position: absolute; top: 50%; left: 10px; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--c); }
 
 /* ---------- Widok ---------- */
 .b-view { width: 312px; }
@@ -115,7 +116,7 @@
 .b-view-row { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3); min-height: 36px; padding: 0 8px; }
 .b-view-range { display: grid; grid-template-columns: 14px 1fr 8px 1fr; gap: var(--b-s2); align-items: center; padding: 4px 8px; }
 .b-view-range > span { color: var(--b-text); text-align: center; }
-.b-view-range > span:nth-child(5n + 1) { font: italic 15px var(--b-math); color: var(--b-ink); }
+.b-view-range > span:nth-child(5n + 1) { font: italic var(--b-fs-math-sm) var(--b-math); color: var(--b-ink); }
 .b-view-error { padding: 4px 8px 0; }
 
 /* ---------- Badanie ---------- */
@@ -127,9 +128,9 @@
   animation: b-pop-in var(--b-slow) var(--b-ease);
 }
 .b-analysis-head { display: flex; align-items: center; gap: var(--b-s3); padding: 4px 4px 6px 10px; }
-.b-analysis-head h2 { margin: 0; font-size: 15px; font-weight: 500; color: var(--b-strong); }
+.b-analysis-head h2 { margin: 0; font-size: var(--b-fs-title); font-weight: 500; line-height: 24px; color: var(--b-strong); }
 .b-analysis-target {
-  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; padding-left: 8px; border-left: 3px solid var(--c); font-size: 15px;
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; padding-left: 8px; border-left: 3px solid var(--c); font-size: var(--b-fs-math-sm);
 }
 .b-muted { color: var(--b-text); }
 .b-ledger { display: grid; margin: 0; padding: 0 10px; }
