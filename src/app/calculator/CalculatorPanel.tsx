@@ -373,6 +373,10 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>polyfit(x, y, 2)</code>, <code>fit(x, y, a*exp(b*x))</code></td><td>dopasowanie: wielomian (dokładnie dla danych wymiernych) i dowolny model</td></tr>
               <tr><td><code>interp1(x, y, xq, 'spline')</code>, <code>spline</code>, <code>pchip</code>, <code>trapz</code></td><td>interpolacja (także <code>spline(x, y, 'natural')</code>) i całkowanie danych</td></tr>
               <tr><td><code>plot(x, y)</code>, <code>scatter</code>, <code>stem</code>, <code>bar</code>, <code>histogram</code>, <code>errorbar</code>, <code>polarplot</code></td><td>wykresy danych</td></tr>
+              <tr><td><code>fzero(f, x0)</code>, <code>fminbnd(f, a, b)</code>, <code>fminsearch(@(v) …, v0)</code>, <code>fsolve</code></td><td>zera, minima, układy równań; <code>v(1)</code>, <code>v(2)</code> to składowe wektora</td></tr>
+              <tr><td><code>integral(@(x) …, a, b)</code>, <code>integral2(@(x, y) …, a, b, c, d)</code></td><td>całki (dokładnie, gdy się da)</td></tr>
+              <tr><td><code>ode45(@(t, y) …, [0 5], y0)</code>, <code>ode45(y'' = -y, [0 10], [1 0])</code>, <code>ode23</code>, <code>ode15s</code></td><td>równania różniczkowe numerycznie, sprawdzane drugim obliczeniem</td></tr>
+              <tr><td><code>dsolve(y'' + y = 0, y(0) = 1, y'(0) = 0)</code></td><td>równania różniczkowe dokładnie, sprawdzane podstawieniem</td></tr>
               <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>

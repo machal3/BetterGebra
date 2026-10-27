@@ -62,9 +62,16 @@ export interface Env {
   vars?: Vars;
   /** The length of the dimension an index is read in: what end means. */
   end?: number;
+  /** The parameters of the function being defined: v(2) of a parameter v is its second component. */
+  params?: readonly string[];
 }
 
 /** env without these names: the x of diff(f, x) and a function's parameters stay symbols. */
+/** env inside a function's body: its parameters are symbols, and v(k) of one is a component. */
+export const withParams = (env: Env, params: readonly string[]): Env => ({ ...shadow(env, params), params: [...(env.params ?? []), ...params] });
+/** The symbol of the k-th component of a vector parameter v. */
+export const component = (v: string, k: number | bigint) => `${v}_${k}`;
+
 export function shadow(env: Env, names: readonly string[]): Env {
   const vars = env.vars;
   if (!vars || !names.length) return env;
@@ -114,14 +121,21 @@ export function evaluate(n: Node, env: Env): Value {
     }
     case 'range': return rangeValue(n, env);
     case 'index': {
+      const own = env.vars?.get(n.n);
+      if (!own && env.params?.includes(n.n) && n.args.length === 1) {
+        // y(2) of a parameter y: its second component, a symbol until the function gets its arguments
+        const k = evaluate(n.args[0], env);
+        if (k.t === 'expr' && isInt(k.e) && k.e.v.n >= 1n) return ex(sym(component(n.n, k.e.v.n)));
+        return fail(`${n.n}(…): składową wektora wskazuje liczba całkowita od 1, np. ${n.n}(2).`);
+      }
       // a letter this input names without a value (x in x(2 + x) = 0): x(…) is a product, as always
-      const v = env.vars?.get(n.n) ?? identifier(n.n, env);
+      const v = own ?? identifier(n.n, env);
       return indexValue(n.n, v, n.args, env);
     }
     case 'colon': return fail('Sam dwukropek działa tylko w indeksie, np. A(:, 1).');
     case 'end': return env.end !== undefined ? ex(num(env.end)) : fail('end działa tylko w nawiasie zmiennej, np. v(end).');
     case 'lambda': {
-      const body = evaluate(n.body, shadow(env, n.params));
+      const body = evaluate(n.body, withParams(env, n.params));
       if (body.t === 'fn' || body.t === 'rel' || body.t === 'str') fail('Wartość funkcji to wyrażenie, lista albo macierz.');
       return { t: 'fn', params: n.params, body };
     }
@@ -452,9 +466,25 @@ function rangeValue(n: Extract<Node, { t: 'range' }>, env: Env): Value {
 // --- A(i, j), v(k), f(x) ---
 
 /** f applied to arguments; f(1:3) to each element when its value is a number. */
-export function apply(f: FnValue, args: Value[], name = 'Funkcja'): Value {
-  if (args.some(isApprox)) return approxValue(apply(f, args.map(exactly), name));
-  if (args.length !== f.params.length) fail(`${name} przyjmuje ${f.params.length} ${f.params.length === 1 ? 'argument' : 'argumenty'}: ${name}(${f.params.join(', ')}).`);
+export function apply(f0: FnValue, args0: Value[], name = 'Funkcja'): Value {
+  if (args0.some(isApprox)) return approxValue(apply(f0, args0.map(exactly), name));
+  if (args0.length !== f0.params.length) fail(`${f0.params.length === 1 ? 'Funkcja' : name} przyjmuje ${f0.params.length} ${f0.params.length === 1 ? 'argument' : 'argumenty'}: ${name}(${f0.params.join(', ')}).`);
+  // a vector parameter (v(1), v(2) in the body) takes the vector's components
+  let f = f0;
+  const args = args0.slice();
+  f0.params.forEach((p, k) => {
+    const used = new Set<string>();
+    const scan = (v: Value): void => { if (v.t === 'expr') variables(v.e).forEach(s => { if (s.startsWith(`${p}_`)) used.add(s); }); else if (v.t === 'list') v.items.forEach(scan); else if (v.t === 'matrix') v.rows.flat().forEach(e => scan(ex(e))); };
+    scan(f.body);
+    if (!used.size) return;
+    const a = args[k], parts = a.t === 'expr' ? [a.e] : a.t === 'matrix' ? transpose(a.rows).flat() : a.t === 'list' ? a.items.map(i => scalar(i, name)) : fail(`${name}: ${p} ma być wektorem.`);
+    f = { ...f, body: mapValue(f.body, e => [...used].reduce((acc, s) => {
+      const j = Number(s.slice(p.length + 1));
+      if (!(j >= 1 && j <= parts.length)) fail(`${name}: ${p}(${j}) poza zakresem; wektor ma ${parts.length} ${parts.length === 1 ? 'element' : 'elementów'}.`);
+      return subst(acc, s, parts[j - 1]);
+    }, e)) };
+    args[k] = ex(sym(p));
+  });
   // all at once: f(x, y) at (y, x) swaps them
   const marks = f.params.map((_, k) => sym(`#${k}`));
   const at = (es: Expr[]) => (e: Expr) => {

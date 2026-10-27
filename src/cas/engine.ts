@@ -6,9 +6,12 @@
 import './functions';
 import { bfSign, bfToNumber } from './bigfloat';
 import { diff, diffN, limit, Lim, taylor } from './calculus';
-import { Env, Value, approxValue as approxValueOf, evaluate, ex, hidden, isApprox, scalar, setInverse, setLeftSolve, shadow, toMat, dims, matMul, type FnValue } from './evaluate';
+import { Env, Value, approxValue as approxValueOf, evaluate, ex, hidden, isApprox, scalar, setInverse, setLeftSolve, shadow, withParams, toMat, dims, matMul, type FnValue } from './evaluate';
 import { LINALG, tiny, type Linalg } from './linalg';
 import { DATAFIT, plotData } from './datafit';
+import { NUMERICS, integrand } from './numerics';
+import { odeCommand } from './ode';
+import { dsolveCommand } from './dsolve';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -180,7 +183,7 @@ function valuePods(v: Value): Out {
 function assignedValue(n: Extract<Node, { t: 'assign' }>, env: Env): Value | null {
   if (reserved(n.name)) fail(`${n.name} to nazwa funkcji lub stałej; wybierz inną nazwę zmiennej.`);
   const params = n.params ?? [];
-  const v = evaluate(n.value, shadow(env, params));
+  const v = evaluate(n.value, withParams(env, params));
   if (v.t === 'rel' || v.t === 'str') return null;
   if (n.params && v.t === 'fn') fail(`Zapisz funkcję jako ${n.name}(${params.join(', ')}) = wyrażenie albo ${n.name} = @(${params.join(', ')}) wyrażenie.`);
   const value: Value = n.params ? { t: 'fn', params, body: v } : v;
@@ -1189,6 +1192,14 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
     const r = LINALG[name](args.map(a => evaluate(a, env)), nout);
     if (r) return linalgOut(r);
   }
+  if (Object.hasOwn(NUMERICS, name)) {
+    // fzero(x^2 - 2, 1): the function's letters are its own, whatever the workspace holds (also integral2's y limits)
+    const own = (k: number) => k === 0 || (name === 'integral2' && k >= 3);
+    const r = NUMERICS[name](args.map((a, k) => evaluate(a, own(k) ? shadow(env, letters(a)) : env)), nout);
+    if (r) return linalgOut(r);
+  }
+  if (name === 'ode45' || name === 'ode23' || name === 'ode15s') return linalgOut(odeCommand(name, args, env, nout));
+  if (name === 'dsolve') return linalgOut(dsolveCommand(args, env));
   if (Object.hasOwn(DATAFIT, name)) {
     // fit(x, y, a*exp(b*x)): the model's letters are its own (x and the parameters), whatever the workspace holds
     const read = (a: Node, k: number) => evaluate(a, name === 'fit' && k === 2 ? shadow(env, letters(a)) : env);
@@ -1531,6 +1542,12 @@ function diffCommand(args: Node[], env: Env): Out {
 }
 
 function integrateCommand(args: Node[], env: Env): Out {
+  // integral(@(x) x.^2, 0, 1): MATLAB's form, a function and its limits
+  const f0 = safe(() => evaluate(args[0], env));
+  if (f0?.t === 'fn' && args.length === 3) {
+    const { e: fe, x: fx } = integrand(f0);
+    return definitePods(fe, fx, exprArg(args[1], env, 'Granica'), exprArg(args[2], env, 'Granica'));
+  }
   const e = exprArg(args[0], env);
   let x = varArg(args[1]) ?? mainVar(e);
   let a: Expr | null = null, b: Expr | null = null;
@@ -1553,6 +1570,11 @@ function integrateCommand(args: Node[], env: Env): Out {
     }
     return { pods, value: ex(s) };
   }
+  return definitePods(e, x, a, b);
+}
+/** ∫ₐᵇ f dx: exact from an antiderivative, else Gauss–Kronrod with its error; with the area drawn. */
+function definitePods(e: Expr, x: string, a: Expr, b: Expr): Out {
+  const body = `${toML(e)}<mspace width="0.17em"/><mi mathvariant="normal">d</mi>${mi(x)}`;
   if (!isConstant(a) || !isConstant(b)) {
     const F = integrate(e, x);
     if (!F) fail('Nie znalazłem funkcji pierwotnej.');

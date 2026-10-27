@@ -45,7 +45,9 @@ function code(v: Value): string {
 /** The value a stored variable holds. */
 export function load(s: Saved, env: Env): Value {
   const params = s.params ?? [];
-  const v = evaluate(parse(s.code, { limit: MAX_CODE, assign: false, names: Object.fromEntries(params.map(p => [p, 'scalar' as const])) }), env);
+  // the parameters, and the components v_1, v_2 of a vector parameter, are names of their own
+  const names = [...params, ...(s.code.match(/[a-z][a-z0-9]*_\d+/g) ?? [])];
+  const v = evaluate(parse(s.code, { limit: MAX_CODE, assign: false, names: Object.fromEntries(names.map(p => [p, 'scalar' as const])) }), env);
   return s.kind === 'fn' ? { t: 'fn', params, body: v } : v;
 }
 
