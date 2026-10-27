@@ -1,6 +1,6 @@
 /**
- * One icon set for the whole app: 24-unit line icons with round caps, drawn at 16 or 20px like the icons inside the
- * Affect UI components. Most shapes follow Lucide (ISC, lucide.dev); the four mode glyphs are Bettergebra's own.
+ * One icon set for the whole app: 24-unit line icons with round caps. At 16px a 1.6 stroke draws the same 1.1px line
+ * as the 16-unit glyphs inside the Affect UI components. Most shapes follow Lucide (ISC, lucide.dev); the four mode glyphs are Bettergebra's own.
  * Every icon is its own component, so Button (Clean) sees a new icon as new content and crossfades it.
  */
 import type { ReactNode, SVGProps } from 'react';
@@ -81,6 +81,8 @@ export const IconRatio = make('Ratio', <>
 export const IconReset = make('Reset', <><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" /><path d="M4.5 4.5v4h4" /></>);
 export const IconDownload = make('Download', <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />);
 export const IconChevronDown = make('ChevronDown', <path d="m7 10 5 5 5-5" />);
+export const IconCheck = make('Check', <path d="m5 12.5 4.5 4.5L19 7.5" />);
+export const IconPanel = make('Panel', <><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M9.5 4.5v15" /></>);
 export const IconAlert = make('Alert', <><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4h.01" /></>);
 export const IconEye = make('Eye', <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3" /></>);
 export const IconEyeOff = make('EyeOff', <path d="M3 3l18 18M10.6 5.6A9.5 9.5 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6A17 17 0 0 0 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.6-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" />);

@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
-import { ErrorText, Field, Slider, cx } from '@/components/controls';
+import { ColorPicker, ErrorText, Field, Menu, Slider } from '@/components/controls';
 import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
 import { definition } from '../../geometry/commands';
 import { isPoint, type Style } from '../../geometry/construct';
@@ -46,11 +46,11 @@ export function Toolbar() {
 const DASHES: [string, string, string][] = [['', 'Ciągła', ''], ['dashed', 'Kreskowana', '5 3.5'], ['dotted', 'Kropkowana', '0.1 4.5']];
 const SHAPES: [string, string][] = [['', 'Kropka'], ['ring', 'Pierścień'], ['cross', 'Krzyżyk']];
 const shapeIcon = (s: string) => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
     {s === 'cross' ? <path d="M8 8l8 8M16 8l-8 8" /> : <circle cx="12" cy="12" r="5" fill={s ? 'none' : 'currentColor'} />}
   </svg>
 );
-const dashIcon = (d: string) => <svg viewBox="0 0 32 16" width="32" height="16" aria-hidden="true"><path d="M3 8h26" stroke="currentColor" strokeWidth={d === '0.1 4.5' ? 2.4 : 2} strokeLinecap="round" strokeDasharray={d || undefined} fill="none" /></svg>;
+const dashIcon = (d: string) => <svg viewBox="0 0 32 16" width="32" height="16" aria-hidden="true"><path d="M3 8h26" stroke="currentColor" strokeWidth={d === '0.1 4.5' ? 2 : 1.6} strokeLinecap="round" strokeDasharray={d || undefined} fill="none" /></svg>;
 
 /** A slider whose drag is one undo step: input restyles live, letting go starts the next step. */
 function StyleSlider(props: React.ComponentProps<typeof Slider>) {
@@ -112,37 +112,21 @@ function Look() {
   const o = styled();
   if (!o) return null;
   const st: Style = o.style ?? {}, point = o.kind === 'point', measure = o.kind === 'measure';
-  const custom = !!st.color && !PALETTE.some(([c]) => c === st.color);
   const width = point ? st.size ?? defaultSize(o) : st.width ?? DEFAULT_WIDTH;
   const fill = st.fill ?? (o.kind === 'circle' ? 0 : 0.16);
   return (
     <div className="b-glook">
       <div className="b-glook-row">
         <span>Kolor</span>
-        <div className="b-gswatches" role="group" aria-label="Kolor">
-          {[['', 'Automatyczny'] as [string, string], ...PALETTE].map(([c, name]) => (
-            <button
-              key={c || 'auto'}
-              type="button"
-              className={cx('b-gswatch', !c && 'is-auto')}
-              aria-pressed={(st.color ?? '') === c}
-              aria-label={name}
-              title={name}
-              style={c ? ({ '--sw': c === 'ink' ? 'var(--b-ink)' : c } as React.CSSProperties) : undefined}
-              onClick={() => restyle({ color: c || undefined })}
-            />
-          ))}
-          <label className={cx('b-gswatch', 'is-custom', custom && 'is-chosen')} title="Własny kolor" style={custom ? ({ '--sw': st.color } as React.CSSProperties) : undefined}>
-            <input
-              type="color"
-              aria-label="Własny kolor"
-              key={o.id}
-              defaultValue={custom && st.color!.startsWith('#') ? st.color : '#0060e2'}
-              onInput={e => restyle({ color: e.currentTarget.value }, true)}
-              onBlur={endStyling}
-            />
-          </label>
-        </div>
+        <ColorPicker
+          label="Kolor"
+          auto="Automatyczny"
+          value={st.color}
+          swatches={PALETTE.map(([color, label]) => ({ color, label, css: color === 'ink' ? 'var(--b-ink)' : undefined }))}
+          onPick={color => restyle({ color })}
+          onDrag={color => restyle({ color }, true)}
+          onDragEnd={endStyling}
+        />
       </div>
       {!measure && (
         <label className="b-glook-row">
@@ -170,15 +154,15 @@ function Look() {
           <output>{Math.round(fill * 100)}%</output>
         </label>
       )}
-      <label className="b-glook-row">
-        <span>Etykieta</span>
-        <select className="b-select" value={st.label ?? ''} onChange={e => restyle({ label: (e.target.value || undefined) as Style['label'] })}>
-          <option value="">Automatycznie</option>
-          <option value="name">Nazwa</option>
-          <option value="value">Nazwa i wartość</option>
-          <option value="none">Brak</option>
-        </select>
-      </label>
+      <div className="b-glook-row">
+        <span id="geo-label-label">Etykieta</span>
+        <Menu<NonNullable<Style['label']> | ''>
+          aria-labelledby="geo-label-label"
+          value={st.label ?? ''}
+          onChange={v => restyle({ label: v || undefined })}
+          options={[{ value: '', label: 'Automatycznie' }, { value: 'name', label: 'Nazwa' }, { value: 'value', label: 'Nazwa i wartość' }, { value: 'none', label: 'Brak' }]}
+        />
+      </div>
       <Button variant="ghost" className="b-glook-reset" disabled={!o.style} onClick={resetStyle}>Przywróć domyślny wygląd</Button>
     </div>
   );

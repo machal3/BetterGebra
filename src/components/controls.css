@@ -1,21 +1,27 @@
-/* Shared controls (components/controls.tsx). Tokens from styles/tokens.css. */
+/* Shared controls (components/controls.tsx), in the values of the Affect UI clean files. Tokens: styles/tokens.css. */
 
 /* ---------- Section ---------- */
 .b-section + .b-section { margin-top: var(--b-s6); }
 .b-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--b-s2); min-height: 28px; margin: 0 0 var(--b-s2); }
-.b-section-head h2 { margin: 0; font-size: var(--b-fs-md); font-weight: 600; color: var(--b-strong); letter-spacing: -0.005em; }
+.b-section-head h2 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; line-height: 20px; color: var(--b-strong); }
+
+/* ---------- Small parts: count, kbd, tag, inline code ---------- */
 .b-count {
-  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px;
+  display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--b-r-xs);
   background: var(--b-fill); font-size: var(--b-fs-xs); font-weight: 500; line-height: 16px; font-variant-numeric: tabular-nums; color: var(--b-text);
 }
 .b-kbd {
-  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px;
-  background: var(--b-card); box-shadow: 0 0 0 0.5px var(--b-line-hover), 0 1px 0 var(--b-line-hover);
-  font: 500 11px/1 var(--b-font); color: var(--b-text);
+  display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--b-r-xs);
+  background: var(--b-card); box-shadow: var(--b-shadow); font: 500 var(--b-fs-xs)/1 var(--b-font); color: var(--b-ink);
+}
+.b-tag {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--b-r-xs);
+  background: var(--b-fill); font-size: var(--b-fs-xs); font-weight: 500; line-height: 16px; color: var(--b-text);
 }
 .b-hint { margin: 0; font-size: var(--b-fs-md); line-height: 20px; color: var(--b-text); }
-.b-hint code, .b-code {
-  padding: 1px 5px; border-radius: 5px; background: var(--b-fill); font: 12px/18px var(--b-mono); color: var(--b-ink); white-space: nowrap;
+.b-code, .b-hint code {
+  padding: 1px 5px; border-radius: var(--b-r-xs); background: var(--b-fill); font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-ink);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Error ---------- */
@@ -23,47 +29,49 @@
 .b-error svg { flex: none; margin-top: 1px; }
 .b-error:empty { display: none; }
 
-/* ---------- Field ---------- */
+/* ---------- Focus: the components' ring, an outline outside (inside on full-width rows) ---------- */
+:is(.b-field, .b-menu-trigger, .b-swatch, .b-chip, .b-colorpop-area):focus-visible { outline: 2px solid var(--b-focus); outline-offset: 1px; }
+:is(.b-switch, .b-disclosure-head, .b-row, .b-menu-option):focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+
+/* ---------- Field (the input of Message Actions) ---------- */
 .b-field {
   box-sizing: border-box; width: 100%; min-width: 0; height: 32px; margin: 0; padding: 0 10px;
   border: 0; border-radius: var(--b-r-sm); outline: none;
-  background: var(--b-card); box-shadow: inset 0 0 0 1px var(--b-field-line);
+  background: var(--b-card); box-shadow: var(--b-shadow-field);
   font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);
   transition: box-shadow var(--b-fast) ease, background-color var(--b-fast) ease;
 }
-.b-field--mono { font-family: var(--b-mono); font-size: 13px; }
-.b-field::placeholder { color: var(--b-muted); opacity: 1; }
-@media (hover: hover) { .b-field:hover:not(:focus) { box-shadow: inset 0 0 0 1px var(--b-text); } }
-.b-field:focus { box-shadow: inset 0 0 0 1px var(--b-solid), 0 0 0 3px var(--b-focus); }
-.b-field[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--b-danger); }
-.b-field[aria-invalid="true"]:focus { box-shadow: inset 0 0 0 1px var(--b-danger), 0 0 0 3px var(--b-danger-line); }
-.b-field:disabled { opacity: 0.5; cursor: not-allowed; }
+.b-field--mono { font-family: var(--b-mono); }
+.b-field::placeholder { color: var(--b-faint); opacity: 1; }
+@media (hover: hover) { .b-field:hover:not(:focus, :disabled) { box-shadow: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.04); } }
+.b-field:focus { outline: 2px solid var(--b-focus); outline-offset: 1px; }
+.b-field[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--b-danger); }
+.b-field[aria-invalid="true"]:focus { outline-color: var(--b-danger-line); }
+.b-field:disabled { opacity: 0.4; cursor: not-allowed; }
 /* number fields without the spinner arrows: values are typed, the slider is next to them */
 .b-field[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .b-field[type="number"]::-webkit-inner-spin-button, .b-field[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
-/* ---------- Switch row ---------- */
+/* ---------- Switch row: monochrome, the solid chip when on ---------- */
 .b-switch {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3); width: 100%; min-height: 36px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-s3); width: 100%; min-height: 32px;
   margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm); background: none;
   font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
   transition: background-color var(--b-fast) ease;
 }
 @media (hover: hover) { .b-switch:hover { background: var(--b-wash); } }
-.b-switch:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
 .b-switch-track {
-  position: relative; flex: none; width: 32px; height: 18px; border-radius: 9px; background: var(--b-control-off);
+  position: relative; flex: none; width: 28px; height: 16px; border-radius: var(--b-r-full); background: var(--b-control-off);
   transition: background-color var(--b-normal) var(--b-ease);
 }
 .b-switch-thumb {
-  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
-  transition: transform var(--b-slow) var(--b-ease-glide);
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--b-thumb);
+  box-shadow: var(--b-shadow-thumb); transition: transform var(--b-normal) var(--b-ease-glide), background-color var(--b-normal) ease;
 }
 .b-switch[aria-checked="true"] .b-switch-track { background: var(--b-solid); }
-.b-switch[aria-checked="true"] .b-switch-thumb { transform: translateX(14px); }
+.b-switch[aria-checked="true"] .b-switch-thumb { transform: translateX(12px); background: var(--b-thumb-on); }
 
-/* ---------- Slider ---------- */
+/* ---------- Slider: a hairline track, filled in ink from zero to the thumb ---------- */
 .b-slider {
   --p: 0.5; --z: 0.5;
   -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer;
@@ -78,91 +86,174 @@
 }
 .b-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border: 0; border-radius: 50%;
-  background: #ffffff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform var(--b-fast) ease;
+  background: var(--b-card); box-shadow: var(--b-shadow-thumb); transition: transform var(--b-press) var(--b-ease);
 }
-.b-slider::-moz-range-thumb {
-  width: 16px; height: 16px; border: 0; border-radius: 50%;
-  background: #ffffff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.25);
-}
+.b-slider::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--b-card); box-shadow: var(--b-shadow-thumb); }
+:root[data-theme="dark"] .b-slider::-webkit-slider-thumb { background: var(--b-solid); }
+:root[data-theme="dark"] .b-slider::-moz-range-thumb { background: var(--b-solid); }
 .b-slider:active::-webkit-slider-thumb { transform: scale(1.1); }
 .b-slider:focus-visible { outline: none; }
-.b-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--b-focus), 0 1px 3px rgba(0, 0, 0, 0.25); }
-.b-slider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--b-focus), 0 1px 3px rgba(0, 0, 0, 0.25); }
+.b-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--b-card), 0 0 0 3px var(--b-focus), var(--b-shadow-thumb); }
+.b-slider:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 1px var(--b-card), 0 0 0 3px var(--b-focus), var(--b-shadow-thumb); }
 
-/* ---------- Disclosure (Filter Menu group anatomy) ---------- */
+/* ---------- Disclosure (the groups of Filter Menu / Smart Recommendation) ---------- */
 .b-disclosure + .b-disclosure { margin-top: 2px; }
 .b-disclosure-head {
   display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm);
   background: none; font: 500 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
-  transition: background-color 140ms ease;
+  transition: background-color var(--b-fast) ease;
 }
-@media (hover: hover) { .b-disclosure-head:hover { background: var(--b-wash); transition-duration: var(--b-fast); } }
-.b-disclosure-head:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
-.b-disclosure-chevron { flex: none; color: var(--b-icon); transform: rotate(-90deg); transition: transform 260ms var(--b-ease); }
+@media (hover: hover) { .b-disclosure-head:hover { background: var(--b-wash); } }
+.b-disclosure-chevron { flex: none; color: var(--b-icon); transform: rotate(-90deg); transition: transform var(--b-slow) var(--b-ease); }
 .b-disclosure[data-open] .b-disclosure-chevron { transform: none; }
 .b-disclosure-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .b-disclosure-aside { flex: none; font-size: var(--b-fs-sm); font-weight: 400; color: var(--b-muted); font-variant-numeric: tabular-nums; }
-.b-disclosure-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms var(--b-ease); }
+.b-disclosure-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--b-fold) var(--b-ease); }
 .b-disclosure[data-open] .b-disclosure-panel { grid-template-rows: 1fr; }
-.b-disclosure-inner { min-height: 0; overflow: hidden; opacity: 0; transition: opacity 220ms ease; }
+.b-disclosure-inner { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--b-normal) ease; }
 .b-disclosure[data-open] .b-disclosure-inner { opacity: 1; padding-bottom: 6px; }
 
-/* ---------- Popover surface ---------- */
+/* ---------- Row: one line of a list (history, examples, references, objects) ---------- */
+.b-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; margin: 0; padding: 6px 8px; border: 0;
+  border-radius: var(--b-r-sm); background: none; text-align: start; color: var(--b-ink); cursor: pointer;
+  font: 400 var(--b-fs-md)/20px var(--b-font); transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-row:hover { background: var(--b-wash); } }
+.b-row:active { background: var(--b-fill); }
+.b-row[aria-pressed="true"], .b-row[aria-current="true"] { background: var(--b-fill); }
+
+/* ---------- Chip: a small toggle or link inside a card ---------- */
+.b-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 24px; margin: 0; padding: 0 8px; border: 0; border-radius: var(--b-r-sm);
+  background: var(--b-card); box-shadow: inset 0 0 0 0.5px var(--b-line-hover); cursor: pointer;
+  font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
+  transition: background-color var(--b-fast) ease, color var(--b-fast) ease, transform var(--b-press) var(--b-ease);
+}
+@media (hover: hover) { .b-chip:hover { background: var(--b-wash); } }
+.b-chip:active { transform: scale(0.97); }
+.b-chip[aria-pressed="false"] { color: var(--b-muted); }
+
+/* ---------- Popover surface: menus, settings, colour; a sheet on phones ---------- */
 .b-popover {
-  position: fixed; inset: auto; box-sizing: border-box; margin: 0; padding: 0; border: 0; border-radius: var(--b-r-xl);
+  position: fixed; inset: auto; box-sizing: border-box; margin: 0; padding: 0; border: 0; border-radius: var(--b-r-lg);
   background: var(--b-raised); color: var(--b-ink); box-shadow: var(--b-shadow-pop);
   font: 400 var(--b-fs-md)/20px var(--b-font);
   max-height: calc(100dvh - 16px); overflow: auto; overscroll-behavior: contain;
 }
-.b-popover:popover-open { animation: b-pop-in var(--b-normal) var(--b-ease); }
-@keyframes b-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-.b-popover-title { margin: 0; padding: 12px 16px 6px; font-size: 15px; font-weight: 500; line-height: 24px; color: var(--b-strong); }
-/* Phones: a sheet from the bottom edge, above the bottom bar */
+.b-popover:popover-open { animation: b-pop-in var(--b-pop) var(--b-ease); }
+@keyframes b-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
+.b-popover-title { margin: 0; padding: 12px 16px 6px; font-size: var(--b-fs-title); font-weight: 500; line-height: 24px; color: var(--b-strong); }
+/* Phones: a sheet from the bottom edge, with a grip */
 @media (max-width: 767px) {
   .b-popover {
     left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto !important; max-height: 80dvh;
     border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-bottom: env(safe-area-inset-bottom);
+  }
+  .b-popover::before {
+    content: ""; display: block; width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--b-line-hover);
   }
   .b-popover:popover-open { animation: b-sheet-in var(--b-slow) var(--b-ease); }
   .b-popover::backdrop { background: var(--b-backdrop); }
 }
 @keyframes b-sheet-in { from { transform: translateY(24px); opacity: 0; } }
 
-@media (prefers-reduced-motion: reduce) {
-  .b-switch-thumb, .b-switch-track, .b-disclosure-chevron, .b-disclosure-panel, .b-disclosure-inner, .b-field { transition: none; }
-  .b-popover:popover-open { animation: none; }
+/* ---------- Menu (the option menu of Smart Recommendation) ---------- */
+.b-menu-trigger {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; max-width: 100%; height: 32px;
+  margin: 0; padding: 0 6px 0 10px; border: 0; border-radius: var(--b-r-sm); background: var(--b-card); box-shadow: var(--b-shadow-field);
+  font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
+  transition: box-shadow var(--b-fast) ease;
 }
-@media (pointer: coarse) {
-  .b-switch { min-height: 44px; }
-  .b-field { height: 40px; font-size: 16px; }
-  .b-disclosure-head { height: 44px; }
+@media (hover: hover) { .b-menu-trigger:hover { box-shadow: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.04); } }
+.b-menu-value { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.b-menu-chevron { flex: none; color: var(--b-icon); transition: transform var(--b-slow) var(--b-ease); }
+.b-menu-trigger[aria-expanded="true"] .b-menu-chevron { transform: rotate(180deg); }
+.b-menu { width: 248px; max-height: min(320px, 60vh); padding: 4px; }
+/* (only while open: a display here would beat the hidden state of a closed popover) */
+.b-menu:popover-open { display: grid; gap: 2px; grid-template-columns: minmax(0, 1fr); }
+.b-menu-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 32px; margin: 0; padding: 0 10px 0 8px; border: 0;
+  border-radius: var(--b-r-sm); background: none; font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink); text-align: start; cursor: pointer;
+  transition: background-color 90ms ease-out;
 }
+@media (hover: hover) { .b-menu-option:hover { background: var(--b-wash); } }
+.b-menu-option[aria-selected="true"] { background: var(--b-fill); }
+.b-menu-option svg { flex: none; color: var(--b-strong); }
 
-/* Affect UI (clean): icons a step darker than the components' default, for 3:1 on white and on dark */
+/* ---------- Colour: swatches and the custom colour popover ---------- */
+.b-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.b-swatch {
+  position: relative; display: grid; place-items: center; flex: none; width: 22px; height: 22px; margin: 0; padding: 0; border: 0;
+  border-radius: 50%; background: var(--sw, transparent); color: var(--b-icon); cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--b-line-hover);
+  transition: box-shadow var(--b-normal) var(--b-ease), transform var(--b-press) var(--b-ease);
+}
+.b-swatch:active { transform: scale(0.92); }
+.b-swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--b-line-hover), 0 0 0 2px var(--b-raised), 0 0 0 3.5px var(--b-strong); }
+/* automatic: an empty swatch with a slash; custom: a dashed ring with a plus until a colour is chosen */
+.b-swatch.is-auto { background: linear-gradient(135deg, transparent calc(50% - 0.75px), var(--b-muted) calc(50% - 0.75px) calc(50% + 0.75px), transparent calc(50% + 0.75px)); }
+.b-swatch.is-custom[aria-pressed="false"] { box-shadow: none; outline: 1px dashed var(--b-faint); outline-offset: -1px; }
+.b-swatch.is-custom[aria-pressed="false"]:focus-visible { outline: 2px solid var(--b-focus); outline-offset: 1px; }
+.b-colorpop { width: 232px; padding: 12px; }
+.b-colorpop:popover-open { display: grid; gap: 12px; }
+.b-colorpop-area {
+  position: relative; height: 136px; border-radius: var(--b-r-sm); cursor: crosshair; touch-action: none;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+  box-shadow: inset 0 0 0 0.5px var(--b-line-hover);
+}
+.b-colorpop-knob {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 2.5px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.b-hue {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 12px; margin: 0; border-radius: var(--b-r-full); cursor: pointer;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); box-shadow: inset 0 0 0 0.5px var(--b-line-hover);
+}
+.b-hue::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: var(--b-shadow-thumb); }
+.b-hue::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; box-shadow: var(--b-shadow-thumb); }
+.b-hue:focus-visible { outline: 2px solid var(--b-focus); outline-offset: 2px; }
+.b-colorpop-row { display: grid; grid-template-columns: 32px 1fr; gap: 8px; align-items: center; }
+.b-colorpop-preview { width: 32px; height: 32px; border-radius: var(--b-r-sm); box-shadow: inset 0 0 0 0.5px var(--b-line-hover); }
+
+/* ---------- Affect UI (clean): icons a step darker than the components' default, for 3:1 on white and on dark ---------- */
 :root :is(.ui-buttonc, .ui-mac, .ui-nsc, .ui-src) {
   --ui-btnc-icon: var(--b-icon); --ui-mac-icon: var(--b-icon); --ui-nsc-icon: var(--b-icon); --ui-src-icon: var(--b-icon);
 }
 /* (the segmented control writes its icon colour into the rule, not into a variable) */
 :root .ui-segc__opt:not([data-active]) .ui-segc__icon { color: var(--b-icon); }
+/* a pressed or open icon button: the neutral fill, as the components mark what is picked */
+.ui-buttonc.b-tool-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--b-fill); color: var(--b-strong); }
 
-/* ---------- Toolbar over a canvas (Wykresy, Geometria): a column on the right ---------- */
+/* ---------- Floating toolbar over a canvas (Wykresy, Geometria): a column on the right ---------- */
 .b-toolbar {
   position: absolute; z-index: 3; top: var(--b-s3); right: var(--b-s3);
-  display: flex; flex-direction: column; padding: 4px; border-radius: var(--b-r-xl);
+  display: flex; flex-direction: column; padding: 4px; border-radius: var(--b-r-lg);
   background: var(--b-raised); box-shadow: var(--b-shadow-pop);
+  /* a short canvas (a phone on its side): the column scrolls rather than leaving it */
+  max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none;
 }
 .b-tool-group { display: flex; flex-direction: column; gap: 2px; }
-.b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 1px 0 var(--b-line); }
+.b-tool-group + .b-tool-group { margin-top: 4px; padding-top: 4px; box-shadow: inset 0 0.5px 0 var(--b-line-hover); }
 .b-toolbar .ui-buttonc { --h: 32px; color: var(--b-ink); }
-.ui-buttonc.b-tool-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--b-fill); color: var(--b-strong); }
-.b-tool-text { display: block; font: italic 17px/1 var(--b-math); }
-/* a short canvas (a phone on its side): the column scrolls rather than leaving it */
-.b-toolbar { max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none; }
+.b-tool-text { display: block; font: italic var(--b-fs-math)/1 var(--b-math); }
 @media (max-width: 767px) { .b-toolbar { top: 8px; right: 8px; } }
-@media (pointer: coarse) { .b-toolbar .ui-buttonc { --h: 44px; } }
 
 /* ---------- Empty state: a quiet drawing and a sentence ---------- */
 .b-empty { display: grid; justify-items: center; gap: var(--b-s2); padding: var(--b-s4) var(--b-s2); text-align: center; }
 .b-empty p { margin: 0; font-size: var(--b-fs-md); color: var(--b-text); }
-.b-empty-art { width: 96px; height: 64px; fill: var(--b-wash); stroke: var(--b-faint); stroke-width: 1.5; stroke-linecap: round; }
+.b-empty-art { width: 96px; height: 64px; fill: var(--b-card); stroke: var(--b-faint); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.b-empty-art .b-empty-soft { fill: var(--b-wash); stroke: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .b-switch-thumb, .b-switch-track, .b-disclosure-chevron, .b-disclosure-panel, .b-disclosure-inner, .b-field, .b-menu-chevron, .b-swatch, .b-chip { transition: none; }
+  .b-popover:popover-open { animation: none; }
+}
+@media (pointer: coarse) {
+  .b-switch, .b-row, .b-menu-option { min-height: 44px; }
+  .b-field, .b-menu-trigger { height: 38px; font-size: 16px; }
+  .b-disclosure-head { height: 44px; }
+  .b-chip { min-height: 36px; }
+  .b-swatch { width: 30px; height: 30px; }
+  .b-toolbar .ui-buttonc { --h: 44px; }
+}

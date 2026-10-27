@@ -61,25 +61,6 @@
 .b-glook-row > span { color: var(--b-text); }
 .b-glook-row > :nth-child(2):last-child { grid-column: 2 / -1; justify-self: start; }
 .b-glook-row output { min-width: 3em; text-align: end; font-size: var(--b-fs-sm); font-variant-numeric: tabular-nums; color: var(--b-ink); }
-.b-gswatches { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.b-gswatch {
-  position: relative; width: 22px; height: 22px; margin: 0; padding: 0; border: 0; border-radius: 50%; overflow: hidden; cursor: pointer;
-  background: var(--sw, transparent); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); transition: box-shadow var(--b-normal) var(--b-ease);
-}
-:root[data-theme="dark"] .b-gswatch { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
-/* Automatic: a slashed empty swatch */
-.b-gswatch.is-auto { background: linear-gradient(135deg, transparent 44%, var(--b-text) 44% 56%, transparent 56%); }
-.b-gswatch[aria-pressed="true"], .b-gswatch.is-chosen { box-shadow: 0 0 0 2px var(--b-raised), 0 0 0 4px var(--b-solid); }
-.b-gswatch:focus-visible, .b-gswatch.is-custom:focus-within { outline: 2px solid var(--b-focus); outline-offset: 3px; }
-.b-gswatch.is-custom:not(.is-chosen) { background: conic-gradient(#d13438, #ca5010, #eaa300, #107c10, #0f6cbd, #8764b8, #c239b3, #d13438); }
-.b-gswatch.is-custom input { position: absolute; inset: -8px; width: 40px; height: 40px; opacity: 0; cursor: pointer; }
-.b-select {
-  height: 32px; padding: 0 28px 0 10px; border: 0; border-radius: var(--b-r-sm); outline: none; cursor: pointer;
-  background: var(--b-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4.5 6.25 3.5 3.5 3.5-3.5' fill='none' stroke='%23777' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 16px;
-  box-shadow: inset 0 0 0 1px var(--b-field-line); font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);
-  -webkit-appearance: none; appearance: none;
-}
-.b-select:focus-visible { box-shadow: inset 0 0 0 1px var(--b-solid), 0 0 0 3px var(--b-focus); }
 .ui-buttonc.b-glook-reset { justify-self: start; margin-top: 2px; }
 
 /* ---------- Side panel ---------- */
@@ -166,7 +147,6 @@
   .b-gpalette-tool { width: 44px; height: 44px; }
   .b-gobj-eye { width: 44px; height: 44px; }
   .b-gobj .ui-buttonc { --h: 44px; }
-  .b-gswatch { width: 30px; height: 30px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .b-ginspect { animation: none; }

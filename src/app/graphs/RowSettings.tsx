@@ -6,14 +6,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
-import { ErrorText, Field, Slider, placePopover } from '@/components/controls';
+import { ColorPicker, ErrorText, Field, Slider, placePopover } from '@/components/controls';
 import { IconCopy, IconSearch, IconTrash } from '@/components/icons';
 import { useStore } from '@/hooks/use-store';
 import { calculatorQuery } from '../../calculator-query';
 import { domainText, symbolic } from '../../format';
 import { constant } from '../../math';
 import { compiled } from '../../model';
-import { MAX_FUNCTIONS, PALETTE, addFunction, patchFunction, setActive, state, type Dash, type FnState, type Mode } from '../../state';
+import { MAX_FUNCTIONS, PALETTE, PALETTE_NAMES, addFunction, patchFunction, setActive, state, type Dash, type FnState, type Mode } from '../../state';
 import { toast } from '../toast';
 import { removeRow } from './FunctionList';
 
@@ -26,7 +26,7 @@ const read = (input: HTMLInputElement, empty: number): number | string => {
 };
 
 const DASHES: [Dash, string][] = [['', 'Ciągła'], ['8 6', 'Przerywana'], ['1 5', 'Kropkowana']];
-const dashIcon = (d: Dash) => <svg viewBox="0 0 32 16" width="32" height="16" aria-hidden="true"><path d="M3 8h26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray={d || undefined} fill="none" /></svg>;
+const dashIcon = (d: Dash) => <svg viewBox="0 0 32 16" width="32" height="16" aria-hidden="true"><path d="M3 8h26" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeDasharray={d || undefined} fill="none" /></svg>;
 
 function Settings({ f, close }: { f: FnState; close: () => void }) {
   useStore(['list', 'expr', 'active', 'mode', 'style'], s => s.functions.length);
@@ -98,14 +98,13 @@ function Settings({ f, close }: { f: FnState; close: () => void }) {
 
       <section className="b-rowset-group" aria-labelledby={`fn-${f.id}-color`}>
         <div className="b-rowset-head"><h3 id={`fn-${f.id}-color`}>Kolor</h3></div>
-        <div className="b-colors" role="group" aria-labelledby={`fn-${f.id}-color`}>
-          {PALETTE.map(color => (
-            <button key={color} type="button" className="b-color" style={{ '--sw': color } as React.CSSProperties} aria-pressed={f.color === color} aria-label={`Kolor ${color}`} onClick={() => patchFunction(f.id, { color })} />
-          ))}
-          <label className="b-color b-color--custom" title="Własny kolor">
-            <input type="color" aria-label="Własny kolor" defaultValue={f.color} key={f.color} onInput={e => patchFunction(f.id, { color: e.currentTarget.value })} />
-          </label>
-        </div>
+        <ColorPicker
+          label="Kolor"
+          value={f.color}
+          swatches={PALETTE.map((color, i) => ({ color, label: PALETTE_NAMES[i] }))}
+          onPick={color => { if (color) patchFunction(f.id, { color }); }}
+          onDrag={color => patchFunction(f.id, { color })}
+        />
       </section>
 
       {/* the complex plane is coloured, no line is drawn */}

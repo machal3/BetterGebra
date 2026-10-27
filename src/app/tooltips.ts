@@ -1,6 +1,7 @@
 /**
- * Tooltips in place of the native title bubble: shown after a short delay on hover or keyboard focus, beside a
- * vertical toolbar and above other controls (below when there is no room). The Affect UI components keep their own.
+ * Tooltips in place of the native title bubble, timed like the ones inside Affect UI's Message Actions: 380ms
+ * after the pointer arrives, at once on keyboard focus; beside a vertical toolbar and above other controls (below
+ * when there is no room). The Affect UI components keep their own.
  */
 export function initTooltips(): void {
   const tip = document.createElement('div');
@@ -16,7 +17,7 @@ export function initTooltips(): void {
     owner = null;
     if (tip.matches(':popover-open')) tip.hidePopover();
   };
-  const show = (el: HTMLElement) => {
+  const show = (el: HTMLElement, delay: number) => {
     hide();
     const text = el.getAttribute('title');
     if (!text) return;
@@ -36,17 +37,17 @@ export function initTooltips(): void {
       else if (y < 4) y = r.bottom + gap;
       tip.style.left = `${Math.max(4, Math.min(x, innerWidth - t.width - 4))}px`;
       tip.style.top = `${Math.max(4, Math.min(y, innerHeight - t.height - 4))}px`;
-    }, 300);
+    }, delay);
   };
   document.addEventListener('pointerover', e => {
     if (e.pointerType === 'touch' || owner?.contains(e.target as Node)) return;
     const el = (e.target as Element).closest<HTMLElement>('[title]');
-    if (el) show(el); else if (owner) hide();
+    if (el) show(el, 380); else if (owner) hide();
   });
   document.addEventListener('pointerout', e => { if (owner && !owner.contains(e.relatedTarget as Node)) hide(); });
   document.addEventListener('focusin', e => {
     const t = e.target as Element, el = t.closest?.<HTMLElement>('[title]');
-    if (el && t.matches(':focus-visible')) show(el);
+    if (el && t.matches(':focus-visible')) show(el, 0);
   });
   document.addEventListener('focusout', hide);
   document.addEventListener('pointerdown', hide, true);
