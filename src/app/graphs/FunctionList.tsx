@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
 import { Count, ErrorText, Kbd, Section, cx } from '@/components/controls';
 import { IconPlus, IconSliders, IconTrash } from '@/components/icons';
+import { PHONE, useMedia } from '@/hooks/use-media';
 import { useStore } from '@/hooks/use-store';
 import { domainText } from '../../format';
 import { expressionMathML, relationMathML } from '../../math';
@@ -16,6 +17,7 @@ import { compiled } from '../../model';
 import { MAX_FUNCTIONS, addFunction, patchFunction, removeFunction, setActive, state, type FnState, type Mode } from '../../state';
 import { useShown } from '../Dock';
 import { toast } from '../toast';
+import { ExactInCalculator } from './Analysis';
 import { RowSettings } from './RowSettings';
 
 const PREFIX: Record<Mode, string> = { graph: 'y =', complex: 'f(z) =' };
@@ -167,8 +169,11 @@ function FunctionRow({ f, index, mode, active }: { f: FnState; index: number; mo
 
 export function FunctionList() {
   // the same topics the old list listened to: not params, so a slider never re-renders the list
-  const { functions, mode, activeId } = useStore(['list', 'expr', 'active', 'mode', 'style'], s => ({ functions: s.functions, mode: s.mode, activeId: s.activeId }));
+  const { functions, mode, activeId, analysisOpen } = useStore(['list', 'expr', 'active', 'mode', 'style', 'panel'], s => ({ functions: s.functions, mode: s.mode, activeId: s.activeId, analysisOpen: s.analysisOpen }));
   const full = functions.length >= MAX_FUNCTIONS;
+  // the calculator's offer for the active row, unless the Badanie card beside the list shows it already (a phone's
+  // sheet hides that card)
+  const phone = useMedia(PHONE);
   if (!useShown('Funkcje')) return null;
   return (
     <Section title="Funkcje" aside={<Count label={`${functions.length} z ${MAX_FUNCTIONS} funkcji`}>{functions.length} / {MAX_FUNCTIONS}</Count>}>
@@ -186,6 +191,7 @@ export function FunctionList() {
       >
         Dodaj funkcję
       </Button>
+      {(!analysisOpen || phone) && <ExactInCalculator className="b-fn-rec" />}
     </Section>
   );
 }

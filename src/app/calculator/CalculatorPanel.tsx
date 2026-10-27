@@ -7,6 +7,7 @@ import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, useSync
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
 import { MessageActions } from '@/components/ui/message-actions-clean';
+import { SmartRecommendation, type Recommendation } from '@/components/ui/smart-recommendation-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
@@ -15,7 +16,7 @@ import { Count, Disclosure, Section, cx } from '@/components/controls';
 import { IconArrowRight, IconBook, IconCalculator, IconHistory, IconList, IconStop, IconTrash } from '@/components/icons';
 import type { Pod, Result, Row } from '../../cas/engine';
 import { nodeML } from '../../cas/nodeformat';
-import { parse } from '../../cas/parse';
+import { parse, type Node } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
 import { PaneBar, setPane, useShown } from '../Dock';
 import { usePanel } from '../navigation';
@@ -83,7 +84,53 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
       )}
       {result.error && <section className="b-pod is-error" role="alert"><p>{result.error}</p></section>}
       {result.pods.map((p, i) => <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />)}
+      {!busy && <NextSteps ans={result.ans} query={query} run={run} />}
     </div>
+  );
+}
+
+/** The one-letter variables of a parsed answer (e and i are constants). */
+function letters(n: Node, out = new Set<string>()): Set<string> {
+  if (n.t === 'id' && n.n.length === 1 && n.n !== 'e' && n.n !== 'i') out.add(n.n);
+  else if (n.t === 'op') { letters(n.a, out); letters(n.b, out); }
+  else if (n.t === 'neg' || n.t === 'post') letters(n.a, out);
+  else if (n.t === 'call') n.args.forEach(a => letters(a, out));
+  return out;
+}
+
+/** What can be done next with an answer that is a function of one variable; nothing for numbers, sets and the rest. */
+function nextSteps(ans: string | undefined, query: string): Recommendation[] {
+  if (!ans || ans.length > 160) return [];
+  let node: Node;
+  try { node = parse(sugar(ans)); } catch { return []; }
+  const vars = [...letters(node)];
+  if (node.t === 'list' || node.t === 'rel' || vars.length !== 1) return [];
+  const [v] = vars, x = v === 'x';
+  const steps: Recommendation[] = [
+    ...x ? [{ id: `badanie funkcji ${ans}`, label: 'Badanie funkcji', reason: 'Dziedzina, granice, asymptoty, monotoniczność, ekstrema i wypukłość wyniku, z wykresem.', signal: 3 as const }] : [],
+    { id: `${ans} = 0`, label: 'Miejsca zerowe', reason: `Rozwiązania równania ${ans} = 0 w postaci dokładnej.`, signal: 3 },
+    { id: `diff(${ans}, ${v})`, label: 'Pochodna', reason: `Pochodna wyniku względem ${v}, uproszczona.`, signal: 3 },
+    { id: `integrate(${ans}, ${v})`, label: 'Całka nieoznaczona', reason: 'Funkcja pierwotna wyniku, sprawdzona różniczkowaniem.', signal: 3 },
+    ...x ? [{ id: `wykres ${ans}`, label: 'Wykres', reason: 'Wykres wyniku z miejscami zerowymi i ekstremami, do przeniesienia do Wykresów.', signal: 3 as const }] : [],
+  ];
+  return steps.filter(s => s.id !== query.trim());
+}
+
+/** "Co dalej z wynikiem": the answer's next questions, in the card of the Badanie panel's calculator offer. */
+function NextSteps({ ans, query, run }: { ans: string | undefined; query: string; run: (q: string) => void }) {
+  const options = nextSteps(ans, query);
+  if (!options.length) return null;
+  return (
+    <SmartRecommendation
+      key={`${query} ${ans}`}
+      className="b-calc-next"
+      title="Co dalej z wynikiem"
+      options={options}
+      showSignal={false}
+      defaultOpen={false}
+      acceptLabel={o => `Oblicz: ${o.label.charAt(0).toLowerCase()}${o.label.slice(1)}`}
+      onAccept={o => run(o.id)}
+    />
   );
 }
 

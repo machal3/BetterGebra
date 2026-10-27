@@ -71,6 +71,8 @@
 /* ---------- Results ---------- */
 .b-calc-results { display: grid; gap: var(--b-s2); container-type: inline-size; transition: opacity var(--b-normal) ease; }
 .b-calc-results[aria-busy="true"] { opacity: 0.5; }
+/* "Co dalej z wynikiem": the whole width under the cards */
+.ui-src.b-calc-next { grid-column: 1 / -1; max-width: none; margin-top: var(--b-s2); }
 .b-calc-query { display: flex; align-items: flex-start; gap: var(--b-s3); padding: 8px 4px 6px; }
 .b-calc-query-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .b-calc-query-label { font-size: var(--b-fs-sm); font-weight: 500; color: var(--b-text); }

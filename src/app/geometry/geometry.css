@@ -66,6 +66,8 @@
 .b-glook-row output { min-width: 3em; text-align: end; font-size: var(--b-fs-sm); font-variant-numeric: tabular-nums; color: var(--b-ink); }
 .ui-buttonc.b-glook-reset { justify-self: start; margin-top: 2px; }
 .b-ginspect-name { flex: 1; min-width: 0; }
+/* the object's way to Wykresy and the calculator, at the foot of the inspector */
+.ui-src.b-ginspect-rec { max-width: none; }
 
 /* ---------- Widok (phones: what the short toolbar leaves out) ---------- */
 .b-gview { width: 312px; }

@@ -1,20 +1,25 @@
 /**
- * What floats over the geometry board: the tool's hint, the inspector of the selected object (its coordinates and
- * its look), the toolbar, and the dialog that asks for a length, radius, angle or scale. On phones the toolbar keeps
- * undo, redo and zoom, the rest is in the Widok popover (a sheet), and the inspector shows the look on request.
+ * What floats over the geometry board: the tool's hint, the inspector of the selected object (its coordinates, its
+ * look, and for a line, segment, ray or circle its way to Wykresy and the calculator), the toolbar, and the dialog
+ * that asks for a length, radius, angle or scale. On phones the toolbar keeps undo, redo and zoom, the rest is in
+ * the Widok popover (a sheet), and the inspector shows the look on request.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
+import { SmartRecommendation, type Recommendation } from '@/components/ui/smart-recommendation-clean';
 import { ColorPicker, ErrorText, Field, Menu, Slider, Switch } from '@/components/controls';
 import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconSliders, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { definition } from '../../geometry/commands';
-import { isPoint, type Style } from '../../geometry/construct';
+import { isPoint, type GeoObject, type Shape, type Style } from '../../geometry/construct';
 import {
   DEFAULT_WIDTH, FILLED, PALETTE, TOOLS, applyCoords, clearAll, coordText, decimal, defaultSize, endStyling, exportPng, onFocusCoords, readAsk, redo,
   resetStyle, resetView, restyle, select, styled, toggleAxes, toggleGrid, undo, zoomIn, zoomOut,
 } from '../../geometry/controller';
+import { addFunction, commit, state, MAX_FUNCTIONS } from '../../state';
+import { openSection } from '../navigation';
+import { toast } from '../toast';
 import { useGeo } from './use-geo';
 
 export function Hint() {
@@ -195,8 +200,76 @@ function Look() {
   );
 }
 
+/** A number for the graph panel's and the calculator's parsers: a dot, at most 4 decimals, no −0. */
+const plainNum = (v: number) => String(Number(v.toFixed(4)) || 0);
+/** (x − 2)^2, (y + 1)^2, x^2 */
+const square = (v: string, c: number) => Math.abs(c) < 1e-9 ? `${v}^2` : `(${v} ${c > 0 ? '-' : '+'} ${plainNum(Math.abs(c))})^2`;
+
+/**
+ * The shape as a row of Wykresy: a line (or a segment, ray or vector: a line over their x range) as y = mx + b, a
+ * vertical line as x = c, a circle as its equation. Null for what a row can't draw (a vertical segment or ray).
+ */
+function asRow(s: Shape | null | undefined): { expr: string; from: number; to: number; whole: boolean } | null {
+  if (s?.kind === 'circle') return { expr: `${square('x', s.cx)} + ${square('y', s.cy)} = ${plainNum(s.r * s.r)}`, from: -Infinity, to: Infinity, whole: true };
+  if (s?.kind !== 'line' && s?.kind !== 'segment' && s?.kind !== 'ray' && s?.kind !== 'vector') return null;
+  const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  if (Math.abs(dx) <= 1e-9 * Math.abs(dy)) return s.kind === 'line' ? { expr: `x = ${plainNum(s.x1)}`, from: -Infinity, to: Infinity, whole: true } : null;
+  const m = dy / dx, b = s.y1 - m * s.x1;
+  const mx = Math.abs(m) < 1e-9 ? '' : Math.abs(m - 1) < 1e-9 ? 'x' : Math.abs(m + 1) < 1e-9 ? '-x' : `${plainNum(m)}x`;
+  const expr = !mx ? plainNum(b) : Math.abs(b) < 1e-9 ? mx : `${mx} ${b > 0 ? '+' : '-'} ${plainNum(Math.abs(b))}`;
+  const [from, to] = s.kind === 'line' ? [-Infinity, Infinity] : s.kind === 'ray' ? (dx > 0 ? [s.x1, Infinity] : [-Infinity, s.x1]) : [Math.min(s.x1, s.x2), Math.max(s.x1, s.x2)];
+  return { expr, from, to, whole: s.kind === 'line' };
+}
+
+/** Adds the row to Wykresy (in its graph mode) and goes there; the toast can take it back. */
+function toGraphs(row: NonNullable<ReturnType<typeof asRow>>, name: string): void {
+  const f = addFunction(row.expr, { from: row.from, to: row.to });
+  if (!f) { toast(`Wykresy mają już ${MAX_FUNCTIONS} funkcji. Usuń którąś, aby dodać ${name}.`); return; }
+  const before = state.activeId;
+  state.activeId = f.id;
+  commit('list', 'expr', 'active');
+  openSection('graph');
+  toast(`Dodano ${name} do Wykresów.`, {
+    label: 'Cofnij',
+    run: () => {
+      state.functions.splice(state.functions.indexOf(f), 1);
+      state.activeId = state.functions.some(g => g.id === before) ? before : state.functions[0]?.id ?? 0;
+      commit('list', 'expr', 'active');
+    },
+  });
+}
+
+/** "Dalej z obiektem": a line, segment, ray or circle drawn in Wykresy, or its graph in the calculator. */
+function Elsewhere({ o, s }: { o: GeoObject; s: Shape | null | undefined }) {
+  const row = asRow(s);
+  if (!row) return null;
+  const kind = s!.kind === 'circle' ? 'okrąg' : s!.kind === 'line' ? 'prostą' : s!.kind === 'ray' ? 'półprostą' : s!.kind === 'vector' ? 'wektor' : 'odcinek';
+  const shown = row.expr.includes('=') ? row.expr : `y = ${row.expr}`;
+  const range = row.whole ? '' : Number.isFinite(row.from) && Number.isFinite(row.to) ? ` dla x od ${plainNum(row.from)} do ${plainNum(row.to)}`
+    : Number.isFinite(row.from) ? ` dla x ≥ ${plainNum(row.from)}` : ` dla x ≤ ${plainNum(row.to)}`;
+  const options: Recommendation[] = [
+    { id: 'graphs', label: 'Narysuj w Wykresach', reason: `${o.name}: ${shown}${range} — nowy wiersz obok Twoich funkcji.`, signal: 3 },
+    ...row.whole ? [{ id: 'calc', label: 'Wykres w kalkulatorze', reason: `Wykres ${shown} z punktami szczególnymi, w kalkulatorze.`, signal: 3 as const }] : [],
+  ];
+  return (
+    <SmartRecommendation
+      key={`${o.id} ${row.expr} ${row.from} ${row.to}`}
+      className="b-ginspect-rec"
+      title={`Dalej z: ${o.name}`}
+      options={options}
+      showSignal={false}
+      defaultOpen={false}
+      acceptLabel={op => op.id === 'graphs' ? 'Otwórz w Wykresach' : 'Otwórz w kalkulatorze'}
+      onAccept={op => {
+        if (op.id === 'graphs') toGraphs(row, `${kind} ${o.name}`);
+        else location.hash = `#kalkulator?q=${encodeURIComponent(`wykres ${row.expr}`)}`;
+      }}
+    />
+  );
+}
+
 export function Inspector() {
-  useGeo();
+  const geo = useGeo();
   const target = styled();
   // a phone shows the coordinates; the look, which would cover half the board, waits for its button
   const phone = useMedia(PHONE), [look, setLook] = useState(false);
@@ -210,6 +283,7 @@ export function Inspector() {
       </header>
       <Coordinates />
       {(!phone || look) && <Look />}
+      <Elsewhere o={target} s={geo.shapes.get(target.id)} />
     </section>
   );
 }

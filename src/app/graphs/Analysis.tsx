@@ -79,15 +79,36 @@ function recommendations(): Recommendation[] {
   ];
 }
 
+/**
+ * "Dokładnie w kalkulatorze": the active row's exact study and other exact answers, a click away. In the Badanie
+ * card, and under the list of functions while that card is closed.
+ */
+export function ExactInCalculator({ className }: { className?: string }) {
+  useStore(['active', 'expr', 'mode', 'list'], s => s.activeId);
+  // after a trip to the calculator, the suggestion starts over instead of showing "przyjęto"
+  const panel = usePanel();
+  const options = recommendations(), f = activeFn();
+  if (!options.length || !f) return null;
+  return (
+    <SmartRecommendation
+      // a new row or expression starts from its first suggestion again
+      key={`${f.id} ${f.expression} ${state.mode} ${panel}`}
+      className={className}
+      title="Dokładnie w kalkulatorze"
+      options={options}
+      showSignal={false}
+      defaultOpen={false}
+      acceptLabel={() => 'Otwórz w kalkulatorze'}
+      onAccept={o => { location.hash = `#kalkulator?q=${encodeURIComponent(o.id)}`; }}
+    />
+  );
+}
+
 export function Analysis() {
   const open = useStore(['panel', 'active', 'expr', 'mode', 'list'], s => s.analysisOpen);
   const json = useSyncExternalStore(onDrawn, snapshot);
-  // after a trip to the calculator, the suggestion starts over instead of showing "przyjęto"
-  const panel = usePanel();
   if (!open || !json) return null;
   const view: View = JSON.parse(json);
-  const options = recommendations();
-  const f = activeFn();
   const close = () => { state.analysisOpen = false; commit('panel'); };
   return (
     <section id="analysis" className="b-analysis" aria-label="Badanie funkcji" aria-live="polite">
@@ -105,19 +126,7 @@ export function Analysis() {
         {!view.set && <div><dt>Przecięcia</dt><dd dangerouslySetInnerHTML={{ __html: view.cross }} /></div>}
       </dl>
       <p className="b-analysis-foot">{view.set ? 'w widocznej części płaszczyzny' : 'w widocznym zakresie'}</p>
-      {options.length > 0 && f && (
-        <SmartRecommendation
-          // a new row or expression starts from its first suggestion again
-          key={`${f.id} ${f.expression} ${state.mode} ${panel}`}
-          className="b-analysis-rec"
-          title="Dokładnie w kalkulatorze"
-          options={options}
-          showSignal={false}
-          defaultOpen={false}
-          acceptLabel={() => 'Otwórz w kalkulatorze'}
-          onAccept={o => { location.hash = `#kalkulator?q=${encodeURIComponent(o.id)}`; }}
-        />
-      )}
+      <ExactInCalculator className="b-analysis-rec" />
     </section>
   );
 }

@@ -76,6 +76,8 @@
 .b-fn-add .ui-buttonc__label { flex: 1; text-align: start; }
 .b-fn-add .ui-buttonc__icon:first-child { color: var(--b-solid); }
 .b-fn-add .ui-buttonc__icon:last-child { width: auto; height: auto; }
+/* the calculator's offer for the active row, under the list */
+.ui-src.b-fn-rec { max-width: none; margin-top: var(--b-s3); }
 
 /* ---------- Row settings (popover; a bottom sheet on phones) ---------- */
 .b-rowset-pop { width: 344px; }
