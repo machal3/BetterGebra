@@ -27,7 +27,7 @@ export const COMMAND_NAMES: Record<string, string> = {
   norm: 'norma', identity: 'macierz jednostkowa', mean: 'średnia', median: 'mediana', variance: 'wariancja', stdev: 'odchylenie standardowe',
   sort: 'sortuj', total: 'suma', degree: 'stopień', coeffs: 'współczynniki', discriminant: 'Δ', quotient: 'iloraz', remainder: 'reszta',
   polygcd: 'NWD', resultant: 'rugownik', trigexpand: 'rozwiń trygonometrycznie', trigreduce: 'linearyzuj', expandlog: 'rozwiń logarytmy',
-  clear: 'usuń zmienne', who: 'zmienne',
+  clear: 'usuń zmienne', who: 'zmienne', sum: 'sum', product: 'prod',
 };
 const ID: Record<string, string> = { pi: 'π', inf: '∞', phi: 'φ', tau: 'τ', ans: 'ans' };
 const PREC: Record<string, number> = { rel: 0, '+': 1, '-': 1, '*': 2, '/': 2, '.*': 2, './': 2, '\\': 2, neg: 3, '^': 4, '.^': 4, post: 5 };
@@ -42,7 +42,9 @@ export function spelling(raw: string, fallback: (n: string) => string | undefine
 let spell = (n: string) => n;
 export function nodeML(n: Node, spelled?: (n: string) => string): string {
   spell = spelled ?? (s => s);
-  try { return `<math display="block">${ml(n)}</math>`; } finally { spell = s => s; }
+  // statements (a = 1; b = a + 1) one after another, not a set in braces
+  const body = n.t === 'list' && n.items.some(i => i.t === 'assign') ? n.items.map(ml).join(`${mo(';')}<mspace width="0.6em"/>`) : null;
+  try { return `<math display="block">${body ?? ml(n)}</math>`; } finally { spell = s => s; }
 }
 
 function ml(n: Node): string {

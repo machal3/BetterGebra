@@ -66,6 +66,10 @@ export const COMMANDS: Record<string, [number, number]> = {
   trigexpand: [1, 1], trigreduce: [1, 1], expandlog: [1, 1],
   plot: [1, 8],
   clear: [0, Infinity], who: [0, 0],
+  zeros: [1, 2], ones: [1, 2], eye: [1, 2], diag: [1, 2], linspace: [2, 3], logspace: [2, 3], magic: [1, 1], hilb: [1, 1],
+  vander: [1, 1], toeplitz: [1, 2], repmat: [2, 3], reshape: [2, 3], kron: [2, 2], triu: [1, 2], tril: [1, 2], fliplr: [1, 1],
+  flipud: [1, 1], circshift: [2, 3], size: [1, 2], numel: [1, 1], length: [1, 1], isempty: [1, 1], find: [1, 2], any: [1, 2],
+  all: [1, 2], cumsum: [1, 2], cumprod: [1, 2],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -79,7 +83,7 @@ export const ALIAS: Record<string, string> = {
   rozloz: 'factor', faktoryzuj: 'factor', factor: 'factor', factorize: 'factor', czynniki: 'factor',
   wspolnymianownik: 'together', together: 'together', ulamkiproste: 'apart', apart: 'apart', partialfractions: 'apart',
   skroc: 'cancel', cancel: 'cancel', licznik: 'numer', numerator: 'numer', numer: 'numer', mianownik: 'denom', denominator: 'denom', denom: 'denom',
-  rozwiaz: 'solve', solve: 'solve', pierwiastki: 'roots', zera: 'roots', roots: 'roots', zeros: 'roots', miejscazerowe: 'roots',
+  rozwiaz: 'solve', solve: 'solve', pierwiastki: 'roots', zera: 'roots', roots: 'roots', miejscazerowe: 'roots',
   pochodna: 'diff', rozniczkuj: 'diff', diff: 'diff', derivative: 'diff', derive: 'diff',
   calka: 'integrate', calkuj: 'integrate', integrate: 'integrate', integral: 'integrate', int: 'integrate',
   granica: 'limit', limit: 'limit', lim: 'limit', taylor: 'taylor', szereg: 'taylor', series: 'taylor', maclaurin: 'taylor',
@@ -107,6 +111,9 @@ export const ALIAS: Record<string, string> = {
   quotient: 'quotient', iloraz: 'quotient', remainder: 'remainder', reszta: 'remainder', polygcd: 'polygcd', resultant: 'resultant', rugownik: 'resultant',
   trigexpand: 'trigexpand', trigreduce: 'trigreduce', expandlog: 'expandlog', rozwinlog: 'expandlog',
   clear: 'clear', usun: 'clear', who: 'who', whos: 'who', zmienne: 'who',
+  zerowa: 'zeros', jedynki: 'ones', diagonalna: 'diag', przekatna: 'diag', magiczny: 'magic', hilbert: 'hilb', vandermonde: 'vander',
+  kronecker: 'kron', powiel: 'repmat', przeksztalc: 'reshape', rozmiar: 'size', wymiar: 'size', znajdz: 'find', pusta: 'isempty',
+  sumyczesciowe: 'cumsum', przesun: 'circshift',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;

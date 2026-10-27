@@ -15,6 +15,7 @@ import { toML, toText } from './format';
 import { complexParts, constSign, binomialBig } from './functions';
 import { definite, integrate, partialFractions } from './integrate';
 import * as LA from './matrix';
+import { ARRAYS, arrayReading, placeOf } from './arrays';
 import { nodeML, spelling } from './nodeformat';
 import * as NT from './ntheory';
 import { Decimal } from './bigfloat';
@@ -139,7 +140,20 @@ function top(node: Node, env: Env): Out {
   if (node.t === 'list' && node.items.some(i => i.t === 'assign')) return statements(node.items, env);
   if (node.t === 'call' && Object.hasOwn(COMMANDS, node.n)) return command(node.n, node.args, env);
   if (node.t === 'op' && node.o === '\\') return leftDivisionPods(node.a, node.b, env);
-  if (node.t === 'rel') return relation(node, env, null);
+  if (node.t === 'call' && (node.n === 'max' || node.n === 'min') && node.args.length === 1) {
+    // max(v): the value and where it is
+    const v = evaluate(node.args[0], env), k = placeOf(v, node.n);
+    if (k !== null) {
+      const e = simplify(scalar(evaluate(node, env), node.n));
+      return { pods: [{ title: node.n === 'max' ? 'Największy element' : 'Najmniejszy element', rows: [row(e, `na miejscu ${k}`)] }], value: ex(e) };
+    }
+  }
+  if (node.t === 'rel') {
+    // v > 2 of a list: 1 where it holds, 0 where not; an equation otherwise
+    const v = node.ops.length === 1 ? safe(() => evaluate(node, env)) : null;
+    if (v && v.t !== 'rel') return { pods: [{ ...valuePods(v).pods[0], title: 'Porównanie element po elemencie', note: '1 tam, gdzie zachodzi, 0 tam, gdzie nie. Jako indeks wybiera te miejsca: v(v > 2).' }], value: v };
+    return relation(node, env, null);
+  }
   if (node.t === 'list' && node.items.length && node.items.every(i => i.t === 'rel')) return system(node.items, env, null);
   const v = evaluate(node, env);
   return valuePods(v);
@@ -927,7 +941,7 @@ function listPods(v: Extract<Value, { t: 'list' }>): Pod[] {
   // a long list (1:1000) is shown by its beginning and end; all of it is in the copied text
   const shown = xs.length > LIST_SHOWN ? [...xs.slice(0, LIST_SHOWN - 4).map(toML), mi('…'), ...xs.slice(-3).map(toML)] : xs.map(toML);
   const pods: Pod[] = [{ title: v.set ? 'Zbiór' : 'Lista', rows: [{ ml: M(`${mo(v.set ? '{' : '[')}${shown.join(mo(';'))}${mo(v.set ? '}' : ']')}`), text: `${v.set ? '{' : '['}${xs.map(toText).join('; ')}${v.set ? '}' : ']'}` }], note: xs.length > LIST_SHOWN ? `${xs.length} elementów` : undefined }];
-  if (xs.length >= 2 && xs.length <= 5000 && xs.every(isConstant) && xs.every(x => constSign(x) !== null)) pods.push(...statsPods(xs));
+  if (!v.logical && xs.length >= 2 && xs.length <= 5000 && xs.every(isConstant) && xs.every(x => constSign(x) !== null)) pods.push(...statsPods(xs));
   return pods;
 }
 const valueText = (v: Value): string => v.t === 'expr' ? toText(v.e) : v.t === 'list' ? `${v.set ? '{' : '['}${v.items.map(valueText).join('; ')}${v.set ? '}' : ']'}` : v.t === 'matrix' ? matText(v.rows)
@@ -1020,8 +1034,22 @@ function bound(name: string, args: Node[]): string[] {
   return out;
 }
 
+/** MATLAB's functions on vectors and matrices (arrays.ts); null when sum, diff, mean … mean what they meant before (Σ, d/dx). */
+function arrayCommand(name: string, args: Node[], env: Env): Out | null {
+  const overloaded = ['sum', 'product', 'diff', 'mean', 'median', 'sort'].includes(name);
+  const vals = overloaded ? safe(() => args.map(a => evaluate(a, env))) : args.map(a => evaluate(a, env));
+  if (!vals || !arrayReading(name, vals)) return null;
+  const r = ARRAYS[name](vals);
+  const first = valuePods(r.value).pods[0];
+  return { pods: [{ ...first, title: r.title, note: r.note ?? first.note }], value: r.value };
+}
+
 function command(name: string, args: Node[], env0: Env): Out {
   const env = shadow(env0, bound(name, args));
+  if (Object.hasOwn(ARRAYS, name)) {
+    const r = arrayCommand(name, args, env);
+    if (r) return r;
+  }
   switch (name) {
     case 'clear': return clearCommand(args);
     case 'who': return whoCommand();

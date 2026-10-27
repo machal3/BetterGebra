@@ -55,7 +55,8 @@ test('elementwise operations, transpose and functions on lists', () => {
   // ' after an expression is still the derivative
   expect(card(run("(x^3)'"), 'Wynik')).toBe('3x^2');
   expect(card(run('sin([0, pi/2])'), 'Lista')).toBe('[0; 1]');
-  expect(card(run('max([3, 1, 4])'), 'Wynik')).toBe('4');
+  expect(card(run('max([3, 1, 4])'), 'Największy element')).toBe('4');
+  expect(run('min([3, 1, 4, 1])').pods[0].rows[0].note).toBe('na miejscu 2');
   expect(card(run('[1 2] * [1 2; 3 4]'), 'Lista')).toBe('[7; 10]');
   expect(card(run("(1:3)' * (1:3)"), 'Macierz')).toBe('[[1, 2, 3], [2, 4, 6], [3, 6, 9]]');
   expect(card(run("(1:3) * (1:3)'"), 'Wynik')).toBe('14');

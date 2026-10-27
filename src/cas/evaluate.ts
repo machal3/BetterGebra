@@ -5,15 +5,16 @@
  */
 import { E, Expr, HALF, I, INF, MINUS_ONE, ONE, PI, TWO, add, div, fn, isConstant, isInt, isNum, mul, neg, num, pow, sqrt, sub, subst, sym, variables } from './expr';
 import { diff } from './calculus';
-import { complexParts } from './functions';
+import { complexParts, constSign } from './functions';
 import { approx } from './numeric';
 import { COMMANDS, FUNCTIONS, Node } from './parse';
 import { fail, parseDecimal, qdiv, qfloor, qsub } from './q';
 
 export type Value =
   | { t: 'expr'; e: Expr }
-  | { t: 'list'; items: Value[]; set: boolean }
-  | { t: 'matrix'; rows: Expr[][] }
+  /** logical: the 0 and 1 of a comparison (v > 2); as an index it picks the places of its 1s */
+  | { t: 'list'; items: Value[]; set: boolean; logical?: boolean }
+  | { t: 'matrix'; rows: Expr[][]; logical?: boolean }
   | { t: 'rel'; ops: string[]; parts: Expr[] }
   /** @(x, y) body, f(x) = body: the body is an expression, or a list or matrix of them */
   | { t: 'fn'; params: string[]; body: Value }
@@ -110,7 +111,10 @@ export function evaluate(n: Node, env: Env): Value {
     }
     case 'list': return listValue(n, env);
     case 'rel': {
-      const parts = n.parts.map(p => scalar(evaluate(p, env), 'Równanie'));
+      const vals = n.parts.map(p => evaluate(p, env));
+      // v > 2 of a list or matrix: 1 where it holds, 0 where not, as in MATLAB
+      if (vals.some(v => v.t === 'list' || v.t === 'matrix')) return compareEach(n.ops, vals);
+      const parts = vals.map(v => scalar(v, 'Równanie'));
       return { t: 'rel', ops: n.ops, parts };
     }
     case 'range': return rangeValue(n, env);
@@ -246,6 +250,18 @@ function transposed(v: Extract<Value, { t: 'list' | 'matrix' }>, conjugate: bool
   return fromRows(conjugate ? t.map(r => r.map(conj)) : t);
 }
 
+const HOLDS: Record<string, (s: number) => boolean> = { '=': s => s === 0, '!=': s => s !== 0, '<': s => s < 0, '>': s => s > 0, '<=': s => s <= 0, '>=': s => s >= 0 };
+function compareEach(ops: string[], vals: Value[]): Value {
+  if (ops.length !== 1 || !Object.hasOwn(HOLDS, ops[0])) fail('Elementy porównuję jednym znakiem: v > 2, A == B, v != 0.');
+  const holds = HOLDS[ops[0]];
+  const v = broadcast(vals, ([a, b]) => {
+    const s = constSign(sub(a, b));
+    if (s === null) fail('Porównuję elementy, które są liczbami rzeczywistymi.');
+    return holds(s!) ? ONE : num(0);
+  }, 'Porównanie');
+  return v.t === 'list' || v.t === 'matrix' ? { ...v, logical: true } : v;
+}
+
 // --- Matrices written out: [1 2; 3 4], [A B; C D], [v w] ---
 
 /** A value as a block of a matrix: a number is 1×1, a list a row. */
@@ -353,7 +369,13 @@ function indexValue(name: string, v: Value, args: Node[], env: Env): Value {
   const pick = (arg: Node, size: number): number[] => {
     if (arg.t === 'colon') return Array.from({ length: size }, (_, k) => k);
     const val = evaluate(arg, { ...env, end: size });
-    const ks = val.t === 'list' ? val.items.map(x => scalar(x, 'Indeks')) : val.t === 'matrix' ? val.rows.flat() : [scalar(val, 'Indeks')];
+    // an index matrix is read down its columns, like everything in MATLAB
+    const ks = val.t === 'list' ? val.items.map(x => scalar(x, 'Indeks')) : val.t === 'matrix' ? transpose(val.rows).flat() : [scalar(val, 'Indeks')];
+    if ((val.t === 'list' || val.t === 'matrix') && val.logical) {
+      // v(v > 2): the places where the comparison holds
+      if (ks.length !== size) fail(`Maska ma ${ks.length} elementów, a indeksowany wymiar ${size}.`);
+      return ks.flatMap((k, i) => (isNum(k) && k.v.n ? [i] : []));
+    }
     return ks.map(k => {
       if (!isInt(k)) fail('Indeks to liczba całkowita dodatnia; liczymy od 1.');
       const j = Number((k as { v: { n: bigint } }).v.n);

@@ -362,6 +362,11 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>f(x) = x^2</code>, <code>g = @(x, y) x*y</code>, <code>f(3)</code></td><td>funkcje</td></tr>
               <tr><td><code>1:5</code>, <code>0:0.5:2</code>, <code>A(2, :)</code>, <code>v(end)</code></td><td>zakresy i indeksy (od 1)</td></tr>
               <tr><td><code>A'</code>, <code>A .* B</code>, <code>A .^ 2</code>, <code>A\b</code>, <code>[A B; C D]</code></td><td>transpozycja, działania na elementach, układ A·x = b, sklejanie</td></tr>
+              <tr><td><code>zeros(2, 3)</code>, <code>ones</code>, <code>eye</code>, <code>diag</code>, <code>linspace(0, 1, 5)</code>, <code>magic(4)</code>, <code>hilb</code></td><td>budowanie macierzy</td></tr>
+              <tr><td><code>reshape(A, 2, 3)</code>, <code>repmat</code>, <code>kron</code>, <code>triu</code>, <code>fliplr</code>, <code>circshift</code></td><td>zmiana kształtu (elementy w dół kolumn)</td></tr>
+              <tr><td><code>size</code>, <code>numel</code>, <code>length</code>, <code>find</code>, <code>any</code>, <code>all</code></td><td>pytania o macierz</td></tr>
+              <tr><td><code>sum(A)</code>, <code>sum(A, 2)</code>, <code>prod</code>, <code>cumsum</code>, <code>diff(v)</code>, <code>mean</code>, <code>sort(v, 'descend')</code></td><td>na wektorze cały, na macierzy kolumnami; <code>sum(f, k, 1, n)</code> i <code>diff(f, x)</code> jak dotąd</td></tr>
+              <tr><td><code>v &gt; 2</code>, <code>v(v &gt; 2)</code>, <code>sum(v &gt; 2)</code></td><td>porównanie elementów (1 lub 0) i wybór warunkiem</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
               <tr><td><code>wykres sin x, cos x</code>, <code>wykres x^2 + y^2 = 25</code></td><td>wykresy funkcji i krzywych</td></tr>
