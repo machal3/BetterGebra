@@ -11,7 +11,6 @@ import { SmartRecommendation, type Recommendation } from '@/components/ui/smart-
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
-import { TipsPanel } from '@/components/ui/tips-panel-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
 import { IconArrowRight, IconBook, IconCalculator, IconHistory, IconList, IconStop, IconTrash } from '@/components/icons';
 import type { Pod, Result, Row } from '../../cas/engine';
@@ -223,11 +222,19 @@ function Status() {
   );
 }
 
+/** The examples of the empty page: a card with the topics as tabs, each example a tile that runs it. */
 function Suggestions({ run }: { run: (q: string) => void }) {
   const [topic, setTopic] = useState(EXAMPLES[0][0]);
   const items = EXAMPLES.find(([t]) => t === topic)?.[1] ?? [];
+  const grid = useRef<HTMLDivElement>(null);
+  // another topic: its tiles arrive one by one
+  useLayoutEffect(() => cascade(grid.current), [topic]);
   return (
-    <section className="b-calc-suggest" aria-label="Przykłady">
+    <section className="b-calc-suggest" aria-labelledby="calc-suggest-title">
+      <header className="b-calc-suggest-head">
+        <h2 id="calc-suggest-title">Przykłady</h2>
+        <span className="b-calc-suggest-hint">Kliknij, aby obliczyć</span>
+      </header>
       <SegmentedControl
         kind="tabs"
         variant="underline"
@@ -236,13 +243,14 @@ function Suggestions({ run }: { run: (q: string) => void }) {
         onChange={setTopic}
         options={EXAMPLES.map(([t]) => ({ value: t, label: t, controls: 'calc-examples' }))}
       />
-      <div id="calc-examples" role="tabpanel" aria-label={topic}>
-        <TipsPanel
-          key={topic}
-          title={topic}
-          showCount={false}
-          tips={items.map(([q, label]) => ({ id: q, title: label, description: <code className="b-code">{q}</code>, action: 'Oblicz', doneLabel: 'Liczę…', onAction: () => run(q) }))}
-        />
+      <div ref={grid} id="calc-examples" className="b-calc-tiles" role="tabpanel" aria-label={topic}>
+        {items.map(([q, label]) => (
+          <button key={q} type="button" className="b-row b-calc-tile" onClick={() => run(q)}>
+            <span className="b-calc-tile-label">{label}</span>
+            <span className="b-calc-tile-query">{q}</span>
+            <span className="b-calc-tile-go" aria-hidden="true"><IconArrowRight size={14} /></span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -356,9 +364,14 @@ export function CalculatorPanel() {
         <div className="b-calc">
           {idle && (
             <div className="b-calc-hero">
-              <span className="b-calc-hero-icon" aria-hidden="true"><IconCalculator size={28} /></span>
+              <span className="b-calc-hero-icon" aria-hidden="true"><IconCalculator size={22} /></span>
               <h2>Kalkulator symboliczny</h2>
-              <p>Wyniki dokładne — ułamki, pierwiastki, π — a cyfry dziesiętne tylko te, które są pewne. Wpisz wyrażenie, równanie albo polecenie po polsku lub angielsku.</p>
+              <p>Wpisz wyrażenie, równanie albo polecenie — po polsku lub angielsku.</p>
+              <ul className="b-calc-hero-facts" aria-label="Co daje kalkulator">
+                <li>wyniki dokładne: ułamki, pierwiastki, π</li>
+                <li>tylko pewne cyfry dziesiętne</li>
+                <li>sprawdzone numerycznie</li>
+              </ul>
             </div>
           )}
           <Composer value={value} setValue={setValue} run={run} input={input} />
