@@ -2,6 +2,7 @@
 
 #calc.calc { overflow-y: auto; scrollbar-gutter: stable; background: var(--b-page); }
 .b-calc {
+  position: relative; z-index: 1;
   display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-s4);
   width: min(100%, 860px); margin: 0 auto; padding: 40px 32px 72px;
   font: 400 var(--b-fs-md)/20px var(--b-font); color: var(--b-ink);

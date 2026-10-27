@@ -21,7 +21,9 @@ import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
 import { DIGITS, abort, clearHistory, compute, setDigits, useCalc } from './calc-store';
 import { EXAMPLES, KEYS } from './content';
+import { Backdrop } from '../Backdrop';
 import './calculator.css';
+
 
 /** Long plain numbers wrap as text; MathML would run off the card. */
 const LONG = /^[−-]?[\d.e+−-]{70,}$/;
@@ -294,6 +296,8 @@ export function CalculatorPanel() {
   return (
     <>
       {main && createPortal(
+        <>
+        <Backdrop className="b-calc-backdrop" speed={7} />
         <div className="b-calc">
           {idle && (
             <div className="b-calc-hero">
@@ -306,7 +310,8 @@ export function CalculatorPanel() {
           {busy && <Status />}
           {idle && <Suggestions run={run} />}
           {current.result ? <Results result={current.result} query={current.query} busy={busy} run={run} /> : busy && <Placeholder />}
-        </div>,
+        </div>
+        </>,
         main,
       )}
       {side && createPortal(<Side run={run} />, side)}

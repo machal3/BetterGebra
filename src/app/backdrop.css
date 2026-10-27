@@ -1,0 +1,29 @@
+/* The drifting grid behind a page (Backdrop.tsx). Tokens: styles/tokens.css. */
+.b-backdrop {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  opacity: 0; transition: opacity 700ms var(--b-ease);
+}
+.b-backdrop[data-shown] { opacity: 1; animation: b-backdrop-in 1200ms var(--b-ease); }
+@keyframes b-backdrop-in { from { opacity: 0; } }
+.b-backdrop .ui-gb { height: 100%; }
+/* its own layer from the start, so the first frame of the drift doesn't repaint the page */
+.b-backdrop .ui-gb-lines { will-change: transform; }
+/* faded out: nothing left to composite every frame */
+.b-backdrop:not([data-shown]) .ui-gb-lines { animation-play-state: paused; }
+
+/* Kalkulator: fixed under the scrolling column, brightest around the field at the top */
+.b-calc-backdrop { position: fixed; top: var(--b-topbar-h); right: 0; bottom: var(--b-bottombar-h); left: 0; }
+.b-calc-backdrop .ui-gb-grid {
+  -webkit-mask-image: radial-gradient(ellipse 80% 72% at 50% 30%, #000 30%, transparent 82%);
+  mask-image: radial-gradient(ellipse 80% 72% at 50% 30%, #000 30%, transparent 82%);
+}
+@media (min-width: 768px) {
+  body[data-dock="open"] .b-calc-backdrop { left: calc(var(--b-dock-w) + 2 * var(--b-dock-gap)); }
+}
+
+/* Geometria: over the empty board, in the part no panel covers; gone with the first object or the board's own grid */
+.b-geo-backdrop { z-index: 1; inset: 0 0 var(--b-inset-bottom) var(--b-inset-left); }
+
+@media (prefers-reduced-motion: reduce) {
+  .b-backdrop, .b-backdrop[data-shown] { transition: none; animation: none; }
+}

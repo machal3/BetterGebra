@@ -10,6 +10,7 @@ import { AskDialog, Hint, Inspector, Toolbar } from './Board';
 import { Objects } from './Objects';
 import { ToolCatalogue, ToolPalette } from './Tools';
 import { useGeo } from './use-geo';
+import { Backdrop } from '../Backdrop';
 import './geometry.css';
 
 type Tab = 'geo-tab-create' | 'geo-tab-objects';
@@ -54,6 +55,8 @@ export function GeometryPanel() {
       )}
       {stage && createPortal(
         <>
+          {/* an empty board shows the start screen's grid until the first object, or its own grid, is there */}
+          <Backdrop className="b-geo-backdrop" shown={!geo.objects.length && !geo.grid} speed={8} />
           <div className="b-gtop">
             <ToolPalette onMore={() => { choose('geo-tab-create'); requestAnimationFrame(() => { search.current?.focus(); search.current?.scrollIntoView({ block: 'nearest' }); }); }} />
             <Hint />
