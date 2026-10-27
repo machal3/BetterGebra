@@ -3,7 +3,7 @@
  * the mode switch moves to a bar at the bottom, within reach of the thumb.
  */
 import { Button } from '@/components/ui/button-clean';
-import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
+import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control-clean';
 import { IconCalculator, IconComplex, IconGeometry, IconGraph, IconHelp, IconMoon, IconSun } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { useStore } from '@/hooks/use-store';

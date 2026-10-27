@@ -52,10 +52,8 @@
 .b-topbar-actions { justify-self: end; display: flex; align-items: center; gap: 2px; }
 .b-topbar .ui-buttonc, .b-home-corner .ui-buttonc { --h: 32px; }
 
-/* The mode switch: the inactive labels a step darker than the component's default, for 4.5:1 on its tray */
-:root:not([data-theme="dark"]) .b-modes { --ui-seg-soft: #5c5c5c; }
-.b-topbar .b-modes { --ui-seg-tray: var(--b-track); }
-:root[data-theme="dark"] .b-topbar .b-modes { --ui-seg-tray: var(--b-page); }
+/* The mode switch (segmented control, clean, tray): in dark mode the tray is the page, one step below the bar */
+:root[data-theme="dark"] .b-topbar .b-modes { --ui-segc-track: var(--b-page); }
 
 /* ---------- Tablet: no wordmark, the switch stays centred ---------- */
 @media (max-width: 1023px) {
@@ -90,9 +88,9 @@
   box-shadow: inset 0 1px 0 var(--b-line);
 }
 /* Icon above a short label, so four sections fit a 360px screen with 52px targets */
-/* (the component sets its sizes on .ui-seg[data-size], so these need one class more) */
-.ui-seg.b-modes--bottom[data-size] { --ui-seg-h: 52px; --ui-seg-px: 2px; --ui-seg-fs: 11.5px; --ui-seg-icon: 20px; --ui-seg-tray: var(--b-track); }
-.b-modes--bottom .ui-seg__content { flex-direction: column; gap: 3px; }
+/* (the component sets its sizes on .ui-segc[data-size], also for a coarse pointer, so these need more classes) */
+.b-bottombar .ui-segc.b-modes--bottom[data-size] { --ui-segc-h: 56px; --ui-segc-px: 2px; --ui-segc-fs: var(--b-fs-xs); --ui-segc-lh: 16px; --ui-segc-icon: 20px; }
+.b-modes--bottom .ui-segc__content { flex-direction: column; gap: 2px; }
 
 /* ---------- Start screen ---------- */
 .b-home {
@@ -137,7 +135,7 @@
   text-align: center;
 }
 /* three tips: the list never needs its own scroll (the component's documented variable) */
-.ui-tp.b-home-tips { width: min(100%, 760px); --ui-tp-max-height: none; }
+.ui-tpc.b-home-tips { width: min(100%, 760px); --ui-tpc-max-height: none; }
 
 @media (max-width: 767px) {
   .b-home-main { justify-content: flex-start; padding-top: 88px; }

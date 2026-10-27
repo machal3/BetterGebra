@@ -3,8 +3,7 @@
  * its look), the toolbar, and the dialog that asks for a length, radius, angle or scale.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Button as CleanButton } from '@/components/ui/button-clean';
+import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { ErrorText, Field, Slider, cx } from '@/components/controls';
 import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
@@ -26,19 +25,19 @@ export function Toolbar() {
   return (
     <div className="b-toolbar" role="toolbar" aria-label="Narzędzia rysunku" aria-orientation="vertical">
       <div className="b-tool-group">
-        <CleanButton variant="ghost" icon={<IconUndo />} aria-label="Cofnij" title="Cofnij  Ctrl+Z" disabled={!geo.canUndo} onClick={undo} />
-        <CleanButton variant="ghost" icon={<IconRedo />} aria-label="Ponów" title="Ponów  Ctrl+Y" disabled={!geo.canRedo} onClick={redo} />
+        <Button variant="ghost" icon={<IconUndo />} aria-label="Cofnij" title="Cofnij  Ctrl+Z" disabled={!geo.canUndo} onClick={undo} />
+        <Button variant="ghost" icon={<IconRedo />} aria-label="Ponów" title="Ponów  Ctrl+Y" disabled={!geo.canRedo} onClick={redo} />
       </div>
       <div className="b-tool-group">
-        <CleanButton variant="ghost" icon={<IconZoomIn />} aria-label="Przybliż" title="Przybliż" onClick={zoomIn} />
-        <CleanButton variant="ghost" icon={<IconZoomOut />} aria-label="Oddal" title="Oddal" onClick={zoomOut} />
-        <CleanButton variant="ghost" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok" onClick={resetView} />
+        <Button variant="ghost" icon={<IconZoomIn />} aria-label="Przybliż" title="Przybliż" onClick={zoomIn} />
+        <Button variant="ghost" icon={<IconZoomOut />} aria-label="Oddal" title="Oddal" onClick={zoomOut} />
+        <Button variant="ghost" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok" onClick={resetView} />
       </div>
       <div className="b-tool-group">
-        <CleanButton variant="ghost" className="b-tool-toggle" icon={<IconGrid />} aria-pressed={geo.grid} aria-label="Kratka" title="Kratka" onClick={toggleGrid} />
-        <CleanButton variant="ghost" className="b-tool-toggle" icon={<IconAxes />} aria-pressed={geo.axes} aria-label="Układ współrzędnych" title="Układ współrzędnych" onClick={toggleAxes} />
-        <CleanButton variant="ghost" icon={<IconDownload />} aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG" onClick={exportPng} />
-        <CleanButton variant="ghost" className="b-gclear" icon={<IconTrash />} aria-label="Wyczyść rysunek" title="Wyczyść rysunek" disabled={!geo.objects.length} onClick={clearAll} />
+        <Button variant="ghost" className="b-tool-toggle" icon={<IconGrid />} aria-pressed={geo.grid} aria-label="Kratka" title="Kratka" onClick={toggleGrid} />
+        <Button variant="ghost" className="b-tool-toggle" icon={<IconAxes />} aria-pressed={geo.axes} aria-label="Układ współrzędnych" title="Układ współrzędnych" onClick={toggleAxes} />
+        <Button variant="ghost" icon={<IconDownload />} aria-label="Zapisz rysunek jako PNG" title="Zapisz PNG" onClick={exportPng} />
+        <Button variant="ghost" className="b-gclear" icon={<IconTrash />} aria-label="Wyczyść rysunek" title="Wyczyść rysunek" disabled={!geo.objects.length} onClick={clearAll} />
       </div>
     </div>
   );
@@ -180,7 +179,7 @@ function Look() {
           <option value="none">Brak</option>
         </select>
       </label>
-      <CleanButton variant="ghost" className="b-glook-reset" disabled={!o.style} onClick={resetStyle}>Przywróć domyślny wygląd</CleanButton>
+      <Button variant="ghost" className="b-glook-reset" disabled={!o.style} onClick={resetStyle}>Przywróć domyślny wygląd</Button>
     </div>
   );
 }
@@ -193,7 +192,7 @@ export function Inspector() {
     <section id="geo-inspect" className="b-ginspect" aria-label="Zaznaczony obiekt">
       <header className="b-ginspect-head">
         <span className="b-ginspect-name">{target.name}</span>
-        <CleanButton variant="ghost" icon={<IconClose />} aria-label="Zamknij" title="Zamknij  Esc" onClick={() => select(null)} />
+        <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij" title="Zamknij  Esc" onClick={() => select(null)} />
       </header>
       <Coordinates />
       <Look />

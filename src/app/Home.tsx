@@ -1,7 +1,7 @@
 /** The start screen: what the three parts do, one action each, over a slowly drifting grid. */
 import { GridBackground } from '@/components/ui/grid-background';
 import { TextReveal } from '@/components/ui/text-reveal';
-import { TipsPanel, type Tip } from '@/components/ui/tips-panel';
+import { TipsPanel, type Tip } from '@/components/ui/tips-panel-clean';
 import { openSection } from './navigation';
 import { HelpButton, Logo, ThemeButton } from './Shell';
 
