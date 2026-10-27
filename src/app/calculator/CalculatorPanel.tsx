@@ -12,7 +12,8 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
 import { parse, type Node, type VarKind } from '../../cas/parse';
@@ -158,7 +159,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
   const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
-  const names = Object.fromEntries(Object.entries(vars).map(([n, s]) => [n, s.kind]));
+  const names = Object.fromEntries(Object.entries(vars).filter(([n]) => !n.startsWith('#')).map(([n, s]) => [n, s.kind]));
   const display = Object.fromEntries(Object.entries(vars).flatMap(([n, s]) => (s.display ? [[n, s.display]] : [])));
   const shown = preview(useDeferredValue(value), names, display);
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -276,12 +277,15 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
   const shown = { history: useShown('Historia'), vars: useShown('Zmienne'), examples: useShown('Przykłady'), syntax: useShown('Zapis') };
   // a question picked in a phone's sheet: the sheet steps aside for its answer
   const run = (q: string) => { setPane(null); compute(q); };
-  const entries = Object.entries(vars);
+  const entries = Object.entries(vars).filter(([n]) => !n.startsWith('#'));
   return (
     <>
       {shown.vars && <Section
         title="Zmienne"
-        aside={entries.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Usuń wszystkie zmienne" title="Usuń wszystkie zmienne" onClick={clearVars} />}
+        aside={<>
+          <Button variant="ghost" icon={<IconPlus />} aria-label="Wklej dane z tabeli" title="Wklej dane z tabeli albo pliku CSV" popoverTarget={DATA_POPOVER} />
+          {entries.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Usuń wszystkie zmienne" title="Usuń wszystkie zmienne" onClick={clearVars} />}
+        </>}
       >
         {entries.length ? (
           <ul className="b-vars">
@@ -298,7 +302,7 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
           </ul>
         ) : (
           <div className="b-empty">
-            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>.</p>
+            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>. Dane z arkusza wkleisz przyciskiem +.</p>
           </div>
         )}
       </Section>}
@@ -377,6 +381,10 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
               <tr><td><code>integral(@(x) …, a, b)</code>, <code>integral2(@(x, y) …, a, b, c, d)</code></td><td>całki (dokładnie, gdy się da)</td></tr>
               <tr><td><code>ode45(@(t, y) …, [0 5], y0)</code>, <code>ode45(y'' = -y, [0 10], [1 0])</code>, <code>ode23</code>, <code>ode15s</code></td><td>równania różniczkowe numerycznie, sprawdzane drugim obliczeniem</td></tr>
               <tr><td><code>dsolve(y'' + y = 0, y(0) = 1, y'(0) = 0)</code></td><td>równania różniczkowe dokładnie, sprawdzane podstawieniem</td></tr>
+              <tr><td><code>mode</code>, <code>prctile(v, 90)</code>, <code>iqr</code>, <code>skewness</code>, <code>cov</code>, <code>corrcoef</code>, <code>var(v, 1)</code></td><td>statystyka opisowa (dokładnie)</td></tr>
+              <tr><td><code>normcdf(x, μ, σ)</code>, <code>norminv</code>, <code>tcdf</code>, <code>chi2inv</code>, <code>binopdf</code>, <code>poisscdf</code>, …</td><td>rozkłady: …pdf, …cdf, …inv</td></tr>
+              <tr><td><code>fitlm(x, y)</code>, <code>rand(3)</code>, <code>randn</code>, <code>randi([1 6], 1, 10)</code>, <code>rng(42)</code></td><td>regresja z testami; liczby losowe (powtarzalne po rng)</td></tr>
+              <tr><td>przycisk + w części Zmienne</td><td>wklejenie tabeli albo pliku CSV: kolumny jako wektory, całość jako <code>dane</code></td></tr>
               <tr><td><code>double(A)</code>, <code>≈</code></td><td>liczby przybliżone (podwójna precyzja, jak w MATLAB-ie)</td></tr>
               <tr><td><code>who</code>, <code>clear x</code>, <code>clear</code></td><td>lista zmiennych, usuwanie</td></tr>
               <tr><td><code>\frac{'{1}{2}'}</code>, <code>\int_0^1 x^2\,dx</code>, <code>\lim_{'{x \\to 0}'}</code>, <code>\begin{'{pmatrix}'}…\end{'{pmatrix}'}</code></td><td>LaTeX: wklej wzór, także w <code>$…$</code></td></tr>
@@ -452,11 +460,12 @@ export function CalculatorPanel() {
         main,
       )}
       {side && createPortal(<Side run={run} insert={insert} />, side)}
+      {createPortal(<DataImport />, document.body)}
       <PaneBar
         panel="calculator"
         items={[
           { label: 'Historia', icon: <IconHistory />, count: history.length },
-          { label: 'Zmienne', icon: <IconVariable />, count: Object.keys(vars).length },
+          { label: 'Zmienne', icon: <IconVariable />, count: Object.keys(vars).filter(n => !n.startsWith('#')).length },
           { label: 'Przykłady', icon: <IconList /> },
           { label: 'Zapis', icon: <IconBook /> },
         ]}

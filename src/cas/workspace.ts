@@ -3,11 +3,11 @@
  * localStorage: each value written in the parser's own notation, kept only if reading it back gives the same value.
  * The worker holds nothing between questions (a newer question ends it), so the page sends the workspace with each.
  */
-import { Expr, same, variables } from './expr';
+import { Expr, isNum, same, variables } from './expr';
 import { Env, Value, Vars, evaluate, isApprox } from './evaluate';
 import { toCode, toText } from './format';
 import { VarKind, parse } from './parse';
-import { fail } from './q';
+import { fail, qToNumber } from './q';
 import { approx as approxNum } from './numeric';
 
 export interface Saved {
@@ -28,16 +28,21 @@ export const MAX_VARS = 100;
 
 const kindOf = (v: Value): VarKind => v.t === 'fn' ? 'fn' : v.t === 'matrix' ? 'matrix' : v.t === 'list' ? 'list' : 'scalar';
 
-function code(v: Value): string {
+/**
+ * An entry in the parser's notation. An approximate number goes as the shortest decimal of its double: double(…)
+ * rounds it back to the very same double, in a fraction of the length of its exact binary fraction.
+ */
+const entry = (e: Expr, ap: boolean) => (ap && isNum(e) ? String(qToNumber(e.v)) : toCode(e));
+function code(v: Value, ap = isApprox(v)): string {
   switch (v.t) {
-    case 'expr': return toCode(v.e);
+    case 'expr': return entry(v.e, ap);
     case 'list': {
       if (v.items.some(i => i.t === 'list' || i.t === 'matrix')) fail('Listy list nie umiem zapamiętać jako zmiennej.');
-      const inner = v.items.map(code).join(', ');
+      const inner = v.items.map(i => code(i, ap)).join(', ');
       return v.set ? `{${inner}}` : `[${inner}]`;
     }
     // rows split by ; so that a column [a; b] reads back as a column, not as the list [a, b]
-    case 'matrix': return `[${v.rows.map(r => r.map(toCode).join(', ')).join('; ')}]`;
+    case 'matrix': return `[${v.rows.map(r => r.map(e => entry(e, ap)).join(', ')).join('; ')}]`;
     default: return fail('Tej wartości nie umiem zapamiętać jako zmiennej.');
   }
 }
@@ -116,7 +121,7 @@ export class Workspace implements Vars {
     return this.cache.get(name);
   }
   kinds(): Record<string, VarKind> {
-    return Object.fromEntries(Object.entries(this.saved).map(([n, s]) => [n, s.kind]));
+    return Object.fromEntries(Object.entries(this.saved).filter(([n]) => !n.startsWith('#')).map(([n, s]) => [n, s.kind]));
   }
   reset() { this.local.clear(); this.used.clear(); }
 }

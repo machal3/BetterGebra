@@ -12,6 +12,7 @@ import { DATAFIT, plotData } from './datafit';
 import { NUMERICS, integrand } from './numerics';
 import { odeCommand } from './ode';
 import { dsolveCommand } from './dsolve';
+import { RandomSource, STATS, setRandom } from './stats';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -84,6 +85,10 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
   hidden.length = 0;
   ws = new Workspace(opts.vars ?? {}, () => baseEnv(null));
   assigned = {};
+  // the random numbers go on from where the last question left them (the state is a hidden variable, #rng)
+  const rngState = opts.vars?.[RNG]?.code.split(',').map(Number);
+  const rand = new RandomSource(rngState?.length === 4 && rngState.every(Number.isFinite) ? rngState : null);
+  setRandom(rand);
   let ans: Value | null = null;
   if (opts.ans) { try { ans = evaluate(parse(opts.ans, { limit: 60_000, assign: false }), baseEnv(null)); } catch { ans = null; } }
   const env: Env = { ...baseEnv(ans), vars: ws };
@@ -103,6 +108,7 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
       out = top(node, env);
     }
     const { pods, value } = out;
+    if (rand.used) assigned[RNG] = { kind: 'scalar', code: rand.state.join(','), label: '', preview: '' };
     const ansText = value && value.t === 'expr' ? toText(value.e) : undefined;
     const ansCode = value && value.t !== 'fn' && value.t !== 'str' && value.t !== 'rel' ? safe(() => save(value, baseEnv(null)).code) ?? undefined : undefined;
     const used = usedText();
@@ -114,6 +120,8 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
     return { input, pods: [], error: message(err), interpreted };
   }
 }
+/** The hidden variable that keeps the random generator's state. */
+const RNG = '#rng';
 /** "n = 10, A (macierz 2×2)": the stored variables the answer used. */
 function usedText(): string {
   return [...ws.used].filter(n => !ws.local.has(n)).map(n => {
@@ -291,14 +299,14 @@ function clearCommand(args: Node[]): Out {
     else fail('clear: podaj nazwy zmiennych, np. clear A x.');
   };
   args.forEach(walk);
-  const all = Object.keys(ws.saved);
+  const all = Object.keys(ws.saved).filter(n => !n.startsWith('#'));
   const gone = args.length ? names : all;
   for (const n of gone) if (!all.includes(n)) fail(`Nie ma zmiennej ${n}.`);
   for (const n of gone) assigned[n] = null;
   return { pods: [{ title: 'Usunięte zmienne', rows: [textRow(gone.length ? gone.map(n => ws.saved[n].display ?? n).join(', ') : 'Nie było żadnych zmiennych.')] }] };
 }
 function whoCommand(): Out {
-  const all = Object.entries(ws.saved);
+  const all = Object.entries(ws.saved).filter(([n]) => !n.startsWith('#'));
   if (!all.length) return { pods: [{ title: 'Zmienne', rows: [textRow('Nie ma jeszcze zmiennych. Zapisz je tak: A = [1 2; 3 4], n = 10, f(x) = x^2.')] }] };
   return { pods: [{ title: 'Zmienne', rows: all.map(([n, s]) => ({ ml: M(`${nameML(s.display ?? n)}${s.params ? `${mo('(')}${s.params.map(nameML).join(mo(','))}${mo(')')}` : ''}${mo('=')}${mtext(s.preview)}`), text: `${s.display ?? n} = ${s.preview}`, note: s.label })) }] };
 }
@@ -996,7 +1004,13 @@ function linalgOut(r: Linalg): Out {
       if (!ap && !r.grid && flat.length <= 8 && flat.every(isConstant) && flat.some(e => !isNum(e))) r.note = `≈ [${v.rows.map(row => row.map(e => approxText(e).replace('.', ',')).join(' ')).join('; ')}]`;
       return r;
     }
-    if (v.t === 'expr') return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${ap ? approxML(v.e) : toML(v.e)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${ap ? approxText(v.e, true) : toText(v.e)}` };
+    if (v.t === 'expr') {
+      // an exact irrational number gets its decimals beside it
+      const note = !ap && isConstant(v.e) && !isNum(v.e) ? shortApprox(v.e) || undefined : undefined;
+      return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${ap ? approxML(v.e) : toML(v.e)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${ap ? approxText(v.e, true) : toText(v.e)}`, note };
+    }
+    // a line of text: a model, a row of a table of coefficients
+    if (v.t === 'str') return { ml: M(`${lhsML}${lhs ? mo(':') + '<mspace width="0.5em"/>' : ''}${mtext(v.s)}`), text: `${lhs ? `${lhs}: ` : ''}${v.s}` };
     return { ml: M(`${lhsML}${lhs || ap ? mo(rel) : ''}${valueML(v)}`), text: `${lhs ? `${lhs} ${rel} ` : ''}${valueText(v)}` };
   };
   return { pods: r.cards.map(c => ({ title: c.title, rows: c.rows.map(([lhs, v]) => valueRow(lhs, v)), note: c.note, ...(c.plot ? { plot: c.plot } : {}) })), value: r.outputs[0], outputs: r.outputs };
@@ -1200,6 +1214,10 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
   }
   if (name === 'ode45' || name === 'ode23' || name === 'ode15s') return linalgOut(odeCommand(name, args, env, nout));
   if (name === 'dsolve') return linalgOut(dsolveCommand(args, env));
+  if (Object.hasOwn(STATS, name)) {
+    const r = STATS[name](args.map(a => evaluate(a, env)), nout);
+    if (r) return linalgOut(r);
+  }
   if (Object.hasOwn(DATAFIT, name)) {
     // fit(x, y, a*exp(b*x)): the model's letters are its own (x and the parameters), whatever the workspace holds
     const read = (a: Node, k: number) => evaluate(a, name === 'fit' && k === 2 ? shadow(env, letters(a)) : env);

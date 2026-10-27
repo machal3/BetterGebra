@@ -73,6 +73,18 @@ export function qpow(a: Q, k: bigint): Q {
 /** A float approximation that survives numerators and denominators far beyond 1e308. */
 export function qToNumber(a: Q): number {
   let { n, d } = a;
+  const neg = n < 0n, an = neg ? -n : n;
+  if (an < 1n << 53n && d < 1n << 53n) return Number(n) / Number(d); // both exact: one correctly rounded division
+  // correctly rounded: an integer quotient of 64+ bits, its last bit set when something was left over (sticky)
+  const bits = bitLength(an) - bitLength(d), k = 66 - bits;
+  if (k > -1100 && k < 1150) {
+    const num = k >= 0 ? an << BigInt(k) : an, den = k >= 0 ? d : d << BigInt(-k);
+    let qq = num / den;
+    if (num % den) qq |= 1n;
+    // by 2^−k in two steps: 2^1088 alone would overflow
+    const half = Math.trunc(k / 2), x = Number(qq) * 2 ** -half * 2 ** -(k - half);
+    if (Number.isFinite(x) && x !== 0) return neg ? -x : x;
+  }
   const shift = Math.max(bitLength(n), bitLength(d)) - 1000;
   if (shift > 0) { n >>= BigInt(shift); d >>= BigInt(shift); if (!d) return n < 0n ? -Infinity : Infinity; }
   return Number(n) / Number(d);

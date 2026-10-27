@@ -14,7 +14,7 @@ export const EXAMPLES: [string, [string, string][]][] = [
   ['Tablice', [['magic(4)', 'kwadrat magiczny'], ['linspace(0, 1, 5)', 'równe odstępy'], ['reshape(1:6, 2, 3)', 'zmiana kształtu'], ['cumsum(1:10)', 'sumy częściowe'], ['sum(magic(4))', 'sumy kolumn'], ['v = [4 8 15 16 23 42]; v(v > 10)', 'wybór warunkiem']]],
   ['Zmienne', [['A = [4 1; 2 3]', 'zmienna'], ['f(x) = x^3 - 2x', 'funkcja'], ['g = @(x, y) x^2 + y^2', 'funkcja dwóch zmiennych'], ['n = 10; sum(1/k^2, k, 1, n)', 'kilka poleceń'], ['0:pi/4:pi', 'zakres'], ['[1 2; 3 4] .^ 2', 'potęga elementów']]],
   ['Teoria liczb', [['rozłóż 2^64 + 1', 'czynniki'], ['isprime(2^89 - 1)', 'pierwszość'], ['nwd(462, 1071)', 'NWD'], ['crt([2, 3, 2], [3, 5, 7])', 'kongruencje'], ['totient(10^12)', 'φ Eulera'], ['fibonacci(300)', 'Fibonacci']]],
-  ['Statystyka', [['{2, 4, 4, 4, 5, 5, 7, 9}', 'statystyki'], ['median(3, 1, 4, 1, 5, 9, 2, 6)', 'mediana']]],
+  ['Statystyka', [['{2, 4, 4, 4, 5, 5, 7, 9}', 'statystyki'], ['prctile([2 4 4 4 5 5 7 9], [25 50 75])', 'kwartyle'], ['fitlm([1 2 3 4 5], [2.1 3.9 6.2 7.8 10.1])', 'regresja liniowa'], ['corrcoef([1 2 3 4 5], [2 4 5 4 5])', 'korelacja'], ['normcdf(1.96)', 'rozkład normalny'], ['tinv(0.975, 10)', 'kwantyl t-Studenta'], ['binopdf(0:4, 4, 1/2)', 'rozkład dwumianowy']]],
 ];
 
 /** Symbol keys in groups; a divider goes between groups. */

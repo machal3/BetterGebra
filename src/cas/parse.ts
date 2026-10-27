@@ -79,6 +79,12 @@ export const COMMANDS: Record<string, [number, number]> = {
   bar: [1, 2], histogram: [1, 2], errorbar: [3, 3], polarplot: [1, 2],
   fzero: [2, 2], fminbnd: [3, 3], fminsearch: [2, 2], fsolve: [2, 2], integral2: [5, 5], ode45: [3, 3], ode23: [3, 3], ode15s: [3, 3],
   dsolve: [1, 7],
+  mode: [1, 1], range: [1, 1], prctile: [2, 2], quantile: [2, 2], iqr: [1, 1], skewness: [1, 1], kurtosis: [1, 1], zscore: [1, 1],
+  cov: [1, 2], corrcoef: [1, 2], histcounts: [1, 2], fitlm: [2, 2], rand: [0, 2], randn: [0, 2], randi: [1, 3], rng: [1, 1],
+  normpdf: [1, 3], normcdf: [1, 3], norminv: [1, 3], tpdf: [2, 2], tcdf: [2, 2], tinv: [2, 2], chi2pdf: [2, 2], chi2cdf: [2, 2], chi2inv: [2, 2],
+  fpdf: [3, 3], fcdf: [3, 3], finv: [3, 3], binopdf: [3, 3], binocdf: [3, 3], poisspdf: [2, 2], poisscdf: [2, 2], exppdf: [1, 2], expcdf: [1, 2],
+  expinv: [1, 2], unifpdf: [1, 3], unifcdf: [1, 3], unifinv: [1, 3], gampdf: [2, 3], gamcdf: [2, 3], gaminv: [2, 3], betapdf: [3, 3],
+  betacdf: [3, 3], betainv: [3, 3],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -127,6 +133,8 @@ export const ALIAS: Record<string, string> = {
   pseudoodwrotna: 'pinv', przyblizona: 'double',
   hist: 'histogram', dopasuj: 'fit', interpoluj: 'interp1', splot: 'conv', trapezy: 'trapz', sklejana: 'spline', punktowy: 'scatter',
   slupkowy: 'bar', biegunowy: 'polarplot', quadgk: 'integrate',
+  dominanta: 'mode', rozstep: 'range', percentyl: 'prctile', kwantyl: 'quantile', skosnosc: 'skewness', kurtoza: 'kurtosis',
+  kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;
@@ -170,7 +178,7 @@ export const isStr = (t: string | undefined) => t !== undefined && t[0] === '"';
 const endsOperand = (t: string | undefined) => t !== undefined && !isStr(t) && (/^\.?\d|^[a-zα-ω]/i.test(t) || [')', ']', '}', "'", ".'", '!', '°'].includes(t));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** MATLAB's names with a digit in them, read whole (interp1 is not interp·1). */
-const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s)(?![a-z0-9_])/y;
+const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv)(?![a-z0-9_])/y;
 
 /** Tokens, each with whether a space came before it (inside [ ] a space can separate elements). */
 function lex(source: string, names: readonly string[]): { toks: string[]; space: boolean[] } {

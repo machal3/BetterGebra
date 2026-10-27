@@ -26,7 +26,8 @@ function load(): Stored {
     const d = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (d && Array.isArray(d.history)) {
       const vars: Vars = {};
-      if (d.vars && typeof d.vars === 'object') for (const [k, v] of Object.entries(d.vars)) if (/^[a-z][a-z0-9_]*$/.test(k) && isSaved(v)) vars[k] = v;
+      // names, and #rng: the random generator's state
+      if (d.vars && typeof d.vars === 'object') for (const [k, v] of Object.entries(d.vars)) if ((/^[a-z][a-z0-9_]*$/.test(k) || k === '#rng') && isSaved(v)) vars[k] = v;
       return { history: d.history.filter((s: unknown) => typeof s === 'string').slice(0, MAX_HISTORY), digits: (DIGITS as readonly number[]).includes(d.digits) ? d.digits : 25, vars };
     }
   } catch { /* corrupt or blocked: start fresh */ }
@@ -57,7 +58,9 @@ let ans: string | null = null;
 export function setDigits(digits: number): void { set({ digits }); persist(); }
 export function clearHistory(): void { set({ history: [] }); persist(); }
 export function removeVar(name: string): void { const vars = { ...snap.vars }; delete vars[name]; set({ vars }); persist(); }
-export function clearVars(): void { set({ vars: {} }); persist(); }
+export function clearVars(): void { set({ vars: Object.fromEntries(Object.entries(snap.vars).filter(([n]) => n.startsWith('#'))) }); persist(); }
+/** Variables made on the page (data pasted or read from a file), added to the workspace. */
+export function addVars(added: Record<string, Saved>): void { set({ vars: { ...snap.vars, ...added } }); persist(); }
 
 export async function compute(query: string): Promise<void> {
   const q = query.trim();
