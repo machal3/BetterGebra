@@ -258,7 +258,8 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
   let taken: number[][] = [];
   function place(s: string, x: number, y: number, offsets: readonly (readonly [number, number, CanvasTextAlign])[], style: { fill: string; strong?: boolean; pill?: boolean }, force = false): boolean {
     const theme = readTheme();
-    ctx.font = style.strong ? `600 ${LABEL}` : LABEL;
+    // one weight, as in the interface; a strong label stands out by its colour
+    ctx.font = LABEL;
     const w = ctx.measureText(s).width, padX = style.pill ? 7 : 2;
     for (const [dx, dy, align] of offsets) {
       let X = x + dx, left = align === 'left' ? X : align === 'right' ? X - w : X - w / 2;
@@ -271,9 +272,11 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
       if (!force && taken.some(t => box[0] < t[0] + t[2] && t[0] < box[0] + box[2] && box[1] < t[1] + t[3] && t[1] < box[1] + box[3])) continue;
       taken.push(box);
       if (style.pill) {
-        ctx.beginPath(); ctx.roundRect(box[0], box[1], box[2], box[3], 10);
-        ctx.fillStyle = theme.bg; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = theme.gridMajor; ctx.stroke();
+        // a tag in the Affect UI manner: a 6px card with a hairline and a soft lift
+        ctx.beginPath(); ctx.roundRect(box[0], box[1], box[2], box[3], 6);
+        ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.12)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
+        ctx.fillStyle = theme.bg; ctx.fill(); ctx.restore();
+        ctx.lineWidth = 0.5; ctx.strokeStyle = theme.gridMajor; ctx.stroke();
       }
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
       if (!style.pill) { ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = theme.bg; ctx.strokeText(s, X, Y); }

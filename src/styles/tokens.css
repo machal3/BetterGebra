@@ -19,11 +19,25 @@
  */
 @import '@fontsource-variable/inter/index.css';
 
+/*
+ * Formulas need a font with an OpenType MATH table (MathML stretches brackets, roots and integrals with it).
+ * Cambria Math (Windows) or an installed STIX Two Math first; otherwise STIX Two Math from the bundle, so formulas
+ * come out right on systems without one (Linux, Android). The fontsource CSS limits the file to Latin letters by
+ * unicode-range, which would leave out the operators and the mathematical italic, hence a face of our own.
+ * Tried and left out: Noto Sans Math (integral limits and primes collide in Chromium), Libertinus Math (matrix
+ * brackets don't stretch).
+ */
+@font-face {
+  font-family: "Bettergebra Math";
+  font-display: swap;
+  src: local("STIX Two Math"), local("STIXTwoMath-Regular"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
+}
+
 :root {
   color-scheme: light;
   --b-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --b-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  --b-math: "Cambria Math", "STIX Two Math", "Latin Modern Math", Cambria, "Times New Roman", serif;
+  --b-math: "Cambria Math", "Bettergebra Math", serif;
 
   /* Surfaces */
   --b-page: #f5f5f5;
@@ -118,9 +132,9 @@
   --grid-major: #e6e6e6;
   --axis: #8a8a8a;
   --plot-label: #737373;
-  --geo-free: #0060e2;
-  --geo-polygon: #ca5010;
-  --geo-angle: #107c10;
+  --geo-free: #3e63dd;
+  --geo-polygon: #e5631c;
+  --geo-angle: #30a46c;
 }
 
 :root[data-theme="dark"] {
@@ -171,7 +185,7 @@
   --grid-major: #2a2a2e;
   --axis: #77777d;
   --plot-label: #8e8e94;
-  --geo-free: #4d8dff;
-  --geo-polygon: #e9835e;
-  --geo-angle: #54b054;
+  --geo-free: #6e8ff0;
+  --geo-polygon: #f0844a;
+  --geo-angle: #3fbf82;
 }

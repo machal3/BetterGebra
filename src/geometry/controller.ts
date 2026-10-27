@@ -393,6 +393,8 @@ function restore(): void {
     if (ok) seen.add(o.id);
     return ok;
   });
+  // colours of the palette before (Fluent 2) to the ones that took their place
+  for (const o of objects) if (o.style?.color) o.style.color = FORMER[o.style.color.toLowerCase()] ?? o.style.color;
   nextId = Math.max(0, ...seen) + 1;
   const v = data.view;
   if (v && [v.min, v.max, v.cy].every(Number.isFinite) && v.max > v.min) view = { min: v.min, max: v.max, cy: v.cy, ratio: 1 };
@@ -657,7 +659,7 @@ function draw(): void {
         ctx.fillStyle = st.shape === 'ring' ? theme.bg : color; ctx.fill();
         ctx.lineWidth = st.shape === 'ring' ? 2 : 1.5; ctx.strokeStyle = st.shape === 'ring' ? color : theme.bg; ctx.stroke();
       }
-      // Selection: a 2px ring set off by a gap, like a selected Fluent swatch, instead of a glow.
+      // Selection: a 2px ring set off by a gap, like a picked swatch, instead of a glow.
       if (hot) { ctx.beginPath(); ctx.arc(X, Y, r + 3.5, 0, 2 * Math.PI); ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke(); }
       if (text) label(text, X + r + 3, Y - r - 4, color, theme.bg, font);
       continue;
@@ -811,11 +813,12 @@ export function toggleHidden(id: number): void {
 
 // --- Style of the selected object ---
 export const PALETTE: [string, string][] = [
-  ['ink', 'Atramentowy'], ['#d13438', 'Czerwony'], ['#ca5010', 'Pomarańczowy'], ['#eaa300', 'Żółty'], ['#107c10', 'Zielony'],
-  ['#038387', 'Morski'], ['#0f6cbd', 'Niebieski'], ['#8764b8', 'Fioletowy'], ['#c239b3', 'Różowy'], ['#7a7574', 'Szary'],
+  ['ink', 'Atramentowy'], ['#e5484d', 'Czerwony'], ['#e5631c', 'Pomarańczowy'], ['#b98300', 'Żółty'], ['#30a46c', 'Zielony'],
+  ['#12a594', 'Morski'], ['#3e63dd', 'Niebieski'], ['#8e4ec6', 'Fioletowy'], ['#d6409f', 'Różowy'], ['#7b7a82', 'Szary'],
 ];
+const FORMER: Record<string, string> = Object.fromEntries(['#d13438', '#ca5010', '#eaa300', '#107c10', '#038387', '#0f6cbd', '#8764b8', '#c239b3', '#7a7574'].map((c, i) => [c, PALETTE[i + 1][0]]));
 export const FILLED = new Set<Kind>(['polygon', 'sector', 'angle', 'circle']);
-// Defaults on the Fluent stroke scale: lines take the thick (2px) stroke.
+// Lines take a 2px stroke by default.
 export const DEFAULT_WIDTH = 2;
 export const defaultSize = (o: GeoObject) => o.def === 'free' || o.def === 'on' ? 5 : 4;
 export const decimal = (v: number) => String(v).replace('.', ',');

@@ -6,14 +6,17 @@ import { Viewport, axisSteps } from './viewport';
 
 export interface Theme { bg: string; gridMinor: string; gridMajor: string; axis: string; label: string }
 
+/** Labels in the interface font at the size and weight of Affect UI's small labels (11px, 500); names in the math italic. */
+export let LABEL = '500 11px "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif';
+export let SERIF = 'italic 15px "Cambria Math", "STIX Two Math", serif';
+
+/** The canvas colours and fonts from the CSS tokens (styles/tokens.css); read again when the theme changes. */
 export function readTheme(): Theme {
   const s = getComputedStyle(document.documentElement), v = (k: string) => s.getPropertyValue(`--${k}`).trim();
+  if (v('b-font')) LABEL = `500 11px ${v('b-font')}`;
+  if (v('b-math')) SERIF = `italic 15px ${v('b-math')}`;
   return { bg: v('plot-bg'), gridMinor: v('grid-minor'), gridMajor: v('grid-major'), axis: v('axis'), label: v('plot-label') };
 }
-
-// Labels use the interface font (Inter, 12px); names keep the math italic.
-export const LABEL = '12px "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-export const SERIF = 'italic 15px "Cambria Math", "STIX Two Math", Cambria, Georgia, serif';
 
 export interface AxesOptions { grid: boolean; axes: boolean; xUnit: AxisUnit; yUnit: AxisUnit; plane: boolean; minorGrid: boolean; halo: boolean }
 

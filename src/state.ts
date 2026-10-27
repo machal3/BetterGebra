@@ -46,9 +46,12 @@ export interface State {
 export type Topic = 'list' | 'expr' | 'style' | 'params' | 'view' | 'mode' | 'toggles' | 'active' | 'theme' | 'panel';
 
 export const MAX_FUNCTIONS = 8;
-// Fluent 2 data-visualisation palette.
-export const PALETTE = ['#637cef', '#e3008c', '#2aa0a4', '#9373c0', '#13a10e', '#3a96dd', '#ca5010', '#57811b'];
-export const PALETTE_NAMES = ['Niebieski', 'Różowy', 'Morski', 'Fioletowy', 'Zielony', 'Błękitny', 'Pomarańczowy', 'Oliwkowy'];
+/** Curve colours: at least 3:1 against the light and the dark canvas, each pair apart (ΔE ≥ 22). */
+export const PALETTE = ['#3e63dd', '#e93d82', '#12a594', '#8e4ec6', '#30a46c', '#0091c7', '#e5631c', '#7b7a82'];
+export const PALETTE_NAMES = ['Niebieski', 'Malinowy', 'Morski', 'Fioletowy', 'Zielony', 'Błękitny', 'Pomarańczowy', 'Grafitowy'];
+/** The palette before (Fluent 2), each colour to the one that took its place; a colour picked by hand stays. */
+const FORMER: Record<string, string> = Object.fromEntries(['#637cef', '#e3008c', '#2aa0a4', '#9373c0', '#13a10e', '#3a96dd', '#ca5010', '#57811b'].map((c, i) => [c, PALETTE[i]]));
+export const recolor = (color: string): string => FORMER[color.toLowerCase()] ?? color;
 export const DEFAULT_VIEW: View = { min: -10, max: 10, cy: 0, ratio: 1 };
 export const TRIG_VIEW: View = { min: -2 * Math.PI, max: 2 * Math.PI, cy: 0, ratio: 1 };
 
@@ -206,7 +209,7 @@ export function restore(): boolean {
   for (const g of fns.slice(0, MAX_FUNCTIONS)) {
     addFunction(fromSets ? zbioryRow(String(g.expression ?? '')) : String(g.expression ?? ''), {
       // JSON writes ±Infinity (an unbounded end) as null.
-      color: /^#[0-9a-f]{6}$/i.test(g.color) ? g.color : undefined,
+      color: /^#[0-9a-f]{6}$/i.test(g.color) ? recolor(g.color) : undefined,
       visible: g.visible !== false,
       from: num(g.from, -Infinity), to: num(g.to, Infinity),
       fromOpen: !!g.fromOpen, toOpen: !!g.toOpen,

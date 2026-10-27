@@ -26,7 +26,8 @@ function applyTheme(): void {
   // Always resolved: the Affect UI components follow data-theme, not the system preference.
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   // the browser chrome takes the colour of the top bar
-  for (const m of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) { m.removeAttribute('media'); m.content = dark ? '#161618' : '#ffffff'; }
+  const bar = getComputedStyle(document.documentElement).getPropertyValue('--b-panel').trim();
+  for (const m of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) { m.removeAttribute('media'); m.content = bar; }
   scene.refreshTheme();
   redrawGeometry();
   redrawCalcPlots();
