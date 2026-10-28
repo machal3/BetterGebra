@@ -129,7 +129,8 @@ export function mount3d(scene: Scene3, canvas: HTMLCanvasElement, stage: HTMLEle
     ctx.textAlign = 'right';
     for (const t of [0, 0.5, 1]) {
       const [sx, sy] = project(lx, ly, -0.7 + 1.4 * t);
-      ctx.fillText(format(z0 + (z1 - z0) * t, 3), sx - 8, sy);
+      // the lowest a little above the corner, where the floor's own ticks are
+      ctx.fillText(format(z0 + (z1 - z0) * t, 3), sx - 8, t ? sy : sy - 9);
     }
     ctx.textAlign = 'center';
     ctx.font = LABEL.replace('500', '500 italic');
