@@ -10,7 +10,7 @@ import {
   mapChildren, numDen, pow, same, sqrt, sub, subst, sym, together, key, variables,
 } from './expr';
 import { compileDouble } from './fast';
-import { approx, evalC, C } from './numeric';
+import { approx, evalAt, evalC, C } from './numeric';
 import { coeffsOf, solvePoly } from './poly';
 import { cancel, expandLog, factorExpr, simplify, trigExpand } from './simplify';
 import { constSign } from './functions';
@@ -259,10 +259,12 @@ function staysReal(f: Expr, x: string, v: Expr): boolean {
   return real(f);
 }
 /** Typical size of the terms of f at x = v, as a power of two, so a cancellation-limited zero isn't rejected. */
-function scaleOf(f: Expr, x: string, v: Expr): number {
+/** f at x = c: substituted when c is an expression (sin(π) is 0 exactly), bound when it is a BigFloat. */
+const valueAt = (f: Expr, x: string, c: Expr | BF, p: number): C => 'k' in c ? evalC(subst(f, x, c), p) : evalAt(f, x, c, p);
+function scaleOf(f: Expr, x: string, v: Expr | BF): number {
   const terms = f.k === '+' ? f.t : [f];
   let m = 0;
-  for (const t of terms) { try { const z = evalC(subst(t, x, v), 120); m = Math.max(m, top(z.re), top(z.im)); } catch { /* skip */ } }
+  for (const t of terms) { try { const z = valueAt(t, x, v, 120); m = Math.max(m, top(z.re), top(z.im)); } catch { /* skip */ } }
   return Math.max(0, m);
 }
 /**
@@ -695,7 +697,7 @@ function rootNear(f: Expr, x: string, v: number, h: number, der: (j: number) => 
   const exact = recognize(f, x, z ?? bfFromNumber(v), z ? 200 : 40);
   if (!exact && !z) return null;
   // the multiplicity is how many of f, f′, f″, … vanish there (sin x − x at 0: 3); floor and sign have f′ = 0 everywhere
-  const at = exact ?? numFromBF({ re: z!, im: BZERO });
+  const at = exact ?? z!;
   let mult = 1;
   if (!hasStep(f)) while (mult < 5 && der(mult) && zeroAt(der(mult)!, x, at)) mult++;
   return { exact, approx: exact ? approxOf(exact) : { re: z!, im: BZERO }, mult, family: false };
@@ -707,8 +709,7 @@ function newton(g: Expr, dg: Expr, x: string, v: number): BF | null {
   for (let it = 0; it < 40; it++) {
     let a: C, b: C;
     try {
-      const xv = numFromBF({ re: z, im: BZERO });
-      a = evalC(subst(g, x, xv), 340); b = evalC(subst(dg, x, xv), 340);
+      a = evalAt(g, x, z, 340); b = evalAt(dg, x, z, 340);
     } catch { return null; }
     if (!a.re.m) return z;
     if (!b.re.m) return null;
@@ -725,18 +726,17 @@ function newton(g: Expr, dg: Expr, x: string, v: number): BF | null {
  * roots, whose value is off by the slope times the last bits of z (½ + xˣ·sin x = 0 near 28, where xˣ ≈ 10⁴⁰).
  */
 function rootOf(d: Expr, dd: Expr | null, x: string, z: BF): boolean {
-  const v = numFromBF({ re: z, im: BZERO });
-  if (zeroAt(d, x, v)) return true;
+  if (zeroAt(d, x, z)) return true;
   if (!dd) return false;
   try {
-    const a = evalC(subst(d, x, v), 340), b = evalC(subst(dd, x, v), 340);
+    const a = evalAt(d, x, z, 340), b = evalAt(dd, x, z, 340);
     return !a.im.m && !!b.re.m && top(a.re) - top(b.re) < Math.max(top(z), 0) - 300;
   } catch (err) { if (err instanceof CasError) return false; throw err; }
 }
-/** f vanishes at the constant c, up to the size of its terms there (the test checkSolution makes). */
-function zeroAt(f: Expr, x: string, c: Expr): boolean {
+/** f vanishes at the constant c (or the real BigFloat c), up to the size of its terms there (the test checkSolution makes). */
+function zeroAt(f: Expr, x: string, c: Expr | BF): boolean {
   try {
-    const z = evalC(subst(f, x, c), 300);
+    const z = valueAt(f, x, c, 300);
     return Math.max(top(z.re), top(z.im)) <= -200 + scaleOf(f, x, c);
   } catch { return false; }
 }

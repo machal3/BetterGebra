@@ -209,6 +209,17 @@ type Ctx = { p: number; retried?: boolean };
 export function evalC(e: Expr, p: number): C {
   return ev(e, { p });
 }
+/** The variable evalAt binds, while it runs. */
+let bound: { x: string; v: BF } | null = null;
+/**
+ * Value of e at x = v, a real BigFloat, without substituting it: building e with a 300-bit rational simplifies at that
+ * size (xˣ near 47 as (p/q)^(p/q) takes a third of a second), evaluating it is a few milliseconds.
+ */
+export function evalAt(e: Expr, x: string, v: BF, p: number): C {
+  const outer = bound;
+  bound = { x, v };
+  try { return ev(e, { p }); } finally { bound = outer; }
+}
 
 function ev(e: Expr, ctx: Ctx): C {
   const p = ctx.p, wp = p + 16;
@@ -218,6 +229,7 @@ function ev(e: Expr, ctx: Ctx): C {
       if (e.n === 'pi') return real(bfPi(p));
       if (e.n === 'e') return real(bfExp(bfInt(1), p));
       if (e.n === 'i') return I_C;
+      if (bound && e.n === bound.x) return real(norm(bound.v.m, bound.v.e, p));
       if (e.n === 'inf') throw new CasError('Nieskończoność nie ma wartości liczbowej.');
       throw new CasError(`Zmienna ${e.n} nie ma wartości liczbowej.`);
     case '+': {
