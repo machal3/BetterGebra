@@ -112,7 +112,11 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
       ws.reset(); hidden.length = 0; assigned = {};
       out = top(node, env);
     }
-    const { pods, value } = out;
+    const { value } = out;
+    // x^3 − 3x, π, 7: a "Wynik" that only repeats the question gives its place to the first card that says something
+    const plain = (s: string) => s.toLowerCase().replace(/[\s*·]/g, '').replace(/−/g, '-').replace(/π/g, 'pi');
+    const [first] = out.pods;
+    const pods = out.pods.length > 1 && first.title === 'Wynik' && first.rows.length === 1 && !first.note && plain(first.rows[0].text) === plain(rawInput) ? out.pods.slice(1) : out.pods;
     if (rand.used) assigned[RNG] = { kind: 'scalar', code: rand.state.join(','), label: '', preview: '' };
     const ansText = value && value.t === 'expr' ? toText(value.e) : undefined;
     const ansCode = value && value.t !== 'fn' && value.t !== 'str' && value.t !== 'rel' ? safe(() => save(value, baseEnv(null)).code) ?? undefined : undefined;
@@ -468,8 +472,11 @@ function decimalRow(e: Expr, digits = digitsDefault): Row | null {
 }
 const shortApprox = (e: Expr): string => {
   try {
+    // i, (1 + 7i)/10: the exact form says it all
+    const parts = complexParts(e);
+    if (parts && parts.every(isNum)) return '';
     const v = numericValue(e, 12);
-    const p = (d: Decimal | null) => decimalText(d).text.replace('.', ',');
+    const p = (d: Decimal | null) => decimalText(d, true).text.replace('.', ',');
     if (v.im) return `≈ ${v.re ? p(v.re) + (v.im.neg ? ' − ' : ' + ') : v.im.neg ? '−' : ''}${p({ ...v.im, neg: false })}i`;
     return `≈ ${p(v.re)}`;
   } catch { return ''; }
@@ -485,7 +492,9 @@ function numberPods(e0: Expr): Pod[] {
   const e = s0 && size(s0) < size(e0) ? s0 : e0;
   const parts = complexParts(e);
   const isComplex = parts && !isZero(parts[1]);
-  pods.push({ title: 'Wynik', rows: [row(e)] });
+  // 1 606 938 044 …: a long integer in groups of three, copied without the spaces
+  const whole = isNum(e) && e.v.d === 1n ? e.v.n : null, abs = whole !== null && whole < 0n ? -whole : whole;
+  pods.push({ title: 'Wynik', rows: [abs !== null && abs >= 100_000n ? { ml: M(`${whole! < 0n ? mo('−') : ''}<mn>${String(abs).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}</mn>`), text: toText(e) } : row(e)] });
   if (isNum(e)) {
     if (e.v.d === 1n) pods.push(...integerPods(e.v.n));
     else pods.push(...rationalPods(e.v));
@@ -493,7 +502,9 @@ function numberPods(e0: Expr): Pod[] {
   }
   const s = simplify(e);
   if (!same(s, e) && size(s) < size(e)) pods.push({ title: 'Postać uproszczona', rows: [row(s)] });
-  const d = decimalRow(e);
+  // 2i, 3 − 4i: their decimals would only repeat them
+  const gaussian = !!parts && parts.every(p => isNum(p) && p.v.d === 1n);
+  const d = gaussian ? null : decimalRow(e);
   if (d) pods.push({ title: 'Postać dziesiętna', rows: [d], more: { label: 'Więcej cyfr', query: `N(${toText(e)}, ${Math.min(5000, digitsDefault * 4)})` } });
   if (isComplex && parts) pods.push(...complexPods(e, parts));
   else if (d) {
@@ -571,7 +582,7 @@ function integerPods(n: bigint): Pod[] {
     pods.push({ title: 'Własności', rows: [textRow(props.join(', '))] });
   }
   if (digitsCount > 6) pods.push({ title: 'Liczba cyfr', rows: [textRow(`${digitsCount}`)] });
-  if (an < 1n << 512n) {
+  if (an > 1n && an < 1n << 512n) {
     pods.push({
       title: 'W innych systemach',
       rows: [[2, 'dwójkowym'], [8, 'ósemkowym'], [16, 'szesnastkowym']].map(([b, name]) => {
@@ -765,7 +776,8 @@ function solutionRows(sols: Sol[], x: string): Row[] {
   return sols.map(s => {
     const lhs = mi(x);
     if (s.exact) {
-      const e = s.exact;
+      // x in terms of the other letters: tidied (√(576 − 144y²)/8 is 3√(4 − y²)/2)
+      const e = !s.family && !isConstant(s.exact) && size(s.exact) < 200 ? safe(() => simplify(s.exact!)) ?? s.exact : s.exact;
       const fam = s.family;
       const shown = fam ? familyOrder(e) : toML(e);
       const kML = (k: bigint) => k < 0n ? `${mo('−')}<mn>${-k}</mn>` : `<mn>${k}</mn>`, kText = (k: bigint) => String(k).replace('-', '−');
@@ -841,7 +853,8 @@ function relation(node: Extract<Node, { t: 'rel' }>, env: Env, varsHint: string[
       const pods = expressionPods(r);
       return { pods, value: ex(r) };
     }
-    const x = varsHint?.[0] ?? mainVar(sub(l, r));
+    // a curve in x and y (x² + y² = 25) is read as y in terms of x, as its graph is
+    const x = varsHint?.[0] ?? (vs.length === 2 && vs.includes('x') && vs.includes('y') ? 'y' : mainVar(sub(l, r)));
     if (varsHint && varsHint.length > 1) return systemFromExprs([sub(l, r)], varsHint);
     return equationPods(l, r, x);
   }

@@ -40,14 +40,34 @@ export function spelling(raw: string, fallback: (n: string) => string | undefine
   return n => (n === 'e' || n === 'i' ? n : raw.match(new RegExp(String.raw`(?<![\p{L}\d_])${n}(?![\p{L}\d_])`, 'iu'))?.[0] ?? fallback(n) ?? n);
 }
 let spell = (n: string) => n;
+/** The function of a differential equation (y of y′ = −2y, y(0) = 1): its y(0) is a value, not y·0. */
+let odeY: string | null = null;
+const primedOn = (n: Node): string | null => {
+  let m = n, k = 0;
+  while (m.t === 'post' && m.o === "'" && !m.tr) { m = m.a; k++; }
+  return k && m.t === 'id' && m.n.length === 1 ? m.n : null;
+};
+function primed(n: Node): string | null {
+  const own = primedOn(n);
+  if (own) return own;
+  const kids = n.t === 'op' ? [n.a, n.b] : n.t === 'neg' || n.t === 'post' ? [n.a] : n.t === 'call' || n.t === 'index' ? n.args : n.t === 'rel' ? n.parts : [];
+  for (const k of kids) { const y = primed(k); if (y) return y; }
+  return null;
+}
+const isOdeHead = (n: Node) => (n.t === 'id' && n.n === odeY) || primedOn(n) === odeY;
 export function nodeML(n: Node, spelled?: (n: string) => string): string {
   spell = spelled ?? (s => s);
-  // statements (a = 1; b = a + 1) one after another, not a set in braces
-  const body = n.t === 'list' && n.items.some(i => i.t === 'assign' || i.t === 'massign') ? n.items.map(ml).join(`${mo(';')}<mspace width="0.6em"/>`) : null;
-  try { return `<math display="block">${body ?? ml(n)}</math>`; } finally { spell = s => s; }
+  const items = n.t === 'list' ? n.items : [n];
+  odeY = items.length && items.every(i => i.t === 'rel') ? items.map(primed).find(Boolean) ?? null : null;
+  // statements (a = 1; b = a + 1) one after another, not a set in braces; an equation with its conditions likewise
+  const body = n.t === 'list' && n.items.some(i => i.t === 'assign' || i.t === 'massign') ? n.items.map(ml).join(`${mo(';')}<mspace width="0.6em"/>`)
+    : n.t === 'list' && odeY ? n.items.map(ml).join(`${mo(',')}<mspace width="0.8em"/>`) : null;
+  try { return `<math display="block">${body ?? ml(n)}</math>`; } finally { spell = s => s; odeY = null; }
 }
 
 function ml(n: Node): string {
+  // y(0), y′(0) in the conditions of a differential equation
+  if (odeY && n.t === 'op' && n.o === '*' && isOdeHead(n.a) && (n.b.t === 'num' || n.b.t === 'neg')) return row(ml(n.a), paren(ml(n.b)));
   switch (n.t) {
     case 'num': return mn(n.v.replace('.', ','));
     case 'id': return mi(ID[n.n] ?? spell(n.n));

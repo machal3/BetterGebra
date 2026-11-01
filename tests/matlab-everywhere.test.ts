@@ -93,3 +93,35 @@ test('the graph panel reads MATLAB’s element-wise operators and functions', ()
   expect(compile('hypot(x, 4)')(3)).toBe(5);
   expect(compile('round(x)')(-2.5)).toBe(-3);
 });
+
+test('everyday phrasing: limits first, percent, mod and choose written between numbers', () => {
+  expect(value('całka od 0 do 1 x^2')).toBe('1/3');
+  expect(value('całka od 0 do pi sin(x) dx')).toBe('2');
+  expect(value('12 mod 5')).toBe('2');
+  expect(value('10 choose 3')).toBe('120');
+  expect(value('10 nad 3')).toBe('120');
+  expect(value('20%')).toBe('1/5');
+  expect(value('15% z 80')).toBe('12');
+  expect(value('100 + 20%')).toBe('120');
+});
+
+test('a "Wynik" that only repeats the question is left out; exact Gaussian numbers get no decimals', () => {
+  expect(titles('x^3 - 3x')[0]).toBe('Postać iloczynowa');
+  expect(titles('7')[0]).toBe('Liczba pierwsza');
+  expect(titles('2+2*2')[0]).toBe('Wynik');
+  expect(titles('sqrt(-1)')).not.toContain('Postać dziesiętna');
+  expect(ok('x^2 + 1 = 0').pods[0].rows.map(r => r.note)).toEqual([undefined, undefined]);
+  expect(ok('x^3 = 8').pods[1].rows[0].note).toBe('≈ −1 − 1,73205080757i');
+});
+
+test('roots give up the square content of a sum; a curve in x and y is solved for y', () => {
+  expect(pod('sqrt(576 - 144y^2)', 'Postać uproszczona')!.rows[0].text).toBe('12√(4 − y^2)');
+  expect(pod('sqrt(4x + 8)', 'Postać uproszczona')!.rows[0].text).toBe('2√(x + 2)');
+  expect(ok('x^2/9 + y^2/4 = 1').pods[0].rows.map(r => r.text)).toEqual(['y = −2√(9 − x^2)/3', 'y = 2√(9 − x^2)/3']);
+  expect(value('2x + y = 5')).toBe('y = 5 − 2x');
+});
+
+test('the conditions of a differential equation are shown as y(0), not y·0', () => {
+  expect(ok("y' = -2y, y(0) = 1").input!.ml).toContain('<mi>y</mi><mrow><mo stretchy="false">(</mo><mn>0</mn>');
+  expect(ok('y*2').input!.ml).not.toContain('stretchy="false">(');
+});
