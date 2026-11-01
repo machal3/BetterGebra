@@ -10,9 +10,9 @@ import { Env, Value, approxValue as approxValueOf, evaluate, ex, hidden, isAppro
 import { LINALG, tiny, type Linalg } from './linalg';
 import { DATAFIT, plotData } from './datafit';
 import { NUMERICS, integrand } from './numerics';
-import { odeCommand } from './ode';
-import { dsolveCommand } from './dsolve';
-import { RandomSource, STATS, setRandom } from './stats';
+import { odeCommand, readEquation } from './ode';
+import { conditionOf, dsolveCommand } from './dsolve';
+import { RandomSource, STATS, percentile, setRandom } from './stats';
 import { SIGNAL } from './signal';
 import { FIELDS } from './fields';
 import * as DN from './dense';
@@ -33,7 +33,7 @@ import { COMMANDS, Node, parse, reserved } from './parse';
 import { sugar } from './sugar';
 export { sugar };
 import { coeffsOf, polyOf, polyToExpr, pdivmod, pgcd, solvePoly, P, deg } from './poly';
-import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, qToNumber, bitLength, gcd as bgcd } from './q';
+import { CasError, Q, fail, q, qsign, qabs, qfloor, qsub, qToNumber, qFromDouble, bitLength, gcd as bgcd } from './q';
 import { cancel, expandLog, factorExpr, simplify, trigExpand, trigLinearize } from './simplify';
 import { Interval, IntervalSet, Sol, SolveResult, SystemResult, chooseUnknowns, domain as domainOf, setDomainText, solveEquation, solveInequality, solveSystem, intersect, within, zeroIntervals } from './solve';
 import { product as prodOf, sum as sumOf, ratioHint, numericSum } from './sums';
@@ -55,7 +55,10 @@ export interface Result {
   ans?: string; ansCode?: string;
   /** Variables this input set (null: removed), and the stored ones it used, for the heading. */
   assigned?: Record<string, Saved | null>; used?: string;
+  /** MATLAB's functions that take the answer further (lu, svd, fft …), as ready questions. */
+  next?: Step[];
 }
+export interface Step { query: string; label: string; reason: string }
 
 const M = (inner: string) => `<math display="block">${inner}</math>`;
 // parentheses at their natural size: f(x) next to a tall fraction must not stretch
@@ -114,13 +117,61 @@ export function run(rawInput: string, opts: RunOptions = {}): Result {
     const ansText = value && value.t === 'expr' ? toText(value.e) : undefined;
     const ansCode = value && value.t !== 'fn' && value.t !== 'str' && value.t !== 'rel' ? safe(() => save(value, baseEnv(null)).code) ?? undefined : undefined;
     const used = usedText();
+    // after lu(A), roots(p) … the cards are the answer; after a matrix or a list, what MATLAB would do with it next
+    const asked = node.t === 'call' && Object.hasOwn(COMMANDS, node.n) && !Object.hasOwn(ARRAYS, node.n) && !['rand', 'randn', 'randi', 'inverse', 'transpose', 'primes'].includes(node.n);
+    const next = value && ansCode && !asked ? safe(() => nextSteps(value, subjectOf(node, rawInput))) : null;
     return {
       input, pods, ans: ansText, ansCode, interpreted: interpreted !== rawInput.trim() ? interpreted : undefined,
-      ...(Object.keys(assigned).length ? { assigned } : {}), ...(used ? { used } : {}),
+      ...(Object.keys(assigned).length ? { assigned } : {}), ...(used ? { used } : {}), ...(next?.length ? { next } : {}),
     };
   } catch (err) {
     return { input, pods: [], error: message(err), interpreted };
   }
+}
+/** How the next question names the answer: A of A = …, a short literal [1 2; 3 4] or magic(4) as typed, else ans. */
+function subjectOf(node: Node, raw: string): string {
+  if (node.t === 'assign' && !node.params) return spelled(node.name);
+  const text = raw.trim();
+  const literal = node.t === 'list' && node.bracket === '[' && !node.items.some(i => i.t === 'assign' || i.t === 'massign') || node.t === 'range'
+    || node.t === 'call' && Object.hasOwn(ARRAYS, node.n) && !['rand', 'randn', 'randi'].includes(node.n);
+  return literal && text.length <= 60 ? text : 'ans';
+}
+/** What MATLAB would do next with a matrix or a list of numbers: what the cards don't show already. */
+function nextSteps(v: Value, s: string): Step[] {
+  const steps: Step[] = [];
+  const add_ = (query: string, label: string, reason: string) => steps.push({ query, label, reason });
+  // a row or a column is a vector
+  if (v.t === 'matrix' && (v.rows.length === 1 || v.rows[0].length === 1)) return nextSteps({ t: 'list', items: v.rows.flat().map(ex), set: false }, s);
+  if (v.t === 'matrix') {
+    const [n, k] = dims(v.rows);
+    if (!v.rows.flat().every(isConstant) || n * k > 400) return [];
+    if (n === k) {
+      if (v.approx) {
+        add_(`eig(${s})`, 'Wartości własne: eig', 'Wartości i wektory własne, A·V = V·D, sprawdzone residuum.');
+        add_(`inv(${s})`, 'Macierz odwrotna: inv', 'A⁻¹ w podwójnej precyzji, ze sprawdzeniem A·A⁻¹ ≈ I.');
+      }
+      add_(`lu(${s})`, 'Rozkład LU: lu', 'P·A = L·U z wyborem elementu głównego, dokładnie dla liczb wymiernych.');
+      add_(`qr(${s})`, 'Rozkład QR: qr', 'A = Q·R, Q ortogonalna, R trójkątna górna.');
+      add_(`svd(${s})`, 'Rozkład SVD: svd', 'A = U·Σ·Vᵀ i wartości szczególne.');
+      if (n <= 6) add_(`expm(${s})`, 'Eksponenta macierzy: expm', 'e^A, dokładnie dla małych macierzy wymiernych; rozwiązuje układy x′ = A·x.');
+    } else {
+      add_(`svd(${s})`, 'Rozkład SVD: svd', 'A = U·Σ·Vᵀ i wartości szczególne.');
+      add_(`qr(${s})`, 'Rozkład QR: qr', 'A = Q·R, Q ortogonalna, R trójkątna górna.');
+      add_(`pinv(${s})`, 'Pseudoodwrotność: pinv', 'Macierz A⁺ Moore’a–Penrose’a; A⁺·b to rozwiązanie najmniejszych kwadratów.');
+      add_(`null(${s})`, 'Jądro: null', 'Baza rozwiązań A·x = 0.');
+    }
+    return steps;
+  }
+  if (v.t === 'list' && !v.set && !v.logical && v.items.length >= 2 && v.items.length <= 5000 && v.items.every(i => i.t === 'expr' && isConstant(i.e))) {
+    const n = v.items.length;
+    add_(`cumsum(${s})`, 'Sumy częściowe: cumsum', 'Suma pierwszych 1, 2, …, n elementów.');
+    add_(`diff(${s})`, 'Różnice kolejnych: diff', 'Przyrosty między sąsiednimi elementami.');
+    if (n >= 3) add_(`polyfit(1:${n}, ${s}, 1)`, 'Trend liniowy: polyfit', 'Prosta najmniejszych kwadratów przez punkty (k, v(k)), z R² i wykresem.');
+    if (n >= 4) add_(`fft(${s})`, 'Widmo: fft', 'Dyskretna transformata Fouriera, dokładnie dla liczb wymiernych.');
+    add_(`norm(${s})`, 'Długość wektora: norm', 'Norma euklidesowa √(Σ vₖ²).');
+    return steps;
+  }
+  return steps;
 }
 /** The hidden variable that keeps the random generator's state. */
 const RNG = '#rng';
@@ -165,6 +216,8 @@ function top(node: Node, env: Env): Out {
       return { pods: [{ title: node.n === 'max' ? 'Największy element' : 'Najmniejszy element', rows: [row(e, `na miejscu ${k}`)] }], value: ex(e) };
     }
   }
+  const ode = odeInput(node, env);
+  if (ode) return ode;
   if (node.t === 'rel') {
     // v > 2 of a list: 1 where it holds, 0 where not; an equation otherwise
     const v = node.ops.length === 1 ? safe(() => evaluate(node, env)) : null;
@@ -174,6 +227,33 @@ function top(node: Node, env: Env): Out {
   if (node.t === 'list' && node.items.length && node.items.every(i => i.t === 'rel')) return system(node.items, env, null);
   const v = evaluate(node, env);
   return valuePods(v);
+}
+
+/**
+ * y' = -2y, y'' + y = 0, y(0) = 1, y'(0) = 0 typed as they are: solved as dsolve solves them, and when there is no
+ * exact solution but the conditions fix one, numerically as ode45 does (over ten units of time from t₀).
+ */
+function odeInput(node: Node, env: Env): Out | null {
+  const items = node.t === 'list' ? node.items : [node];
+  if (!items.length || items.some(i => i.t !== 'rel')) return null;
+  const eq = readEquation(items[0], env);
+  // a prime on a stored variable is its transpose (v'), not a derivative
+  if (!eq || Object.hasOwn(ws.kinds(), eq.y)) return null;
+  const hint = (cmd: string) => (p: Pod, k: number): Pod => (k ? p : { ...p, note: `${p.note ? `${p.note} ` : ''}${cmd}` });
+  try {
+    const out = linalgOut(dsolveCommand(items, env));
+    return { ...out, pods: out.pods.map(hint('To samo daje polecenie dsolve(…); numerycznie: ode45.')) };
+  } catch (err) {
+    // no exact solution: y(t₀), y'(t₀) … y⁽ᵏ⁻¹⁾(t₀) given, as ode45 needs them
+    const conds = safe(() => items.slice(1).map(c => conditionOf(c, eq.y, env)).sort((a, b) => a.order - b.order));
+    const t0 = conds?.[0]?.t0;
+    if (!conds || conds.length !== eq.order || conds.some((c, k) => c.order !== k || !same(c.t0, t0!))) throw err;
+    const node_ = (e: Expr): Node => parse(sugar(toText(e)), { assign: false });
+    const span: Node = { t: 'list', bracket: '[', items: [node_(t0!), node_(add(t0!, num(10)))] };
+    const y0: Node = { t: 'list', bracket: '[', items: conds.map(c => node_(c.value)) };
+    const out = linalgOut(odeCommand('ode45', [items[0], span, y0], env, 1));
+    return { ...out, pods: out.pods.map(hint(`Dokładnego rozwiązania nie umiem podać, więc to rozwiązanie numeryczne, jak ode45(…, [${toText(t0!)} ${toText(add(t0!, num(10)))}], …).`)) };
+  }
 }
 
 function valuePods(v: Value): Out {
@@ -289,6 +369,8 @@ function fnPods(f: FnValue): Pod[] {
   const pods: Pod[] = [{ title: 'Funkcja', rows: [{ ml: M(valueML(f)), text: `(${f.params.join(', ')}) ↦ ${valueText(f.body)}` }] }];
   const body = f.body;
   if (f.params.length === 1 && body.t === 'expr' && !freeSymbols(f).length) pods.push(...(safe(() => expressionPods(subst(body.e, f.params[0], sym('x'))).slice(1)) ?? []));
+  // g(x, y): the surface and the level lines, as surf(g) and contour(g)
+  if (f.params.length === 2 && body.t === 'expr' && !freeSymbols(f).length) pods.push(...(safe(() => fieldPods(body.e)) ?? []));
   return pods;
 }
 /** clear, clear x A: the names to remove (all of them without arguments). */
@@ -603,6 +685,8 @@ function expressionPods(e: Expr): Pod[] {
       const real = z.sols.filter(s => !s.approx || isRealSol(s));
       if (real.length) pods.push({ title: 'Miejsca zerowe', rows: solutionRows(real.slice(0, 16), x), note: z.note ?? (real.length > 16 ? `Pokazano 16 z ${real.length}.` : undefined) });
     }
+    const cp = safe(() => coefficientPod(e, x));
+    if (cp) pods.push(cp);
     const dom = safe(() => domain(e, x));
     if (dom && !(dom.parts.length === 1 && !dom.parts[0].lo && !dom.parts[0].hi)) pods.push({ title: 'Dziedzina', rows: [intervalRow(dom.parts, x)], note: dom.note });
     else if (dom?.note) pods.push({ title: 'Dziedzina', rows: [intervalRow(dom.parts, x)], note: dom.note });
@@ -617,8 +701,26 @@ function expressionPods(e: Expr): Pod[] {
       if (d) rows.push({ ml: M(`<mfrac><mo>∂</mo><mrow><mo>∂</mo>${mi(v)}</mrow></mfrac>${mo('=')}${toML(d)}`), text: `∂/∂${v}: ${toText(d)}` });
     }
     if (rows.length) pods.push({ title: 'Pochodne cząstkowe', rows });
+    if (vs.length === 2) pods.push(...fieldPods(best));
   }
   return pods;
+}
+/** f(x, y) as MATLAB draws it: its surface (surf) and its level lines (contour). */
+function fieldPods(e: Expr): Pod[] {
+  const f = ex(e), [s, c] = [safe(() => FIELDS.surf([f], 1)), safe(() => FIELDS.contour([f], 1))];
+  return [...(s ? linalgOut(s).pods.map(p => ({ ...p, note: `${p.note ?? ''} Jak surf(…) w MATLAB-ie.`.trim() })) : []), ...(c ? linalgOut(c).pods.map(p => ({ ...p, note: `${p.note ?? ''} Jak contour(…).`.trim() })) : [])];
+}
+/** A polynomial as MATLAB holds it: the vector of its coefficients, from the highest power. */
+function coefficientPod(e: Expr, x: string): Pod | null {
+  const c = coeffsOf(e, x);
+  if (!c || c.length < 3 || c.length > 16 || !c.every(isConstant)) return null;
+  const v = c.slice().reverse().map(a => simplify(a)), p = `[${v.map(toText).join(' ')}]`;
+  return {
+    title: 'Wektor współczynników',
+    rows: [{ ml: M(`${mi('p')}${mo('=')}${mo('[')}${v.map(toML).join('<mspace width="0.5em"/>')}${mo(']')}`), text: `p = ${p}` }],
+    note: `Od najwyższej potęgi ${x}, jak sym2poly w MATLAB-ie; ten wektor przyjmują roots, polyval, polyder i conv.`,
+    ...v.every(isNum) ? { more: { label: 'Pierwiastki: roots(p)', query: `roots(${p})` } } : {},
+  };
 }
 /** Polynomials read best expanded: x³/3 − 5x²/2 + 6x rather than x(2x² − 15x + 36)/6. */
 function polyForm(e: Expr, x: string): Expr {
@@ -1056,7 +1158,45 @@ function matrixPods(m: Expr[][]): Pod[] {
   pods.push({ title: 'Macierz transponowana', rows: [matRow(LA.transpose(m), '<msup><mi>A</mi><mi>T</mi></msup>', 'Aᵀ')] });
   const r = safe(() => LA.rref(m));
   if (r) pods.push({ title: 'Postać schodkowa zredukowana', rows: [matRow(r.R)] });
+  pods.push(...(safe(() => normPods(m)) ?? []), ...(safe(() => definitenessPods(m)) ?? []));
   return pods;
+}
+/** norm(A, 1), norm(A), norm(A, inf), norm(A, 'fro') and cond(A), exact where MATLAB's functions here give them so. */
+function normPods(m: Expr[][]): Pod[] {
+  const [n, k] = dims(m);
+  if (!m.flat().every(isConstant) || n > 6 || k > 6 || n * k < 2) return [];
+  const v: Value = { t: 'matrix', rows: m };
+  const abs = (e: Expr) => simplify(fn('abs', e));
+  const largest = (xs: Expr[]) => simplify(fn('max', ...xs));
+  // the singular values exactly up to 4×4 (as norm and cond try them); beyond, in doubles at once
+  const S = n > 4 || k > 4 ? DN.svd(toMat(m)).S : null;
+  const dbl = (x: number): Value => ({ t: 'expr', e: num(qFromDouble(x)), approx: true });
+  const rows: [string, Value][] = [
+    ['‖A‖₁', ex(largest(LA.transpose(m).map(c => add(...c.map(abs)))))],
+    ['‖A‖₂', S ? dbl(S[0]) : LINALG.norm([v], 1)!.outputs[0]],
+    ['‖A‖∞', ex(largest(m.map(r => add(...r.map(abs)))))],
+    ['‖A‖F', ex(simplify(sqrt(add(...m.flat().map(e => pow(abs(e), TWO))))))],
+  ];
+  const c = n !== k ? null : S ? (S[n - 1] > 1e-14 * S[0] ? dbl(S[0] / S[n - 1]) : null) : safe(() => LINALG.cond([v], 1)!.outputs[0]);
+  if (c) rows.push(['cond A', c]);
+  return linalgOut({ cards: [{ title: 'Normy i uwarunkowanie', rows, note: 'Jak norm(A, 1), norm(A), norm(A, inf), norm(A, \'fro\') i cond(A) w MATLAB-ie: największa suma kolumny, największa wartość szczególna, największa suma wiersza, pierwiastek z sumy kwadratów; cond = σ_max/σ_min.' }], outputs: [] }).pods;
+}
+/** A symmetric matrix by Sylvester's criterion: its leading minors, exactly. */
+function definitenessPods(m: Expr[][]): Pod[] {
+  const n = m.length;
+  if (n < 2 || n > 6 || m[0].length !== n || !m.flat().every(isConstant)) return [];
+  if (m.some((r, i) => r.some((x, j) => j > i && LA.nonzero(sub(x, m[j][i]))))) return [];
+  const minors = Array.from({ length: n }, (_, k) => constSign(LA.det(m.slice(0, k + 1).map(r => r.slice(0, k + 1)))));
+  if (minors.some(s => s === null)) return [];
+  const pos = minors.every(s => s! > 0), negDef = minors.every((s, k) => s! * (k % 2 ? 1 : -1) > 0);
+  const text = pos ? 'dodatnio określona' : negDef ? 'ujemnie określona' : minors[n - 1] ? 'nieokreślona' : null;
+  if (!text) return [];
+  return [{
+    title: 'Określoność',
+    rows: [textRow(`Macierz symetryczna ${text}.`)],
+    note: `Z kryterium Sylvestera: znaki minorów wiodących ${minors.map(s => (s! > 0 ? '+' : s! < 0 ? '−' : '0')).join(' ')}.${pos ? ' Istnieje rozkład Choleskiego A = Rᵀ·R (chol w MATLAB-ie).' : ''}`,
+    ...pos ? { more: { label: 'Rozkład Choleskiego: chol', query: `chol(${matText(m)})` } } : {},
+  }];
 }
 
 function eigen(m: Expr[][], cp: Expr): Pod[] | null {
@@ -1113,15 +1253,27 @@ function statsPods(xs: Expr[]): Pod[] {
   const ss = add(...xs.map(x => pow(sub(x, mean), TWO)));
   const varPop = simplify(div(ss, num(n))), varSample = simplify(div(ss, num(n - 1)));
   const r = (title: string, e: Expr) => ({ ml: M(`${mtext(title)}${mo(':')}<mspace width="0.4em"/>${toML(e)}`), text: `${title}: ${toText(e)}`, note: isNum(e) ? undefined : shortApprox(e) });
+  // the most frequent value (the smallest of a tie, as MATLAB's mode), when one comes more than once
+  let mode = sorted[0], count = 0;
+  for (let i = 0; i < n;) { let j = i; while (j < n && constSign(sub(sorted[j], sorted[i])) === 0) j++; if (j - i > count) { count = j - i; mode = sorted[i]; } i = j; }
+  const quartiles = n >= 4 ? safe(() => [percentile(xs, num(25)), percentile(xs, num(75))]) : null;
   return [{
     title: 'Statystyki',
     rows: [
       r('liczba elementów', num(n)), r('suma', simplify(total)), r('średnia', simplify(mean)), r('mediana', simplify(median)),
-      r('minimum', sorted[0]), r('maksimum', sorted[n - 1]),
+      ...count > 1 ? [r(`dominanta (${count} razy)`, mode)] : [],
+      r('minimum', sorted[0]), r('maksimum', sorted[n - 1]), r('rozstęp', simplify(sub(sorted[n - 1], sorted[0]))),
       r('wariancja (populacji)', varPop), r('wariancja (próby)', varSample),
       r('odchylenie standardowe (populacji)', simplify(sqrt(varPop))), r('odchylenie standardowe (próby)', simplify(sqrt(varSample))),
     ],
-  }, { title: 'Posortowane', rows: [{ ml: M(sorted.map(toML).join(mo('≤'))), text: sorted.map(toText).join(' ≤ ') }] }, ...histogram(xs)];
+    note: 'MATLAB: std i var dają wersje próby (mianownik n − 1); std(v, 1) — populacji.',
+  },
+  ...quartiles ? [{
+    title: 'Kwartyle',
+    rows: [r('Q₁ (25. percentyl)', quartiles[0]), r('Q₂ (mediana)', simplify(median)), r('Q₃ (75. percentyl)', quartiles[1]), r('rozstęp międzykwartylowy', simplify(sub(quartiles[1], quartiles[0])))],
+    note: 'Metodą MATLAB-a (prctile, iqr): posortowane wartości w punktach 100(i − ½)/n, liniowo pomiędzy.',
+  }] : [],
+  { title: 'Posortowane', rows: [{ ml: M(sorted.map(toML).join(mo('≤'))), text: sorted.map(toText).join(' ≤ ') }] }, ...histogram(xs)];
 }
 function histogram(xs: Expr[]): Pod[] {
   const plot = safe(() => statsPlot(xs.map(x => approx(x).re)));
@@ -1175,7 +1327,7 @@ const statsArgs = (args: Node[], env: Env) => args.length === 1 ? listArg(args[0
 const one = (title: string, e: Expr, note?: string): Out => ({ pods: [{ title, rows: [row(e, note ?? (isConstant(e) && !isNum(e) ? shortApprox(e) : undefined))] }], value: ex(e) });
 
 /** The argument a command binds as its variable: the x of diff(f, x), integrate(f, x, 0, 1), sum(f, k, 1, n). */
-const BINDS: Record<string, number> = { diff: 1, integrate: 1, limit: 1, taylor: 1, sum: 1, product: 1, solve: 1, roots: 1, subst: 1, analyze: 1, extrema: 1, domain: 1 };
+const BINDS: Record<string, number> = { diff: 1, integrate: 1, limit: 1, taylor: 1, sum: 1, product: 1, solve: 1, roots: 1, subst: 1, analyze: 1, extrema: 1, domain: 1, sym2poly: 1, poly2sym: 1 };
 /** The variables a command binds: they stay symbols even when the workspace gives the letter a value. */
 function bound(name: string, args: Node[]): string[] {
   const out: string[] = [];
@@ -1423,6 +1575,26 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
       const c = coeffsOf(e, x);
       if (!c) fail(`To nie jest wielomian zmiennej ${x}.`);
       return { pods: [{ title: 'Współczynniki (od najwyższej potęgi)', rows: c!.slice().reverse().map((v, k) => ({ ...row(v), note: `przy ${x}^${c!.length - 1 - k}` })) }], value: { t: 'list', items: c!.slice().reverse().map(ex), set: false } };
+    }
+    case 'sym2poly': {
+      // MATLAB's: the coefficients as a vector from the highest power, the form roots, polyval and conv take
+      const e = exprArg(args[0], env), x = varArg(args[1]) ?? mainVar(e);
+      const c = coeffsOf(e, x);
+      if (!c) fail(`sym2poly: to nie jest wielomian zmiennej ${x}.`);
+      const v: Value = { t: 'list', items: c!.slice().reverse().map(e => ex(simplify(e))), set: false };
+      return { pods: [{ ...listPods(v)[0], title: 'Wektor współczynników', note: `Od najwyższej potęgi ${x}; ten wektor przyjmują roots, polyval, polyder i conv.` }], value: v };
+    }
+    case 'poly2sym': {
+      const c = vecArg(args[0], env), X = sym(varArg(args[1]) ?? 'x');
+      return one('Wielomian o tych współczynnikach', expand(add(...c.map((a, k) => mul(a, pow(X, num(c.length - 1 - k)))))));
+    }
+    case 'primes': {
+      const n = intArg(args[0], env, 'primes');
+      if (n > 1_000_000) fail('primes(n): n najwyżej 1 000 000.');
+      const sieve = new Uint8Array(Math.max(n + 1, 2)), ps: Expr[] = [];
+      for (let p = 2; p <= n; p++) if (!sieve[p]) { ps.push(num(p)); for (let k = p * p; k <= n; k += p) sieve[k] = 1; }
+      const v: Value = { t: 'list', items: ps.map(ex), set: false };
+      return { pods: [{ ...listPods(v)[0], title: `Liczby pierwsze ≤ ${n}`, note: `${ps.length} ${ps.length === 1 ? 'liczba' : [2, 3, 4].includes(ps.length % 10) && ![12, 13, 14].includes(ps.length % 100) ? 'liczby' : 'liczb'}.` }], value: v };
     }
     case 'discriminant': {
       const e = exprArg(args[0], env), x = varArg(args[1]) ?? mainVar(e);

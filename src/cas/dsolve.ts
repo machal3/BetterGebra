@@ -220,7 +220,7 @@ function mulP(a: Q[], b: Q[]): Q[] {
 
 interface Condition { order: number; t0: Expr; value: Expr }
 /** y(0) = 1, y'(0) = 0 as typed (y(0) reads as y·(0) where y has no value). */
-function conditionOf(n: Node, y: string, env: Env): Condition {
+export function conditionOf(n: Node, y: string, env: Env): Condition {
   const bad = () => fail(`Warunek początkowy zapisz jak ${y}(0) = 1 albo ${y}'(0) = 0.`);
   if (n.t !== 'rel' || n.ops.length !== 1 || n.ops[0] !== '=') return bad();
   const [l, r] = n.parts;

@@ -41,7 +41,7 @@ const meanE = (xs: Expr[]) => div(add(...xs), num(xs.length));
 const moment = (xs: Expr[], k: number) => { const m = meanE(xs); return div(add(...xs.map(x => pow(sub(x, m), num(k)))), num(xs.length)); };
 const varE = (xs: Expr[], w: 0 | 1) => { if (xs.length < 2 && !w) fail('Wariancja próby potrzebuje co najmniej dwóch wartości.'); const m = meanE(xs); return div(add(...xs.map(x => pow(sub(x, m), num(2)))), num(xs.length - (w ? 0 : 1))); };
 /** MATLAB's percentile: sorted values at 100(i − ½)/n, linear in between, the ends beyond them. */
-function percentile(xs: Expr[], p: Expr): Expr {
+export function percentile(xs: Expr[], p: Expr): Expr {
   const s = sortE(xs), n = s.length;
   if (!n) fail('Percentyl pustej listy nie istnieje.');
   if (sign(p) < 0 || sign(sub(p, num(100))) > 0) fail('Percentyl: p od 0 do 100.');

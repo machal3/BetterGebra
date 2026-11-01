@@ -441,3 +441,37 @@ export function expm(A0: Mat): Mat {
   for (let k = 0; k < s; k++) X = mul(X!, X!);
   return X!;
 }
+
+// --- sqrtm and logm: Denman–Beavers, inverse scaling and squaring ---
+
+/** The principal square root by the Denman–Beavers iteration; null when it does not settle (an eigenvalue ≤ 0). */
+export function sqrtm(A: Mat): Mat | null {
+  const n = A.length, I = eye(n);
+  let Y = copy(A), Z = eye(n);
+  for (let k = 0; k < 100; k++) {
+    const Yi = solve(Y, I), Zi = solve(Z, I);
+    if (!Yi || !Zi) return null;
+    const Y1 = plus([0.5, Y], [0.5, Zi]), Z1 = plus([0.5, Z], [0.5, Yi]), d = relErr(Y, Y1);
+    Y = Y1; Z = Z1;
+    if (d < 1e-15) break;
+  }
+  return Y.every(r => r.every(Number.isFinite)) ? Y : null;
+}
+/** The principal logarithm: square roots until A is near I, then the series of ln(I + E), times 2^k. */
+export function logm(A: Mat): Mat | null {
+  const n = A.length, I = eye(n);
+  let X = copy(A), k = 0;
+  while (normFro(minus(X, I)) > 0.25) {
+    const R = sqrtm(X);
+    if (!R || ++k > 60) return null;
+    X = R;
+  }
+  const E = minus(X, I);
+  let term = copy(E), L = zeros(n, n);
+  for (let j = 1; j <= 80; j++) {
+    L = plus([1, L], [(j % 2 ? 1 : -1) / j, term]);
+    term = mul(term, E);
+    if (normFro(term) < 1e-17 * Math.max(1, normFro(L))) break;
+  }
+  return L.map(r => r.map(x => x * 2 ** k));
+}

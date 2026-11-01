@@ -464,7 +464,13 @@ function floorOf(x: Expr): bigint | null {
 }
 RULES.floor = ([x]) => { const f = floorOf(x); return f === null ? (isInt(x) ? x : null) : num(f); };
 RULES.ceil = ([x]) => { const f = floorOf(neg(x)); return f === null ? null : num(-f); };
-RULES.round = ([x]) => { const f = floorOf(add(x, HALF)); return f === null ? null : num(f); };
+// half away from zero, as MATLAB: round(−2,5) = −3
+RULES.round = ([x]) => {
+  const s = isNum(x) ? qsign(x.v) : constSign(x);
+  if (s === null) return null;
+  const f = floorOf(add(s < 0 ? neg(x) : x, HALF));
+  return f === null ? null : num(s < 0 ? -f : f);
+};
 RULES.frac = ([x]) => { const f = floorOf(x); return f === null ? null : sub(x, num(f)); };
 
 // --- Γ, factorial, binomial, ζ, erf ---

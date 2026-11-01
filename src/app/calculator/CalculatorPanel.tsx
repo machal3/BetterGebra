@@ -14,7 +14,7 @@ import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
 import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
-import type { Pod, Result, Row } from '../../cas/engine';
+import type { Pod, Result, Row, Step } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
 import { parse, type Node, type VarKind } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
@@ -97,7 +97,7 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
       )}
       {result.error && <section className="b-pod is-error" role="alert"><p>{result.error}</p></section>}
       {result.pods.map((p, i) => <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />)}
-      {!busy && <NextSteps ans={result.ans} query={query} run={run} />}
+      {!busy && <NextSteps ans={result.ans} next={result.next} query={query} run={run} />}
     </div>
   );
 }
@@ -130,8 +130,9 @@ function nextSteps(ans: string | undefined, query: string): Recommendation[] {
 }
 
 /** "Co dalej z wynikiem": the answer's next questions, in the card of the Badanie panel's calculator offer. */
-function NextSteps({ ans, query, run }: { ans: string | undefined; query: string; run: (q: string) => void }) {
-  const options = nextSteps(ans, query);
+function NextSteps({ ans, next, query, run }: { ans: string | undefined; next: Step[] | undefined; query: string; run: (q: string) => void }) {
+  // a function of one variable's steps, then the engine's MATLAB ones for matrices and lists
+  const options = [...nextSteps(ans, query), ...(next ?? []).filter(s => s.query !== query.trim()).map((s): Recommendation => ({ id: s.query, label: s.label, reason: s.reason, signal: 3 }))];
   if (!options.length) return null;
   return (
     <SmartRecommendation
