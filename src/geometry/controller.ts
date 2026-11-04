@@ -13,7 +13,7 @@ import type { View } from '../state';
 import { toast } from '../app/toast';
 import { angle as angleValue, parseInput, type Parsed } from './commands';
 import {
-  compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, nextName, pointOn, primed, project, topoSort,
+  compute, dependents, describe, distanceTo, freeAncestors, intersections, isCurve, isLine, isPoint, isRegion, isRound, nextName, pointOn, primed, project, topoSort,
   type Def, type Draft, type GeoObject, type Kind, type Line, type Pt, type Shape, type Style,
 } from './construct';
 
@@ -294,8 +294,9 @@ function add(drafts: Draft[], replace = new Map<number, GeoObject>()): number[] 
  * `target`. Returns what is wrong, or null.
  */
 export function define(text: string, target?: GeoObject): string | null {
+  const input = target && objects.find(o => o.name === text.trim())?.kind === 'point' ? `${target.name} = ${text}` : text;
   let parsed: Parsed;
-  try { parsed = parseInput(text, objects); } catch (e) { return e instanceof Error ? e.message : String(e); }
+  try { parsed = parseInput(input, objects); } catch (e) { return e instanceof Error ? e.message : String(e); }
   const { name, drafts, main } = parsed, victim = target ?? objects.find(o => o.name === name);
   if (name) drafts[main].name = name;
   const replace = new Map<number, GeoObject>();
@@ -423,11 +424,11 @@ function distancePx(s: Shape, x: number, y: number): number {
   return distanceTo(s, v.fromX(x), v.fromY(y)) * v.scale;
 }
 /** The object under (x; y) px that `accept`s: points first, then lines, circles and angles, then region insides. */
-function hit(x: number, y: number, accept: (s: Shape) => boolean = () => true): number | null {
+function hit(x: number, y: number, accept: (s: Shape, id: number) => boolean = () => true): number | null {
   let best: number | null = null, bestScore = Infinity;
   for (const o of objects) {
     const s = shapes.get(o.id);
-    if (!s || (o.hidden && tool !== 'hide') || !accept(s)) continue;
+    if (!s || (o.hidden && tool !== 'hide') || !accept(s, o.id)) continue;
     const d = distancePx(s, x, y), reach = s.kind === 'point' ? slop + 4 : slop;
     if (d > reach) continue;
     const score = d + (s.kind === 'point' || s.kind === 'measure' ? 0 : (s.kind === 'polygon' || s.kind === 'sector') && d === 0 ? 200 : 100);
@@ -446,15 +447,20 @@ function pointAt(x: number, y: number): number {
 interface Snap { x: number; y: number; id?: number; draft?: Draft; on?: number[] }
 
 /**
- * Snapping, nearest first within reach, in this order: an existing point; an intersection of two curves; a curve
- * (at a grid point on it, if the grid is shown and one is close); a grid point; else exactly where clicked.
+ * Snapping, nearest first within reach, in this order: an existing point; an intersection of two curves or a segment
+ * midpoint / circle centre; a curve (at a grid point on it, if the grid is shown and one is close); a grid point;
+ * else exactly where clicked.
  */
-function snap(x: number, y: number): Snap {
+function snap(x: number, y: number, exclude = new Set<number>()): Snap {
   const v = vp(), here = { x: v.fromX(x), y: v.fromY(y) };
-  const existing = hit(x, y, isPoint);
-  if (existing !== null) { const p = shapes.get(existing) as Pt; return { x: p.x, y: p.y, id: existing }; }
+  const canClose = tool === 'polygon' && picked.length >= 3;
+  const existing = hit(x, y, (s, id) => !exclude.has(id) && isPoint(s) && (!picked.includes(id) || (canClose && id === picked[0]) || distancePx(s, x, y) < 4));
+  if (existing !== null) {
+    const p = shapes.get(existing) as Pt;
+    return { x: p.x, y: p.y, id: existing, on: [existing], draft: { kind: 'point', def: 'offset', of: [existing], coef: [0, 0] } };
+  }
   const curves = objects
-    .filter(o => !o.hidden && isCurve(shapes.get(o.id)))
+    .filter(o => !o.hidden && !exclude.has(o.id) && isCurve(shapes.get(o.id)))
     .map(o => ({ id: o.id, s: shapes.get(o.id) as Parameters<typeof project>[0], d: distancePx(shapes.get(o.id)!, x, y) }))
     .filter(c => c.d <= slop)
     .sort((a, b) => a.d - b.d);
@@ -465,15 +471,30 @@ function snap(x: number, y: number): Snap {
       if (p && d <= reach) { reach = d; best = { x: p.x, y: p.y, on: [curves[i].id, curves[j].id], draft: { kind: 'point', def: 'intersect', of: [curves[i].id, curves[j].id], index } }; }
     });
   }
-  if (best) return best;
-  const lattice = gridPoint(x, y);
-  if (curves.length) {
+  for (const o of objects) {
+    if (o.hidden || exclude.has(o.id)) continue;
+    const s = shapes.get(o.id);
+    const m = s?.kind === 'segment' ? { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 } : isRound(s) ? { x: s.cx, y: s.cy } : null;
+    const d = m ? Math.hypot(v.px(m.x) - x, v.py(m.y) - y) : Infinity;
+    if (m && d <= reach) { reach = d; best = { x: m.x, y: m.y, on: [o.id], draft: { kind: 'point', def: 'midpoint', of: [o.id] } }; }
+  }
+  const lattice = gridPoint(x, y) ?? (axes && Math.hypot(v.px(0) - x, v.py(0) - y) <= slop ? { x: 0, y: 0 } : null);
+  let res: Snap;
+  if (best) res = best;
+  else if (curves.length) {
     const c = curves[0], onIt = lattice && distancePx(c.s, v.px(lattice.x), v.py(lattice.y)) < 1, t = project(c.s, ...(onIt ? [lattice.x, lattice.y] : [here.x, here.y]) as [number, number]);
     const p = pointOn(c.s, t)!;
-    return { x: p.x, y: p.y, on: [c.id], draft: { kind: 'point', def: 'on', of: [c.id], t } };
+    res = { x: p.x, y: p.y, on: [c.id], draft: { kind: 'point', def: 'on', of: [c.id], t } };
+  } else {
+    const at = lattice ?? here;
+    res = { ...at, draft: { kind: 'point', def: 'free', of: [], x: at.x, y: at.y } };
   }
-  const at = lattice ?? here;
-  return { ...at, draft: { kind: 'point', def: 'free', of: [], x: at.x, y: at.y } };
+  const same = picked.find(id => {
+    if (id === undefined || (canClose && id === picked[0])) return false;
+    const p = shapes.get(id);
+    return isPoint(p) && Math.hypot(p.x - res.x, p.y - res.y) < 1e-9;
+  });
+  return same !== undefined ? { x: res.x, y: res.y, id: same } : res;
 }
 
 /** The grid step to snap to: the finest drawn lines still at least 16 px apart. */
@@ -499,7 +520,7 @@ function hoverTarget(): { snap?: Snap; id?: number } | null {
   if (tool === 'move' || tool === 'delete' || tool === 'hide') { const id = hit(x, y); return id === null ? null : { id }; }
   if (tool === 'point' || tool === 'polygon') return { snap: snap(x, y) };
   const needs = spec.needs ?? [], open = needs.map((_, i) => i).filter(i => picked[i] === undefined);
-  const id = hit(x, y, s => open.some(i => FITS[needs[i]](s)));
+  const id = hit(x, y, (s, id) => !picked.includes(id) && open.some(i => FITS[needs[i]](s)));
   if (id !== null) return { id };
   return open.some(i => needs[i] === 'point' || needs[i] === 'pointOrLine') ? { snap: snap(x, y) } : null;
 }
@@ -514,7 +535,7 @@ export function setTool(id: ToolId): void {
   request();
 }
 
-async function click(x: number, y: number): Promise<void> {
+async function click(x: number, y: number, byDrag = false): Promise<void> {
   const spec = toolOf(tool), fresh = !picked.some(v => v !== undefined);
   if (tool === 'move') { selected = hit(x, y); renderList(); request(); return; }
   if (tool === 'delete') { const id = hit(x, y); if (id !== null) remove(id); return; }
@@ -527,7 +548,7 @@ async function click(x: number, y: number): Promise<void> {
   selected = null;
   if (tool === 'point') { checkpoint(); pointAt(x, y); update(); return; }
   // Clicking a segment (or circle) itself: its midpoint (centre), its length.
-  if ((tool === 'midpoint' || tool === 'distance') && fresh && hit(x, y, isPoint) === null) {
+  if ((tool === 'midpoint' || tool === 'distance') && !byDrag && fresh && hit(x, y, isPoint) === null) {
     const seg = objects.find(o => o.id === hit(x, y, s => s.kind === 'segment' || (tool === 'midpoint' && s.kind === 'circle')));
     if (seg) {
       checkpoint();
@@ -545,7 +566,7 @@ async function click(x: number, y: number): Promise<void> {
     return;
   }
   const needs = spec.needs!, open = needs.map((_, i) => i).filter(i => picked[i] === undefined);
-  let id = hit(x, y, s => open.some(i => FITS[needs[i]](s)));
+  let id = hit(x, y, (s, id) => !picked.includes(id) && open.some(i => FITS[needs[i]](s)));
   let slot = id === null ? undefined : open.find(i => FITS[needs[i]](shapes.get(id!)!));
   if (slot === undefined) {
     slot = open.find(i => needs[i] === 'point' || needs[i] === 'pointOrLine');
@@ -605,8 +626,10 @@ function preview(): { objects: GeoObject[]; shapes: Map<number, Shape | null> } 
   if (!pointer || !picked.some(v => v !== undefined)) return null;
   const at = snap(pointer.x, pointer.y), cursor: GeoObject = { id: -1, name: '', kind: 'point', def: 'free', of: [], x: at.x, y: at.y };
   const spec = toolOf(tool), needs = spec.needs ?? [], open = needs.map((_, i) => i).filter(i => picked[i] === undefined);
-  const slot = open.find(i => needs[i] === 'point' || needs[i] === 'pointOrLine'), fill = [...picked];
-  if (slot !== undefined) fill[slot] = -1;
+  const hitId = hit(pointer.x, pointer.y, (s, id) => !picked.includes(id) && open.some(i => FITS[needs[i]](s)));
+  const hitSlot = hitId === null ? undefined : open.find(i => FITS[needs[i]](shapes.get(hitId)!));
+  const slot = hitSlot ?? open.find(i => needs[i] === 'point' || needs[i] === 'pointOrLine'), fill = [...picked];
+  if (slot !== undefined) fill[slot] = hitSlot !== undefined ? hitId! : -1;
   let drafts: Draft[];
   if (tool === 'polygon') drafts = [{ kind: 'polygon', def: 'through', of: [...picked as number[], -1] }];
   else if (spec.make && open.length === 1 && slot !== undefined) drafts = spec.make(fill as number[]);
@@ -855,7 +878,8 @@ export function initGeometry(): void {
   addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   const local = (e: { clientX: number; clientY: number }) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  let down: { x: number; y: number; view: View; moved: boolean; drag: { id: number; grab: { x: number; y: number }; start: Map<number, [number, number]> } | null } | null = null;
+  const openSlots = () => tool === 'polygon' ? (picked.length ? 1 : 2) : (toolOf(tool).needs ?? []).filter((_, i) => picked[i] === undefined).length;
+  let down: { x: number; y: number; view: View; moved: boolean; startPick: boolean; drag: { id: number; grab: { x: number; y: number }; start: Map<number, [number, number]> } | null } | null = null;
 
   canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -869,17 +893,21 @@ export function initGeometry(): void {
       const movable = !o ? [] : o.def === 'on' ? [o] : o.kind === 'point' && o.def !== 'free' ? [] : freeAncestors(objects, o.id);
       if (o && movable.length) drag = { id: o.id, grab: { x: v.fromX(p.x), y: v.fromY(p.y) }, start: new Map(movable.map(o => [o.id, [o.x ?? 0, o.y ?? 0] as [number, number]])) };
     }
-    down = { ...p, view: { ...view }, moved: false, drag };
-    pressed = true;
-    canvas.classList.toggle('grabbing', !drag);
+    down = { ...p, view: { ...view }, moved: false, startPick: tool !== 'move' && openSlots() >= 2, drag };
+    pressed = tool === 'move';
+    canvas.classList.toggle('grabbing', tool === 'move' && !drag);
   });
   canvas.addEventListener('pointermove', e => {
     const p = local(e);
     pointer = p;
     if (!down) { request(); return; }
-    if (!down.moved && Math.hypot(p.x - down.x, p.y - down.y) < 4) return;
-    if (!down.moved && down.drag) checkpoint();
-    down.moved = true;
+    if (!down.moved && Math.hypot(p.x - down.x, p.y - down.y) < 4) { request(); return; }
+    if (!down.moved) {
+      if (down.drag) checkpoint();
+      else if (down.startPick) void click(down.x, down.y, true);
+      down.moved = true;
+    }
+    if (tool !== 'move') { request(); return; }
     if (!down.drag) { view = panned(down.view, width, down.x - p.x, p.y - down.y, inset); request(); return; }
     const v = vp(), wx = v.fromX(p.x), wy = v.fromY(p.y);
     let dx = wx - down.drag.grab.x, dy = wy - down.drag.grab.y;
@@ -902,12 +930,21 @@ export function initGeometry(): void {
   });
   const end = (e: PointerEvent) => {
     if (!down) return;
-    const p = local(e), wasClick = !down.moved;
+    const p = local(e), from = down;
     down = null;
     pressed = false;
     canvas.classList.remove('grabbing');
-    if (e.type === 'pointerup' && wasClick) void click(p.x, p.y);
-    else save();
+    if (e.pointerType !== 'mouse') pointer = null;
+    if (e.type === 'pointerup') {
+      if (tool === 'move') {
+        if (!from.moved) void click(p.x, p.y); else save();
+      } else if (!from.moved || !from.startPick) {
+        void click(p.x, p.y);
+      } else if (Math.hypot(p.x - from.x, p.y - from.y) >= slop && picked.some(v => v !== undefined)) {
+        void click(p.x, p.y, true);
+      }
+    } else save();
+    request();
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
@@ -931,7 +968,7 @@ export function initGeometry(): void {
     const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
     if (mod && key === 'z') { e.preventDefault(); if (e.shiftKey) travel(redoStack, undoStack); else travel(undoStack, redoStack); }
     else if (mod && key === 'y') { e.preventDefault(); travel(redoStack, undoStack); }
-    else if (e.key === 'Escape') { if (picked.length) { picked = []; request(); } else setTool('move'); } // setTool also deselects
+    else if (e.key === 'Escape') { down = null; pressed = false; canvas.classList.remove('grabbing'); if (picked.length) { picked = []; request(); } else setTool('move'); } // setTool also deselects
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected !== null) { e.preventDefault(); remove(selected); }
   });
 

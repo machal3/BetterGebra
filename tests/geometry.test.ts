@@ -106,3 +106,53 @@ test('transformations map any shape and name the image with a prime', () => {
   expect(mirrored.sweep).toBeCloseTo(Math.PI / 2, 12);
   expect(primed('A', new Set(['A′']))).toBe('A″');
 });
+
+test('dragging with a construction tool creates a shape from press to release without panning', async () => {
+  const handlers = new Map<string, (e: unknown) => void>();
+  const canvas = {
+    width: 0, height: 0, dataset: {} as Record<string, string>,
+    classList: { toggle: () => {}, remove: () => {} },
+    getContext: () => new Proxy({}, { get: () => () => ({ width: 0 }) }),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }),
+    setPointerCapture: () => {},
+    addEventListener: (type: string, fn: (e: unknown) => void) => { handlers.set(type, fn); },
+  };
+  const stage = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }) };
+  const g = globalThis as Record<string, unknown>;
+  g.window = g;
+  g.requestAnimationFrame = () => 1;
+  g.getComputedStyle = () => ({ getPropertyValue: () => '#000' });
+  g.document = {
+    hidden: false, documentElement: {}, body: { dataset: { panel: 'geometry' } },
+    getElementById: (id: string) => id === 'geo-canvas' ? canvas : stage,
+    addEventListener: () => {}, querySelector: () => null,
+  };
+  g.addEventListener = () => {};
+  g.ResizeObserver = class { observe() { this.cb(); } constructor(private cb: () => void) {} };
+
+  const { geoStore, initGeometry, setTool, undo } = await import('../src/geometry/controller');
+  initGeometry();
+  const fire = (type: string, x: number, y: number) => handlers.get(type)!({ type, button: 0, pointerId: 1, pointerType: 'mouse', clientX: x, clientY: y });
+
+  // Segment by dragging from (100; 200) -> (-5; 0) to (300; 200) -> (5; 0).
+  setTool('segment');
+  fire('pointerdown', 100, 200);
+  fire('pointermove', 120, 200);
+  expect(geoStore.objects.map(o => o.kind)).toEqual(['point']);
+  fire('pointermove', 300, 200);
+  fire('pointerup', 300, 200);
+  expect(geoStore.objects.map(o => o.kind)).toEqual(['point', 'point', 'segment']);
+  expect(geoStore.shapes.get(geoStore.objects[2].id)).toMatchObject({ kind: 'segment', x1: -5, y1: 0, x2: 5, y2: 0 });
+
+  // One undo step reverts the entire drag (both points and the segment).
+  undo();
+  expect(geoStore.objects).toEqual([]);
+
+  // Circle by dragging from centre (200; 200) -> (0; 0) to (260; 280) -> (3; -4), radius 5.
+  setTool('circle');
+  fire('pointerdown', 200, 200);
+  fire('pointermove', 230, 240);
+  fire('pointerup', 260, 280);
+  expect(geoStore.objects.map(o => o.kind)).toEqual(['point', 'point', 'circle']);
+  expect(geoStore.shapes.get(geoStore.objects[2].id)).toMatchObject({ kind: 'circle', cx: 0, cy: 0, r: 5 });
+});
