@@ -156,15 +156,14 @@
 /* ---------- Phones: the tools stay a column on the right; the cards keep clear of it ---------- */
 @media (max-width: 767px) {
   .b-caption { display: none; }
-  /* the card is a sheet like the popovers' (controls.css): on the mode bar, the same head, and
+  /* the card is a sheet like the popovers' (controls.css): on the mode bar, the grip on top (.b-sheet-card), and
      the upper half of the canvas free; the pane bar steps aside while it is up, as it does for the panel's sheet */
   .b-analysis {
-    left: 0; right: 0; bottom: 0; width: auto; max-height: 55%; padding: 0 6px 8px;
+    left: 0; right: 0; bottom: 0; width: auto; max-height: 55%; padding: 20px 6px 8px;
     border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; box-shadow: var(--b-shadow-sheet);
     animation: b-sheet-rise var(--b-sheet-in) var(--b-ease-sheet);
   }
-  .b-analysis-head { height: 60px; padding: 8px 2px 4px 10px; }
-  .b-analysis-head .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; }
+  .b-analysis-head { height: 44px; padding: 4px 10px 8px; }
   body:has(.b-analysis) .b-panebar { transform: translateY(16px) scale(0.96); opacity: 0; pointer-events: none; }
   /* the name above its value: the numbers get the whole width; f(0) and f(1) share a row */
   .b-ledger { grid-template-columns: 1fr 1fr; column-gap: var(--b-s3); }

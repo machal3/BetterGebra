@@ -165,19 +165,22 @@
 /* Phones: a sheet from the bottom edge, with a grip */
 @media (max-width: 767px) {
   /* above the on-screen keyboard (--b-kb, Dock.tsx) */
-  /* Every sheet looks the same as the panel's sheet (layout.css): it rests on the mode bar, never over it, with a
-     56px head of the title and a round close button. No grip: these sheets have one height, and the close button
-     puts them away (a finger can still drag one down by its head) */
+  /* Every sheet looks the same as the panel's sheet (layout.css): it rests on the mode bar, never over it, the grip
+     on top and under it the title. A drag down by the grip (or a tap outside) puts it away: no close button */
   .b-popover {
     --b-sheet-bottom: max(var(--b-kb, 0px), var(--b-bottombar-h, 0px));
     left: 0 !important; right: 0; bottom: var(--b-sheet-bottom); top: auto !important; width: auto !important;
     max-height: min(80dvh, calc(100dvh - var(--b-topbar-h, 0px) - var(--b-sheet-bottom) - 8px));
-    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0;
+    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-top: 20px;
   }
-  .b-popover-head, .b-popover-head--phone { display: flex; gap: var(--b-s2); height: 60px; padding: 8px 8px 4px 16px; }
+  .b-popover::before, .b-sheet-card::before {
+    content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--b-faint);
+  }
+  .b-popover-head, .b-popover-head--phone { display: flex; gap: var(--b-s2); height: 44px; padding: 4px 16px 8px; }
+  /* (only for screen readers and the keyboard, which have Esc too) */
+  .b-sheet-close { position: absolute !important; width: 1px !important; height: 1px !important; margin: -1px !important; padding: 0 !important; overflow: hidden; clip-path: inset(50%); }
   .b-popover-head .b-popover-title { padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .b-popover-close { display: inline-flex; }
-  .b-popover-head .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; }
   /* it rises from the edge like the panel's sheet, and drops back the same way */
   .b-popover {
     opacity: 1; transform: translateY(100%); box-shadow: var(--b-shadow-sheet);
@@ -226,7 +229,7 @@
 .b-menu-option[aria-selected="true"] { background: var(--b-fill); }
 .b-menu-option svg { flex: none; color: var(--b-strong); }
 /* phones: a sheet */
-@media (max-width: 767px) { .b-menu { padding: 8px; } }
+@media (max-width: 767px) { .b-menu { padding: 20px 8px 8px; } }
 
 /* ---------- Colour: swatches and the custom colour popover ---------- */
 .b-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

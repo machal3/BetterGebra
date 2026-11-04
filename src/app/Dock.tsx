@@ -2,7 +2,7 @@
  * The side panel as a floating card over the canvas: its header (the part's name and a button that folds the card
  * up to that header, remembered; motion.ts moves it). On phones the card is away until a button of the pane bar
  * (over the bottom of the canvas) opens one part of it as a sheet — Funkcje, Obiekty, Historia… — with a grip (drag
- * it, or tap it for the half or full height) and a close button, so the canvas is free the rest of the time. The sheet's header has tabs
+ * it, or tap it for the half or full height; dragged down it puts the sheet away), so the canvas is free the rest of the time. The sheet's header has tabs
  * for the panel's other parts, and the sheet stays above the on-screen keyboard (--b-kb). Whatever part of the
  * canvas the card covers becomes the inset of the Wykresy and Geometria views, measured with a ResizeObserver and
  * passed on outside React, so dragging the sheet never re-renders anything.
@@ -288,7 +288,8 @@ export function Dock({ title }: { title: string }) {
             options={parts.map(p => ({ value: p.label, label: p.label, count: p.count || undefined }))}
           />
         )}
-        <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij panel" title="Zamknij panel" onClick={() => setPane(null)} />
+        {/* the grip and a drag down put the sheet away; the button stays for screen readers and the keyboard */}
+        <Button variant="ghost" className="b-sheet-close" icon={<IconClose />} aria-label="Zamknij panel" onClick={() => setPane(null)} />
       </div>,
       head,
     );
