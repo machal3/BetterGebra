@@ -25,7 +25,8 @@ import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, 
 import { BOX, EXAMPLES, PALETTE } from './content';
 import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, prettyText, withSlots, type Replacement } from './composer-text';
 import { Backdrop } from '../Backdrop';
-import { cascade, shake, write } from '../motion';
+import { cascade, shake } from '../motion';
+import { glideField, revealAnswer } from './reveal';
 import './calculator.css';
 
 
@@ -126,9 +127,8 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
   // each answer arrives card by card
   useLayoutEffect(() => {
     const el = ref.current;
-    cascade(el);
-    // the answer is written out as the card lands (the values themselves are never animated); a "no" shakes
-    el?.querySelectorAll('.b-pod.is-primary .b-pod-row').forEach((row, i) => write(row, 220 + i * 120));
+    // the answer arrives (reveal.ts); a "no" shakes
+    revealAnswer(el);
     shake(el?.querySelector('.b-pod.is-error') ?? null);
   }, [result]);
   return (
@@ -635,6 +635,10 @@ export function CalculatorPanel() {
   useLayoutEffect(() => { if (current.status === 'done') main?.scrollTo({ top: 0 }); }, [current.result, current.status, main]);
 
   const idle = current.status === 'idle', busy = current.status === 'busy';
+  // leaving the empty page, the field glides from its middle to the top instead of jumping
+  const fieldTop = useRef<number | null>(null);
+  useLayoutEffect(() => { glideField(main?.querySelector('.b-composer') ?? null, fieldTop.current); }, [idle, main]);
+  useLayoutEffect(() => { fieldTop.current = main?.querySelector('.b-composer')?.getBoundingClientRect().top ?? null; });
   return (
     <>
       {main && createPortal(

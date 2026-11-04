@@ -95,17 +95,36 @@
 .b-composer:focus-within { box-shadow: 0 0 0 0.5px var(--b-line-hover), 0 18px 40px -16px var(--b-backdrop), 0 1px 2px 0 var(--b-line); }
 .b-composer-go svg { transition: transform 360ms var(--b-spring); }
 @media (hover: hover) { .ui-buttonc.b-composer-go:hover svg { transform: translateX(2px); } }
-/* while it computes the old answer steps back into a soft blur */
-.b-calc-results { transition: opacity var(--b-normal) ease, filter var(--b-slow) ease, transform var(--b-slow) var(--b-ease); }
-.b-calc-results[aria-busy="true"] { opacity: 0.45; filter: blur(1.5px); transform: scale(0.995); }
-/* "Wynik": a gleam crosses the badge once, as the answer lands */
+/* while it computes the old answer steps back into a soft blur (and is replaced at once: the new one has its own entrance) */
+.b-calc-results { position: relative; transition: none; }
+.b-calc-results[aria-busy="true"] { opacity: 0.4; filter: blur(2px); transform: scale(0.995); transition: opacity var(--b-normal) ease, filter var(--b-slow) ease, transform var(--b-slow) var(--b-ease); }
+/* computing: a stretch of ink runs along the rule under the field — the line the answer will open out of */
+.b-composer-bar { position: relative; }
+.b-calc:has(.b-calc-status) .b-composer-bar::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--b-strong) 50%, transparent); background-size: 35% 100%; background-repeat: no-repeat;
+  animation: b-compute 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate, b-fade 300ms ease backwards;
+}
+@keyframes b-compute { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+/* the answer's card opens out of a hairline (reveal.ts): the line, and the two that ride its edges apart */
+.b-pod-seam {
+  position: absolute; z-index: 3; height: 1px; margin-top: -0.5px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--b-ink) 12%, var(--b-ink) 88%, transparent); transform-origin: left center;
+}
+/* the question as typed, on its way from the field to the heading */
+.b-calc-ghost {
+  position: fixed; z-index: 50; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
+  color: var(--b-strong); transform-origin: left center;
+}
+/* MathML pieces move as boxes */
+.b-pod-math math * { transform-box: fill-box; transform-origin: center; }
+/* "Wynik": a gleam crosses the badge once, as it is stamped (reveal.ts) */
 .b-pod-badge { position: relative; overflow: hidden; }
 .b-pod-badge::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(100deg, transparent 30%, currentColor 50%, transparent 70%); opacity: 0.35;
-  transform: translateX(-120%); animation: b-gleam 900ms var(--b-ease) 520ms forwards;
+  transform: translateX(-120%);
 }
-@keyframes b-gleam { to { transform: translateX(120%); } }
 /* examples and history: the magnifier nudges toward the question */
 .b-calc-tile-icon { transition: transform 360ms var(--b-spring), color var(--b-fast) ease; }
 @media (hover: hover) { .b-row.b-calc-tile:hover .b-calc-tile-icon { transform: translateX(2px) scale(1.1); color: var(--b-icon); } }

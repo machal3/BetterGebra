@@ -52,18 +52,6 @@ export function shake(el: Element | null): void {
   );
 }
 
-/** A formula is written out: uncovered from the left as a pen would, its last strokes out of a blur. */
-export function write(el: Element | null, delay = 160): void {
-  if (!el || reduced()) return;
-  el.animate(
-    [
-      { clipPath: 'inset(-20% 100% -20% 0)', filter: 'blur(3px)', transform: 'translateX(-4px)' },
-      { clipPath: 'inset(-20% 0 -20% 0)', filter: 'blur(0)', transform: 'none' },
-    ],
-    { duration: 900, delay, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', fill: 'backwards' },
-  );
-}
-
 /** A small thing done (a toggle, a pick): it gives under the finger and springs back a little past its size. */
 export function pop(el: Element | null, by = 0.16): void {
   if (!el || reduced()) return;
