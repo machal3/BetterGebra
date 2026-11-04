@@ -81,22 +81,33 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   /* the open sheet's content arrives just after the sheet, not with it */
   body[data-sheet="open"] .b-dock .sidebar-body { animation: b-sheet-content 360ms var(--b-ease) 90ms backwards; }
 
-  /* Its header: the grip on top, then the tabs (or the part's name) and the close button */
+  /* Its header: the grip on top (a drag down puts the sheet away: no close button), then the tabs or the part's name */
   .b-dock-bar {
-    position: relative; height: 56px; padding: 14px 8px 2px var(--b-s3); gap: var(--b-s2);
+    position: relative; height: 68px; padding: 20px var(--b-s3) 8px; gap: var(--b-s1);
+  }
+  .b-dock-bar:not(:has(.b-dock-tabs)) { height: 64px; padding-bottom: 4px; }
+  .b-dock-bar:has(.b-dock-tabs) { padding-inline: var(--b-s2);
     box-shadow: none; touch-action: none; cursor: grab;
   }
   .b-dock-bar .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; }
   .b-dock-title { padding-left: 4px; font-size: var(--b-fs-title); }
   .b-dock-tabs { flex: 1; min-width: 0; }
-  :root[data-theme="dark"] .b-dock-tabs { --ui-segc-track: var(--b-track); --ui-segc-card: var(--b-fill); }
+  /* the tabs read like the pane bar that opens them and the mode bar under them: pills of words on the sheet, the
+     picked one on the neutral fill, as high as the close button beside them */
+  .b-dock-bar .ui-segc.b-dock-tabs[data-size] {
+    --ui-segc-h: 40px; --ui-segc-pad: 0px; --ui-segc-px: 6px; --ui-segc-fs: var(--b-fs-md); --ui-segc-lh: 20px;
+    --ui-segc-track: transparent; --ui-segc-card: var(--b-fill); --ui-segc-card-shadow: none; border-radius: var(--b-r-full);
+  }
+  .b-dock-tabs .ui-segc__opt, .b-dock-tabs .ui-segc__pill { border-radius: var(--b-r-full); }
+  .b-dock-tabs .ui-segc__opt { color: var(--b-ink); }
+  .b-dock-tabs .ui-segc__opt[data-active] { color: var(--b-strong); }
   /* the grip: a short bar, a tap target across the header's top; tapped it toggles half and full height */
   .b-dock-grip {
-    display: block; position: absolute; top: 0; left: 50%; width: 96px; height: 18px; margin: 0 0 0 -48px; padding: 0; border: 0;
+    display: block; position: absolute; top: 0; left: 50%; width: 96px; height: 20px; margin: 0 0 0 -48px; padding: 0; border: 0;
     background: none; cursor: grab; -webkit-tap-highlight-color: transparent;
   }
   .b-dock-grip::before {
-    content: ""; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px;
+    content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px;
     background: var(--b-faint); transition: width var(--b-normal) var(--b-ease), margin var(--b-normal) var(--b-ease), background-color var(--b-fast) ease;
   }
   .b-dock-grip:active::before, .b-dock.is-dragging .b-dock-grip::before { width: 48px; margin-left: -24px; background: var(--b-muted); }
@@ -104,12 +115,13 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
   .b-dock-grip:focus-visible::before { outline: 2px solid var(--b-focus); outline-offset: 2px; }
 
   /* the sheet's header names the part (and its button the count), so its first section's heading steps aside; a
-     button beside the heading (Wyczyść historię) stays */
+     button beside the heading (Wyczyść) stays */
   .b-dock .sidebar-body > .b-section:first-child > .b-section-head > h2 {
     position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
   }
   .b-dock .sidebar-body > .b-section:first-child > .b-section-head:not(:has(button)) { display: none; }
-  .b-dock .sidebar-body > .b-section:first-child > .b-section-head { justify-content: flex-end; min-height: 0; }
+  /* (its buttons then lead the part, as the buttons of Widok lead that sheet) */
+  .b-dock .sidebar-body > .b-section:first-child > .b-section-head { justify-content: flex-start; min-height: 0; margin-bottom: var(--b-s3); }
   #calc.calc { padding-bottom: var(--b-inset-bottom); }
 
   /* The pane bar: a pill of buttons over the bottom of the canvas, centred, scrolling sideways if it must.
@@ -125,9 +137,10 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
     transform: translateY(16px) scale(0.96); opacity: 0; pointer-events: none;
     transition: transform var(--b-sheet-out) var(--b-ease-away), opacity var(--b-leave) ease;
   }
-  .b-panebar .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; padding-inline: 12px 14px; color: var(--b-ink); }
+  /* its buttons are the sheet's tabs, and read like them: words without icons (so four fit a 360px screen) */
+  .b-panebar .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; padding-inline: 14px; color: var(--b-ink); }
+  .b-panebar .ui-buttonc__icon { display: none; }
   .b-panebar .b-count { margin-left: 2px; }
-  .b-panebar .b-tool-text { font-size: var(--b-fs-math-sm); }
 }
 @keyframes b-sheet-content { from { opacity: 0; transform: translateY(10px); } }
 @media (prefers-reduced-motion: reduce) {

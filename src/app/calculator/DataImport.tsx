@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
-import { Switch, placePopover } from '@/components/controls';
+import { PopoverHead, Switch, placePopover } from '@/components/controls';
 import { IconDownload } from '@/components/icons';
 import { addVars } from './calc-store';
 import { parseTable, tableVariables } from './csv';
@@ -43,7 +43,7 @@ export function DataImport() {
   };
   return (
     <div ref={pop} id={DATA_POPOVER} className="b-popover b-data-pop" popover="auto" role="dialog" aria-labelledby="calc-data-title">
-      <h3 id="calc-data-title" className="b-popover-title">Dane z tabeli</h3>
+      <PopoverHead id="calc-data-title" popover={DATA_POPOVER}>Dane z tabeli</PopoverHead>
       <div className="b-data-body">
         <p className="b-data-hint">Wklej kolumny liczb z arkusza albo z pliku CSV. Każda kolumna stanie się wektorem, cała tabela macierzą <code>dane</code>.</p>
         <textarea

@@ -156,8 +156,15 @@
 /* ---------- Phones: the tools stay a column on the right; the cards keep clear of it ---------- */
 @media (max-width: 767px) {
   .b-caption { display: none; }
-  /* the card keeps the upper half of the canvas free (the short toolbar is above it) */
-  .b-analysis { left: 8px; right: 8px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(55% - var(--b-inset-bottom)); }
+  /* the card is a sheet like the popovers' (controls.css): on the mode bar, the grip on top (.b-sheet-card), and
+     the upper half of the canvas free; the pane bar steps aside while it is up, as it does for the panel's sheet */
+  .b-analysis {
+    left: 0; right: 0; bottom: 0; width: auto; max-height: 55%; padding: 20px 6px 8px;
+    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; box-shadow: var(--b-shadow-sheet);
+    animation: b-sheet-rise var(--b-sheet-in) var(--b-ease-sheet);
+  }
+  .b-analysis-head { height: 44px; padding: 4px 10px 8px; }
+  body:has(.b-analysis) .b-panebar { transform: translateY(16px) scale(0.96); opacity: 0; pointer-events: none; }
   /* the name above its value: the numbers get the whole width; f(0) and f(1) share a row */
   .b-ledger { grid-template-columns: 1fr 1fr; column-gap: var(--b-s3); }
   .b-ledger > div { grid-template-columns: 1fr; gap: 2px; padding: 6px 0; }
@@ -173,6 +180,7 @@
   .b-fn-field { height: 44px; }
   .b-fn-note { margin-left: 56px; }
 }
+@keyframes b-sheet-rise { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) {
   .b-analysis { animation: none; }
   .b-fn, .b-fn::before, .b-fn-action, .b-fn-swatch::after { transition: none; }

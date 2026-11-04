@@ -4,7 +4,8 @@
  * Actions, the option menu and groups of Smart Recommendation) on the same tokens.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from 'react';
-import { IconAlert, IconCheck, IconChevronDown, IconPlus } from './icons';
+import { Button } from './ui/button-clean';
+import { IconAlert, IconCheck, IconChevronDown, IconClose, IconPlus } from './icons';
 import './controls.css';
 
 export const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ');
@@ -112,15 +113,29 @@ export function placePopover(pop: HTMLElement, anchor: HTMLElement, side: 'left'
 }
 
 /**
- * Phones, where a popover is a sheet from the bottom edge: a finger on its top (the grip, the title) drags it down,
- * and letting go low or with a flick puts it away. Touch events, so the drag can keep the page from scrolling.
+ * The head of a popover: its title, laid out like the header of the panel's sheet (Dock.tsx), so every sheet on a
+ * phone reads the same; a close button for screen readers and the keyboard (a finger drags the sheet down by its grip). `phone`: a popover without a
+ * title on wider screens gets one only as a sheet.
+ */
+export function PopoverHead({ id, popover, phone, children }: { id?: string; popover: string; phone?: boolean; children: ReactNode }) {
+  return (
+    <div className={cx('b-popover-head', phone && 'b-popover-head--phone')}>
+      <h3 id={id} className="b-popover-title">{children}</h3>
+      <Button variant="ghost" className="b-popover-close b-sheet-close" icon={<IconClose />} aria-label="Zamknij" title="Zamknij" popoverTarget={popover} popoverTargetAction="hide" />
+    </div>
+  );
+}
+
+/**
+ * Phones, where a popover (or a .b-sheet-card, which hears "sheetclose") is a sheet from the bottom edge: a finger
+ * on its top (the grip, the title) drags it down, and letting go low or with a flick puts it away. Touch events, so the drag can keep the page from scrolling.
  */
 export function initSheetDrag(): void {
   let drag: { pop: HTMLElement; y: number; dy: number; t: number; v: number } | null = null;
   document.addEventListener('touchstart', e => {
-    const pop = (e.target as Element).closest?.<HTMLElement>('.b-popover:popover-open'), y = e.touches[0]?.clientY;
+    const pop = (e.target as Element).closest?.<HTMLElement>('.b-popover:popover-open, .b-sheet-card'), y = e.touches[0]?.clientY;
     if (!pop || e.touches.length > 1 || !matchMedia('(max-width: 767px)').matches || (e.target as Element).closest('button, input, [role="slider"]')) return;
-    if (y - pop.getBoundingClientRect().top > 52) return;
+    if (y - pop.getBoundingClientRect().top > 60) return;
     drag = { pop, y, dy: 0, t: e.timeStamp, v: 0 };
   }, { passive: true });
   document.addEventListener('touchmove', e => {
@@ -138,7 +153,8 @@ export function initSheetDrag(): void {
     drag = null;
     if (!dy) return;
     if (dy > 96 || (v > 0.5 && e.timeStamp - t < 120)) {
-      // it leaves from where the finger let go
+      // it leaves from where the finger let go; a sheet that is not a popover (Badanie) is told to go
+      if (!pop.matches('.b-popover')) { pop.style.translate = ''; pop.dispatchEvent(new Event('sheetclose')); return; }
       pop.addEventListener('toggle', () => { pop.style.translate = ''; }, { once: true });
       pop.hidePopover();
     } else {
@@ -296,6 +312,7 @@ export function ColorPicker({ value, swatches, auto, label, onPick, onDrag = onP
         {!custom && <IconPlus size={14} />}
       </button>
       <div ref={pop} id={id} popover="auto" className="b-popover b-colorpop" role="dialog" aria-label="Własny kolor">
+        <PopoverHead popover={id} phone>Własny kolor</PopoverHead>
         <div
           className="b-colorpop-area"
           role="slider"

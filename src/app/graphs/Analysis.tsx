@@ -4,7 +4,7 @@
  * an answer about another row or mode is not shown. The card re-renders only when its text actually changes,
  * however often the canvas draws.
  */
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SmartRecommendation, type Recommendation } from '@/components/ui/smart-recommendation-clean';
 import { IconClose } from '@/components/icons';
@@ -107,17 +107,27 @@ export function ExactInCalculator({ className }: { className?: string }) {
 export function Analysis() {
   const open = useStore(['panel', 'active', 'expr', 'mode', 'list'], s => s.analysisOpen);
   const json = useSyncExternalStore(onDrawn, snapshot);
+  const card = useRef<HTMLElement>(null);
+  // phones: the card is a sheet, and a drag down by its head puts it away (initSheetDrag)
+  const shown = open && !!json;
+  useEffect(() => {
+    const el = card.current;
+    if (!shown || !el) return;
+    const away = () => { state.analysisOpen = false; commit('panel'); };
+    el.addEventListener('sheetclose', away);
+    return () => el.removeEventListener('sheetclose', away);
+  }, [shown]);
   if (!open || !json) return null;
   const view: View = JSON.parse(json);
   const close = () => { state.analysisOpen = false; commit('panel'); };
   return (
-    <section id="analysis" className="b-analysis" aria-label="Badanie funkcji" aria-live="polite">
+    <section ref={card} id="analysis" className="b-analysis b-sheet-card" aria-label="Badanie funkcji" aria-live="polite">
       <header className="b-analysis-head">
         <h2>Badanie</h2>
         <div className="b-analysis-target" style={(view.color ? { '--c': view.color } as React.CSSProperties : { '--c': 'transparent', '--curve-mix': '100%' } as React.CSSProperties)}>
           {view.math ? <span dangerouslySetInnerHTML={{ __html: view.math }} /> : <span className="b-muted">brak funkcji</span>}
         </div>
-        <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij badanie" title="Zamknij  B" onClick={close} />
+        <Button variant="ghost" className="b-sheet-close" icon={<IconClose />} aria-label="Zamknij badanie" title="Zamknij  B" onClick={close} />
       </header>
       <dl className="b-ledger">
         {!view.set && <div><dt>f(0)</dt><dd dangerouslySetInnerHTML={{ __html: view.v0 }} /></div>}

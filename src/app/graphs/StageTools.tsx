@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
-import { Disclosure, ErrorText, Field, Switch, placePopover } from '@/components/controls';
+import { Disclosure, ErrorText, Field, PopoverHead, Switch, placePopover } from '@/components/controls';
 import { IconDownload, IconFitY, IconList, IconRatio, IconReset, IconSliders, IconVariable, IconZoomIn, IconZoomOut } from '@/components/icons';
 import { useStore } from '@/hooks/use-store';
 import { format } from '../../format';
@@ -149,7 +149,7 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
 
   return (
     <div ref={pop} id="view-panel" className="b-popover b-settings b-view" popover="auto" role="dialog" aria-labelledby="view-title">
-      <h3 id="view-title" className="b-popover-title">Widok</h3>
+      <PopoverHead id="view-title" popover="view-panel">Widok</PopoverHead>
       {/* phones: what the short toolbar leaves out */}
       <div className="b-view-actions">
         <Button variant="secondary" size="sm" icon={<IconFitY />} onClick={fitY}>Dopasuj y</Button>

@@ -469,7 +469,7 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
       {shown.vars && <Section
         title="Zmienne"
         aside={<>
-          <Button variant="ghost" icon={<IconPlus />} aria-label="Wklej dane z tabeli" title="Wklej dane z tabeli albo pliku CSV" popoverTarget={DATA_POPOVER} />
+          <Button variant="secondary" size="sm" icon={<IconPlus />} title="Wklej dane z tabeli albo pliku CSV" popoverTarget={DATA_POPOVER}>Wklej dane</Button>
           {entries.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Usuń wszystkie zmienne" title="Usuń wszystkie zmienne" onClick={clearVars} />}
         </>}
       >
@@ -488,13 +488,13 @@ function Side({ run: compute, insert }: { run: (q: string) => void; insert: (tex
           </ul>
         ) : (
           <div className="b-empty">
-            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>. Dane z arkusza wkleisz przyciskiem +.</p>
+            <p>Zapisz wartość, by użyć jej w kolejnych obliczeniach: <code>A = [1 2; 3 4]</code>, <code>n = 10</code>, <code>f(x) = x^2</code>. Dane z arkusza wkleisz przyciskiem Wklej dane.</p>
           </div>
         )}
       </Section>}
       {shown.history && <Section
         title="Historia"
-        aside={history.length > 0 && <Button variant="ghost" icon={<IconTrash />} aria-label="Wyczyść historię" title="Wyczyść historię" onClick={clearHistory} />}
+        aside={history.length > 0 && <Button variant="secondary" size="sm" icon={<IconTrash />} title="Wyczyść historię" onClick={clearHistory}>Wyczyść</Button>}
       >
         {history.length ? (
           <ol className="b-history">
