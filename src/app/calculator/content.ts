@@ -33,6 +33,18 @@ const key = (label: string, text: string, name: string, wide = false): Key => ({
 /** sin □: the name, a thin space, the place for the argument; a long name takes two columns. */
 const fn = (f: string, name = f, text = `${f}(□)`): Key => key(`<mi mathvariant="normal">${f}</mi><mspace width="0.17em"/>${B}`, text, name, f.length > 4);
 const word = (label: string, text: string, name: string): Key => ({ label, text, name, word: true });
+/**
+ * The root keys are drawn: at a key's size Chromium sets a radical's bar apart from its √, half a pixel higher and
+ * thicker, with a step where they meet. Here the √ and its bar are one stroke (its short down-stroke heavy, as in the
+ * math font); the index sits clear of the hook.
+ */
+const RADICAL = (index: boolean) => {
+  const x = index ? 6 : 0, w = 30 + x;
+  return `<svg class="b-key-svg" viewBox="0 0 ${w} 24" width="${w}" height="24" aria-hidden="true">${
+    index ? '<text x="0.5" y="10.5" class="b-key-index">𝑛</text>' : ''
+  }<path d="M${2 + x} 13.6 ${4.6 + x} 12.2 ${9 + x} 20.6 ${14 + x} 3.6H${28.5 + x}" class="b-key-stroke"/><path d="M${4.8 + x} 12.6 ${9 + x} 20.6" class="b-key-stroke is-heavy"/><rect x="${16.5 + x}" y="6.8" width="9.6" height="11.8" rx="2" class="b-key-slot"/></svg>`;
+};
+const drawn = (label: string, text: string, name: string): Key => ({ label, text, name });
 const mat = (rows: number, cols: number) => `<mrow><mo>[</mo><mtable columnspacing="0.3em" rowspacing="0.25em">${`<mtr>${`<mtd>${B}</mtd>`.repeat(cols)}</mtr>`.repeat(rows)}</mtable><mo>]</mo></mrow>`;
 const cases = (n: number) => `<mrow><mo>{</mo><mtable columnalign="left" rowspacing="0.15em">${`<mtr><mtd style="text-align: left">${B}<mo>=</mo>${B}</mtd></mtr>`.repeat(n)}</mtable></mrow>`;
 
@@ -42,8 +54,8 @@ export const PALETTE: { id: string; name: string; keys: Key[] }[] = [
     key(`<mfrac>${B}${B}</mfrac>`, '(□)/(□)', 'ułamek'),
     key(`<msup>${B}<mn>2</mn></msup>`, '□^2', 'kwadrat'),
     key(`<msup>${B}<mi>n</mi></msup>`, '□^(□)', 'potęga'),
-    key(`<msqrt>${B}</msqrt>`, '√(□)', 'pierwiastek kwadratowy'),
-    key(`<mroot>${B}<mi>n</mi></mroot>`, 'root(□, □)', 'pierwiastek stopnia n: najpierw stopień, potem liczba'),
+    drawn(RADICAL(false), '√(□)', 'pierwiastek kwadratowy'),
+    drawn(RADICAL(true), 'root(□, □)', 'pierwiastek stopnia n: najpierw stopień, potem liczba'),
     key(`<mrow><mo>|</mo>${B}<mo>|</mo></mrow>`, '|□|', 'wartość bezwzględna'),
     key(`<mrow><mo>(</mo>${B}<mo>)</mo></mrow>`, '(□)', 'nawias'),
     key(`<mrow>${B}<mo>!</mo></mrow>`, '□!', 'silnia'),

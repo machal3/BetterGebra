@@ -23,7 +23,7 @@ import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
 import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, useCalc } from './calc-store';
 import { BOX, EXAMPLES, PALETTE } from './content';
-import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, withSlots, type Replacement } from './composer-text';
+import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, prettyText, withSlots, type Replacement } from './composer-text';
 import { Backdrop } from '../Backdrop';
 import { cascade } from '../motion';
 import './calculator.css';
@@ -95,7 +95,7 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
           <div className="b-calc-query-main">
             <span className="b-calc-query-label">Wejście</span>
             <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
-            {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: {result.interpreted}</p>}
+            {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: <span className="b-formula-text">{prettyText(result.interpreted)}</span></p>}
             {result.used && <p className="b-calc-query-note">Ze zmiennych: {result.used}</p>}
           </div>
           <MessageActions actions={['regenerate']} text={query} regenerating={busy} onRegenerate={() => run(query)} label="Działania na pytaniu" />

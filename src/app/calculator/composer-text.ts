@@ -45,6 +45,24 @@ export function prettify(text: string, caret: number): { text: string; caret: nu
   return null;
 }
 
+const SUPER: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹', '-': '⁻' };
+const sup = (s: string) => [...s].map(c => SUPER[c]).join('');
+
+/**
+ * A formula written as text (a plot's legend, "Rozumiem jako: …") the way it is read: x^3 - 1 → x³ − 1,
+ * 2*x → 2·x, sqrt(x) → √(x), <= → ≤. Only whole integer powers become superscripts; x^(1/2) stays as it is.
+ */
+export function prettyText(text: string): string {
+  return text
+    .replace(/\^\(?(-?\d{1,3})\)?(?![\d.(/])/g, (_, n: string) => sup(n))
+    .replace(/<=/g, '≤').replace(/>=/g, '≥').replace(/!=/g, '≠').replace(/->/g, '→')
+    .replace(/(?<![.*])\*(?!\*)/g, '·')
+    .replace(/-/g, '−')
+    .replace(/(?<![\p{L}\\_])sqrt(?![\p{L}\d_])/gu, '√')
+    .replace(/(?<![\p{L}\\_])pi(?![\p{L}\d_])/gu, 'π')
+    .replace(/(?<![\p{L}\\_])inf(?![\p{L}\d_])/gu, '∞');
+}
+
 /** The placeholder of a template: an empty place still to be filled; Tab selects the next one. */
 export const SLOT = '□';
 

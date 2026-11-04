@@ -17,10 +17,10 @@ import {
   type Def, type Draft, type GeoObject, type Kind, type Line, type Pt, type Shape, type Style,
 } from './construct';
 
-type Slot = 'point' | 'line' | 'curve' | 'circle' | 'vector' | 'region' | 'pointOrLine' | 'any';
+type Slot = 'point' | 'line' | 'curve' | 'circle' | 'round' | 'vector' | 'region' | 'perimeter' | 'pointOrLine' | 'any';
 const FITS: Record<Slot, (s: Shape) => boolean> = {
-  point: isPoint, line: isLine, curve: isCurve, circle: s => s.kind === 'circle', vector: s => s.kind === 'vector',
-  region: isRegion, pointOrLine: s => isPoint(s) || isLine(s), any: s => s.kind !== 'measure',
+  point: isPoint, line: isLine, curve: isCurve, circle: s => s.kind === 'circle', round: isRound, vector: s => s.kind === 'vector',
+  region: isRegion, perimeter: s => s.kind === 'polygon' || isRound(s), pointOrLine: s => isPoint(s) || isLine(s), any: s => s.kind !== 'measure',
 };
 
 export interface Ask {
@@ -63,17 +63,26 @@ export const TOOLS = {
   point: { label: 'Punkt', hint: 'Kliknij płaszczyznę, linię lub przecięcie.' },
   intersect: { label: 'Przecięcie', hint: 'Wybierz dwie linie, okręgi lub łuki.', needs: ['curve', 'curve'], existing: 'Te obiekty się nie przecinają.', make: ([a, b]) => [0, 1].map(index => ({ kind: 'point' as const, def: 'intersect' as const, of: [a, b], index })) },
   midpoint: { label: 'Środek', hint: 'Wybierz dwa punkty, odcinek albo okrąg.', needs: ['point', 'point'], make: by('point', 'midpoint') },
+  divide: {
+    label: 'Podział odcinka', hint: 'Wybierz dwa punkty i podaj część odcinka od pierwszego punktu (np. 1/3).', needs: ['point', 'point'],
+    ask: { label: 'Część odcinka od pierwszego punktu (np. 1/3, 0,25)', initial: '1/3', check: v => Number.isFinite(v) ? null : 'Podaj liczbę.', run: ([a, b], v) => add([{ kind: 'point', def: 'divide', of: [a, b], value: v }])[0] },
+  },
   foot: { label: 'Rzut', hint: 'Wybierz punkt i prostą: spodek prostopadłej.', needs: ['point', 'line'], make: by('point', 'foot') },
+  pole: { label: 'Biegun prostej', hint: 'Wybierz prostą i okrąg.', needs: ['line', 'circle'], make: by('point', 'pole') },
   centroid: { label: 'Środek ciężkości', hint: 'Wybierz trzy wierzchołki trójkąta: przecięcie środkowych.', needs: ['point', 'point', 'point'], make: by('point', 'centroid') },
   orthocenter: { label: 'Ortocentrum', hint: 'Wybierz trzy wierzchołki trójkąta: przecięcie wysokości.', needs: ['point', 'point', 'point'], make: by('point', 'orthocenter') },
   incenter: { label: 'Środek okręgu wpisanego', hint: 'Wybierz trzy wierzchołki trójkąta: przecięcie dwusiecznych.', needs: ['point', 'point', 'point'], make: by('point', 'incenter') },
   circumcenter: { label: 'Środek okręgu opisanego', hint: 'Wybierz trzy wierzchołki trójkąta: przecięcie symetralnych.', needs: ['point', 'point', 'point'], make: by('point', 'circumcenter') },
+  ninePointCenter: { label: 'Środek okręgu 9 punktów', hint: 'Wybierz trzy wierzchołki trójkąta: środek okręgu Eulera.', needs: ['point', 'point', 'point'], make: by('point', 'ninePointCenter') },
+  excenter: { label: 'Środek okręgu dopisanego', hint: 'Wybierz wierzchołek naprzeciw i dwa pozostałe wierzchołki trójkąta.', needs: ['point', 'point', 'point'], make: by('point', 'excenter') },
 
   segment: { label: 'Odcinek', hint: 'Wybierz dwa punkty.', needs: ['point', 'point'], make: by('segment', 'through') },
   segmentLength: {
     label: 'Odcinek o długości', hint: 'Wybierz początek i podaj długość.', needs: ['point'],
     ask: { label: 'Długość odcinka', initial: '5', check: positive('Długość'), run: ([a], v) => add([{ kind: 'segment', def: 'through', of: [a, add([{ kind: 'point', def: 'offset', of: [a], value: v }])[0]] }])[0] },
   },
+  median: { label: 'Środkowa trójkąta', hint: 'Wybierz wierzchołek, potem dwa końce przeciwległego boku.', needs: ['point', 'point', 'point'], make: by('segment', 'median') },
+  altitude: { label: 'Wysokość trójkąta', hint: 'Wybierz wierzchołek, potem dwa punkty przeciwległego boku.', needs: ['point', 'point', 'point'], make: by('segment', 'altitude') },
   line: { label: 'Prosta', hint: 'Wybierz dwa punkty.', needs: ['point', 'point'], make: by('line', 'through') },
   ray: { label: 'Półprosta', hint: 'Wybierz początek, potem drugi punkt.', needs: ['point', 'point'], make: by('ray', 'through') },
   vector: { label: 'Wektor', hint: 'Wybierz początek, potem koniec.', needs: ['point', 'point'], make: by('vector', 'through') },
@@ -84,9 +93,11 @@ export const TOOLS = {
   },
   perpendicular: { label: 'Prostopadła', hint: 'Wybierz punkt i prostą.', needs: ['point', 'line'], make: by('line', 'perpendicular') },
   parallel: { label: 'Równoległa', hint: 'Wybierz punkt i prostą.', needs: ['point', 'line'], make: by('line', 'parallel') },
-  bisector: { label: 'Symetralna', hint: 'Wybierz dwa punkty.', needs: ['point', 'point'], make: by('line', 'bisector') },
+  bisector: { label: 'Symetralna', hint: 'Wybierz dwa punkty albo odcinek.', needs: ['point', 'point'], make: by('line', 'bisector') },
   angleBisector: { label: 'Dwusieczna', hint: 'Wybierz punkt, wierzchołek, punkt.', needs: ['point', 'point', 'point'], make: by('line', 'angleBisector') },
   tangent: { label: 'Styczne', hint: 'Wybierz punkt i okrąg.', needs: ['point', 'circle'], existing: 'Z punktu wewnątrz okręgu nie ma stycznych.', make: ([p, c]) => [0, 1].map(index => ({ kind: 'line' as const, def: 'tangent' as const, of: [p, c], index })) },
+  polar: { label: 'Biegunowa', hint: 'Wybierz punkt i okrąg.', needs: ['point', 'circle'], make: by('line', 'polar') },
+  radicalAxis: { label: 'Oś potęgowa', hint: 'Wybierz dwa okręgi.', needs: ['circle', 'circle'], make: by('line', 'radicalAxis') },
 
   polygon: { label: 'Wielokąt', hint: 'Wybierz wierzchołki, na koniec znów pierwszy.' },
   regular: {
@@ -103,13 +114,18 @@ export const TOOLS = {
     ask: { label: 'Promień okręgu', initial: '3', check: positive('Promień'), run: ([c], r) => add([{ kind: 'circle', def: 'radius', of: [c], value: r }])[0] },
   },
   incircle: { label: 'Okrąg wpisany', hint: 'Wybierz trzy wierzchołki trójkąta.', needs: ['point', 'point', 'point'], make: by('circle', 'incircle') },
+  ninePoint: { label: 'Okrąg 9 punktów', hint: 'Wybierz trzy wierzchołki trójkąta: okrąg Eulera przez środki boków i spodki wysokości.', needs: ['point', 'point', 'point'], make: by('circle', 'ninePoint') },
+  excircle: { label: 'Okrąg dopisany', hint: 'Wybierz wierzchołek naprzeciw i dwa pozostałe wierzchołki trójkąta.', needs: ['point', 'point', 'point'], make: by('circle', 'excircle') },
   compass: { label: 'Cyrkiel', hint: 'Wybierz dwa punkty (rozwarcie), potem środek.', needs: ['point', 'point', 'point'], make: by('circle', 'compass') },
   circle3: { label: 'Okrąg przez 3', hint: 'Wybierz trzy punkty okręgu.', needs: ['point', 'point', 'point'], make: by('circle', 'three') },
   semicircle: { label: 'Półokrąg', hint: 'Wybierz końce średnicy (łuk idzie w lewo od kierunku).', needs: ['point', 'point'], make: by('arc', 'semicircle') },
   arc: { label: 'Łuk', hint: 'Wybierz środek, początek łuku, koniec (przeciwnie do wskazówek zegara).', needs: ['point', 'point', 'point'], make: by('arc', 'arc') },
+  arc3: { label: 'Łuk przez 3 punkty', hint: 'Wybierz początek, punkt na łuku i koniec.', needs: ['point', 'point', 'point'], make: by('arc', 'arc3') },
   sector: { label: 'Wycinek koła', hint: 'Wybierz środek, początek łuku, koniec (przeciwnie do wskazówek zegara).', needs: ['point', 'point', 'point'], make: by('sector', 'arc') },
 
   angle: { label: 'Kąt', hint: 'Wybierz punkt, wierzchołek, punkt.', needs: ['point', 'point', 'point'], make: by('angle', 'through') },
+  orientedAngle: { label: 'Kąt skierowany', hint: 'Wybierz punkt, wierzchołek, punkt (przeciwnie do wskazówek zegara, do 360°).', needs: ['point', 'point', 'point'], make: by('angle', 'oriented') },
+  angleBetween: { label: 'Kąt między prostymi', hint: 'Wybierz dwie przecinające się proste lub odcinki.', needs: ['line', 'line'], make: by('angle', 'through') },
   angleSize: {
     label: 'Kąt o mierze', hint: 'Wybierz punkt i wierzchołek, podaj miarę.', needs: ['point', 'point'],
     ask: {
@@ -119,9 +135,13 @@ export const TOOLS = {
   },
   distance: { label: 'Odległość', hint: 'Wybierz dwa punkty, punkt i prostą albo odcinek.', needs: ['point', 'pointOrLine'], make: by('measure', 'distance') },
   area: { label: 'Pole', hint: 'Wybierz wielokąt, okrąg lub wycinek.', needs: ['region'], make: by('measure', 'area') },
+  perimeter: { label: 'Obwód / długość łuku', hint: 'Wybierz wielokąt, okrąg, łuk lub wycinek.', needs: ['perimeter'], make: by('measure', 'perimeter') },
+  slopeMeasure: { label: 'Nachylenie', hint: 'Wybierz prostą, odcinek lub półprostą.', needs: ['line'], make: by('measure', 'slopeMeasure') },
+  radiusMeasure: { label: 'Promień', hint: 'Wybierz okrąg, łuk lub wycinek.', needs: ['round'], make: by('measure', 'radiusMeasure') },
 
   reflectLine: { label: 'Symetria osiowa', hint: 'Wybierz obiekt, potem oś symetrii.', needs: ['any', 'line'], make: image('reflect') },
   reflectPoint: { label: 'Symetria środkowa', hint: 'Wybierz obiekt, potem środek symetrii.', needs: ['any', 'point'], make: image('reflect') },
+  invert: { label: 'Inwersja punktu', hint: 'Wybierz punkt, potem okrąg inwersji.', needs: ['point', 'circle'], make: ([p, c]) => { const src = objects.find(o => o.id === p); return [{ kind: 'point', def: 'invert', of: [p, c], imageOf: src?.name }]; } },
   rotate: {
     label: 'Obrót', hint: 'Wybierz obiekt i środek obrotu, podaj kąt.', needs: ['any', 'point'],
     ask: { label: 'Kąt obrotu, przeciwnie do wskazówek zegara (np. 90 albo π/2)', initial: '90', angle: true, check: v => Number.isFinite(v) ? null : 'Podaj liczbę.', run: imageOf('rotate') },
@@ -151,14 +171,20 @@ export const ICON: Record<ToolId, string> = {
   point: icon(`<circle cx="12" cy="12" r="6.5" class="soft acc"/>${made(12, 12, 2.8)}`),
   intersect: icon(`<path d="M4 6.5 20 17.5M4 17.5 20 6.5"/>${made(12, 12, 2.6)}`),
   midpoint: icon(`<path d="M4 18 20 6"/>${pt(4, 18)}${pt(20, 6)}${made(12, 12)}`),
+  divide: icon(`<path d="M4 18 20 6"/><path d="M14.67 10v4" ${thin}/>${pt(4, 18)}${pt(20, 6)}${made(9.33, 14)}`),
   foot: icon(`<path d="M3 18.5h18"/><path d="M12 5.5v13" ${thin} ${dash}/><path d="M12 15.5h3v3" ${thin}/>${pt(12, 5)}${made(12, 18.5)}`),
+  pole: icon(`<circle cx="14" cy="13" r="6.5"/><path d="M3.5 4.5 19.5 20.5"/>${made(8.5, 7.5)}`),
   centroid: icon(`${TRIANGLE}<path d="M12 4v15.5M3.5 19.5l12.75-7.75M20.5 19.5 7.75 11.75" ${thin} ${dash}/>${made(12, 14.33)}`),
   orthocenter: icon(`${TRIANGLE}<path d="M12 4v15.5M3.5 19.5l13.07-7.17M20.5 19.5 7.43 12.33" ${thin} ${dash}/>${made(12, 14.84)}`),
   incenter: icon(`${TRIANGLE}<circle cx="12" cy="14.47" r="5.03" ${thin} ${dash}/>${made(12, 14.47)}`),
   circumcenter: icon(`<circle cx="12" cy="12" r="8.5" ${thin} ${dash}/><path d="M12 3.5 4.64 16.25h14.72z"/>${made(12, 12)}`),
+  ninePointCenter: icon(`${TRIANGLE}<circle cx="12" cy="15.6" r="4.3" ${thin} ${dash}/>${made(12, 15.6)}`),
+  excenter: icon(`<path d="M4 18 12 5l8 13H4z"/><circle cx="12" cy="19.5" r="3.2" ${thin} ${dash}/>${made(12, 19.5)}`),
 
   segment: icon(`${acc('<path d="M5 19 19 5"/>')}${pt(5, 19)}${pt(19, 5)}`),
   segmentLength: icon(`<path d="M5 9.5h14M5 7.5v4M19 7.5v4" ${thin}/>${acc('<path d="M5 16h14"/>')}${pt(5, 16)}${pt(19, 16)}`),
+  median: icon(`${TRIANGLE}${acc('<path d="M12 4v15.5"/>')}${pt(12, 4)}${made(12, 19.5, 1.9)}`),
+  altitude: icon(`${TRIANGLE}<path d="M12 16.5h3v3" ${thin}/>${acc('<path d="M12 4v15.5"/>')}${pt(12, 4)}`),
   line: icon(`${acc('<path d="M2.5 21.5 21.5 2.5"/>')}${pt(8, 16)}${pt(16, 8)}`),
   ray: icon(`${acc('<path d="M5 19 21.5 2.5"/>')}${pt(5, 19)}${pt(12, 12)}`),
   vector: icon(`${acc('<path d="M5 19 18 6M11 5.5h7.5V13"/>')}${pt(5, 19)}`),
@@ -169,6 +195,8 @@ export const ICON: Record<ToolId, string> = {
   bisector: icon(`<path d="M4 15.5h16"/><path d="M8 14v3M16 14v3" ${thin}/>${acc('<path d="M12 3v18"/>')}${pt(4, 15.5)}${pt(20, 15.5)}`),
   angleBisector: icon(`<path d="M20.5 19H4l10-15"/>${acc('<path d="M4 19 20 10.4"/>')}`),
   tangent: icon(`<circle cx="14.5" cy="14" r="6"/>${acc('<path d="M3 4 20.5 9.6M3 4l7.8 16.2"/>')}${pt(3, 4)}`),
+  polar: icon(`<circle cx="14.5" cy="13.5" r="6"/>${acc('<path d="M4 20 20 4"/>')}${pt(6, 6)}`),
+  radicalAxis: icon(`<circle cx="8.5" cy="12" r="5.5"/><circle cx="16.5" cy="12" r="4.5"/>${acc('<path d="M13 3v18"/>')}`),
 
   polygon: icon(`${acc(filled('M5 18 8 5l11 4-1 9z'))}${pt(5, 18)}${pt(8, 5)}${pt(19, 9)}${pt(18, 18)}`),
   regular: icon(`${acc(filled('M3.5 12 7.75 4.64h8.5L20.5 12l-4.25 7.36h-8.5z'))}${pt(7.75, 19.36)}${pt(16.25, 19.36)}`),
@@ -176,19 +204,28 @@ export const ICON: Record<ToolId, string> = {
   circle: icon(`${acc('<circle cx="12" cy="12" r="8.5"/>')}${pt(12, 12)}${pt(20.5, 12)}`),
   circleRadius: icon(`<path d="M12 12h8.5" ${thin} ${dash}/>${acc('<circle cx="12" cy="12" r="8.5"/>')}${pt(12, 12)}`),
   incircle: icon(`${TRIANGLE}${acc('<circle cx="12" cy="14.47" r="5.03"/>')}`),
+  ninePoint: icon(`${TRIANGLE}${acc('<circle cx="12" cy="15.6" r="4.3"/>')}`),
+  excircle: icon(`<path d="M4 14 12 3l8 11H4z"/>${acc('<circle cx="12" cy="18" r="4"/>')}`),
   compass: icon(`<path d="M12 2.5v3"/><circle cx="12" cy="7" r="1.6"/><path d="M11.3 8.5 6.5 20.5M8.5 15.5h7"/>${acc('<path d="M12.7 8.5l4.8 12"/>')}`),
   circle3: icon(`${acc('<circle cx="12" cy="12" r="8"/>')}${pt(12, 4)}${pt(5.07, 16)}${pt(18.93, 16)}`),
   semicircle: icon(`<path d="M3.5 16h17" ${thin} ${dash}/>${acc('<path d="M3.5 16a8.5 8.5 0 0 1 17 0"/>')}${pt(3.5, 16)}${pt(20.5, 16)}`),
   arc: icon(`<path d="M6 18h13M6 18V5" ${thin} ${dash}/>${acc('<path d="M19 18A13 13 0 0 0 6 5"/>')}${pt(6, 18)}${pt(19, 18)}${pt(6, 5)}`),
+  arc3: icon(`${acc('<path d="M4 18A10 10 0 0 1 20 18"/>')}${pt(4, 18)}${pt(12, 8)}${pt(20, 18)}`),
   sector: icon(`${acc(filled('M6 18h13A13 13 0 0 0 6 5z'))}${pt(6, 18)}`),
 
   angle: icon(`<path d="M20.5 19H4l11-13"/>${acc(`<path d="${WEDGE}" class="soft"/><path d="M11 19A7 7 0 0 0 8.52 13.65"/>`)}`),
+  orientedAngle: icon(`<path d="M20.5 19H4l11-13"/>${acc(`<path d="${WEDGE}" class="soft"/><path d="M11 19A7 7 0 0 0 8.52 13.65"/><path d="M7.5 15l1-1.4 1.5.8"/>`)}`),
+  angleBetween: icon(`<path d="M3 18 21 8M5 5l14 15"/>${acc('<path d="M16.5 10.5A5.5 5.5 0 0 0 10.5 10.9"/>')}`),
   angleSize: icon(`<path d="M20.5 19H4l11-13"/>${acc(`<path d="${WEDGE}" class="soft"/><path d="M11 19A7 7 0 0 0 8.52 13.65"/><circle cx="18.5" cy="6.5" r="2.2"/>`)}`),
   distance: icon(`<path d="M4 7v8M20 7v8" ${thin}/>${acc('<path d="M6 11h12M8.5 8.5 6 11l2.5 2.5M15.5 8.5 18 11l-2.5 2.5"/>')}${pt(4, 17)}${pt(20, 17)}`),
   area: icon(`${acc('<path d="M4 18 8 5l12 5-3 9z" class="soft"/>')}<path d="M4 18 8 5l12 5-3 9z"/>`),
+  perimeter: icon(`${acc('<path d="M4 18 8 5l12 5-3 9z"/>')}`),
+  slopeMeasure: icon(`<path d="M4 19 20 5"/><path d="M9 14.6h6V9.4" ${thin} ${dash}/>${acc('<path d="M15 14.6V9.4"/>')}`),
+  radiusMeasure: icon(`<circle cx="12" cy="12" r="8"/>${acc('<path d="M12 12h8"/>')}${pt(12, 12)}`),
 
   reflectLine: icon(`<path d="M12 2.5v19" ${thin} ${dash}/><path d="M9 7 4 17h5z"/>${acc('<path d="M15 7l5 10h-5z"/>')}`),
   reflectPoint: icon(`<path d="M3.5 5 10 6.5 7 10.5z"/>${acc('<path d="M20.5 19 14 17.5l3-4z"/>')}${pt(12, 12)}`),
+  invert: icon(`<circle cx="11" cy="13" r="6" ${thin} ${dash}/><path d="M11 13 20 4" ${thin} ${dash}/>${pt(14, 10)}${made(19, 5)}`),
   rotate: icon(`${acc('<path d="M20 12a8 8 0 1 1-3-6.2M17 2v4h-4"/>')}${pt(12, 12)}`),
   translate: icon(`<path d="M3 14l3.5-7 3.5 7z"/><path d="M5 19h13M15.5 16.5 18 19l-2.5 2.5" ${thin}/>${acc('<path d="M14 14l3.5-7 3.5 7z"/>')}`),
   dilate: icon(`<path d="M3 20 15 4M3 20l14-5" ${thin} ${dash}/><path d="M6 17 9 12l1 5.5z"/>${acc('<path d="M9 14 15 4l2 11z"/>')}${pt(3, 20)}`),
@@ -201,14 +238,14 @@ export const ICON: Record<ToolId, string> = {
 export type GroupEntry = ToolId | [ToolId, string];
 export const GROUPS: { name: string; tools: GroupEntry[] }[] = [
   { name: 'Edycja', tools: ['move', 'hide', 'delete'] },
-  { name: 'Punkty', tools: [['point', 'Swobodny / na obiekcie'], 'intersect', ['midpoint', 'Środek odcinka lub okręgu'], ['foot', 'Rzut na prostą']] },
-  { name: 'Punkty szczególne trójkąta', tools: ['centroid', 'orthocenter', 'incenter', 'circumcenter'] },
-  { name: 'Odcinki i wektory', tools: [['segment', 'Dwa końce'], ['segmentLength', 'Początek i długość'], ['vector', 'Wektor']] },
-  { name: 'Proste', tools: [['line', 'Dwa punkty'], ['lineSlope', 'Punkt i nachylenie'], ['parallel', 'Równoległa przez punkt'], ['perpendicular', 'Prostopadła przez punkt'], 'bisector', 'angleBisector', ['tangent', 'Styczne z punktu'], 'ray'] },
+  { name: 'Punkty', tools: [['point', 'Swobodny / na obiekcie'], 'intersect', ['midpoint', 'Środek odcinka lub okręgu'], 'divide', ['foot', 'Rzut na prostą'], 'pole'] },
+  { name: 'Punkty szczególne trójkąta', tools: ['centroid', 'orthocenter', 'incenter', 'circumcenter', 'ninePointCenter', 'excenter'] },
+  { name: 'Odcinki i wektory', tools: [['segment', 'Dwa końce'], ['segmentLength', 'Początek i długość'], 'median', 'altitude', ['vector', 'Wektor']] },
+  { name: 'Proste', tools: [['line', 'Dwa punkty'], ['lineSlope', 'Punkt i nachylenie'], ['parallel', 'Równoległa przez punkt'], ['perpendicular', 'Prostopadła przez punkt'], 'bisector', 'angleBisector', ['tangent', 'Styczne z punktu'], 'polar', 'radicalAxis', 'ray'] },
   { name: 'Wielokąty', tools: [['polygon', 'Wierzchołki'], ['regular', 'Foremny: bok i n']] },
-  { name: 'Okręgi i łuki', tools: [['circle', 'Środek i punkt'], ['circleRadius', 'Środek i promień'], ['circle3', 'Przez 3 punkty'], ['compass', 'Cyrkiel: odcinek i środek'], ['incircle', 'Wpisany w trójkąt'], 'semicircle', 'arc', 'sector'] },
-  { name: 'Pomiary', tools: ['angle', 'angleSize', 'distance', 'area'] },
-  { name: 'Przekształcenia', tools: ['reflectLine', 'reflectPoint', 'rotate', 'translate', 'dilate'] },
+  { name: 'Okręgi i łuki', tools: [['circle', 'Środek i punkt'], ['circleRadius', 'Środek i promień'], ['circle3', 'Przez 3 punkty'], ['compass', 'Cyrkiel: odcinek i środek'], ['incircle', 'Wpisany w trójkąt'], 'ninePoint', 'excircle', 'semicircle', 'arc', 'arc3', 'sector'] },
+  { name: 'Pomiary', tools: ['angle', 'orientedAngle', 'angleBetween', 'angleSize', 'distance', 'area', 'perimeter', 'slopeMeasure', 'radiusMeasure'] },
+  { name: 'Przekształcenia', tools: ['reflectLine', 'reflectPoint', 'invert', 'rotate', 'translate', 'dilate'] },
 ];
 
 // --- State ---
@@ -226,6 +263,8 @@ let selected: number | null = null;
 let pointer: { x: number; y: number } | null = null;
 /** A button or finger is down on the canvas: no hover feedback meanwhile. */
 let pressed = false;
+/** Characteristic objects the currently dragged item is snapped onto, highlighted on the board. */
+let snappedTo: number[] = [];
 let undoStack: string[] = [], redoStack: string[] = [];
 
 let canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, width = 0, height = 0, frame = 0, slop = 8;
@@ -529,6 +568,7 @@ function hoverTarget(): { snap?: Snap; id?: number } | null {
 export function setTool(id: ToolId): void {
   tool = id;
   picked = [];
+  snappedTo = [];
   selected = null;
   renderList();
   canvas.dataset.tool = id;
@@ -547,12 +587,12 @@ async function click(x: number, y: number, byDrag = false): Promise<void> {
   // Drawing doesn't select: the inspector stays closed while building.
   selected = null;
   if (tool === 'point') { checkpoint(); pointAt(x, y); update(); return; }
-  // Clicking a segment (or circle) itself: its midpoint (centre), its length.
-  if ((tool === 'midpoint' || tool === 'distance') && !byDrag && fresh && hit(x, y, isPoint) === null) {
+  // Clicking a segment (or circle) itself: its midpoint (centre), perpendicular bisector, or length.
+  if ((tool === 'midpoint' || tool === 'distance' || tool === 'bisector') && !byDrag && fresh && hit(x, y, isPoint) === null) {
     const seg = objects.find(o => o.id === hit(x, y, s => s.kind === 'segment' || (tool === 'midpoint' && s.kind === 'circle')));
     if (seg) {
       checkpoint();
-      add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }]);
+      add([tool === 'midpoint' ? { kind: 'point', def: 'midpoint', of: [seg.id] } : tool === 'bisector' ? { kind: 'line', def: 'bisector', of: [seg.id] } : { kind: 'measure', def: 'distance', of: [seg.id] }]);
       update();
       return;
     }
@@ -657,7 +697,7 @@ function draw(): void {
   ctx.lineJoin = ctx.lineCap = 'round';
 
   const ghost = preview(), names = new Map(objects.map(o => [o.id, o.name])), hover = hoverTarget();
-  const marked = new Set([selected, ...picked, hover?.id, hover?.snap?.id, ...(hover?.snap?.on ?? [])].filter((id): id is number => id !== null && id !== undefined));
+  const marked = new Set([selected, ...picked, ...snappedTo, hover?.id, hover?.snap?.id, ...(hover?.snap?.on ?? [])].filter((id): id is number => id !== null && id !== undefined));
   const items = [...objects.map(o => ({ o, s: shapes.get(o.id), ghost: false })), ...(ghost?.objects ?? []).map(o => ({ o, s: ghost!.shapes.get(o.id), ghost: true }))]
     .filter((i): i is { o: GeoObject; s: Shape; ghost: boolean } => !!i.s && (!i.o.hidden || tool === 'hide'))
     .sort((a, b) => LAYER[a.s.kind] - LAYER[b.s.kind]);
@@ -870,6 +910,19 @@ export function endStyling(): void { styling = false; }
 export function resetStyle(): void { const o = styled(); if (o?.style) { checkpoint(); delete o.style; update(); } }
 
 // --- Input ---
+function applyPointSnap(pt: GeoObject, s: Snap): void {
+  const d = s.draft!;
+  pt.def = d.def;
+  pt.of = [...d.of];
+  if (d.x !== undefined) pt.x = d.x; else delete pt.x;
+  if (d.y !== undefined) pt.y = d.y; else delete pt.y;
+  if (d.t !== undefined) pt.t = d.t; else delete pt.t;
+  if (d.index !== undefined) pt.index = d.index; else delete pt.index;
+  if (d.value !== undefined) pt.value = d.value; else delete pt.value;
+  if (d.coef !== undefined) pt.coef = [...d.coef]; else delete pt.coef;
+  delete pt.text;
+}
+
 export function initGeometry(): void {
   canvas = document.getElementById('geo-canvas') as HTMLCanvasElement;
   ctx = canvas.getContext('2d')!;
@@ -879,7 +932,10 @@ export function initGeometry(): void {
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   const local = (e: { clientX: number; clientY: number }) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const openSlots = () => tool === 'polygon' ? (picked.length ? 1 : 2) : (toolOf(tool).needs ?? []).filter((_, i) => picked[i] === undefined).length;
-  let down: { x: number; y: number; view: View; moved: boolean; startPick: boolean; drag: { id: number; grab: { x: number; y: number }; start: Map<number, [number, number]> } | null } | null = null;
+  let down: {
+    x: number; y: number; view: View; moved: boolean; startPick: boolean;
+    drag: { id: number; grab: { x: number; y: number }; base: string; baseNextId: number; start: Map<number, [number, number]>; exclude: Set<number> } | null;
+  } | null = null;
 
   canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -889,9 +945,18 @@ export function initGeometry(): void {
     let drag = null;
     if (tool === 'move') {
       const id = hit(p.x, p.y), o = objects.find(o => o.id === id);
-      // A point on a line slides along it; other dependent points stay put; a figure moves with its free points.
-      const movable = !o ? [] : o.def === 'on' ? [o] : o.kind === 'point' && o.def !== 'free' ? [] : freeAncestors(objects, o.id);
-      if (o && movable.length) drag = { id: o.id, grab: { x: v.fromX(p.x), y: v.fromY(p.y) }, start: new Map(movable.map(o => [o.id, [o.x ?? 0, o.y ?? 0] as [number, number]])) };
+      const movable = !o ? [] : o.kind === 'point' ? [o] : freeAncestors(objects, o.id);
+      const directPts = !o || o.kind === 'point' ? [] : o.of.map(k => objects.find(x => x.id === k)).filter((x): x is GeoObject => x?.kind === 'point');
+      if (o && (movable.length || directPts.length || o.def === 'equation')) {
+        const pts = [...directPts, ...movable.filter(m => !directPts.some(d => d.id === m.id))];
+        const start = new Map(pts.map(pt => {
+          const s = shapes.get(pt.id);
+          return [pt.id, isPoint(s) ? [s.x, s.y] : [pt.x ?? 0, pt.y ?? 0]] as [number, [number, number]];
+        }));
+        const exclude = dependents(objects, o.id);
+        for (const pt of pts) for (const dep of dependents(objects, pt.id)) exclude.add(dep);
+        drag = { id: o.id, grab: { x: v.fromX(p.x), y: v.fromY(p.y) }, base: snapshot(), baseNextId: nextId, start, exclude };
+      }
     }
     down = { ...p, view: { ...view }, moved: false, startPick: tool !== 'move' && openSlots() >= 2, drag };
     pressed = tool === 'move';
@@ -909,23 +974,110 @@ export function initGeometry(): void {
     }
     if (tool !== 'move') { request(); return; }
     if (!down.drag) { view = panned(down.view, width, down.x - p.x, p.y - down.y, inset); request(); return; }
+    const drag = down.drag;
+    objects = JSON.parse(drag.base);
+    nextId = drag.baseNextId;
+    shapes = compute(objects);
+    snappedTo = [];
     const v = vp(), wx = v.fromX(p.x), wy = v.fromY(p.y);
-    let dx = wx - down.drag.grab.x, dy = wy - down.drag.grab.y;
-    // With the grid shown, the first point moved lands on a grid point when near one; the rest move with it.
-    const [anchorId, [ax, ay]] = down.drag.start.entries().next().value!, anchor = objects.find(o => o.id === anchorId)!;
-    if (anchor.def === 'free') {
-      const g = gridPoint(v.px(ax + dx), v.py(ay + dy));
-      if (g) { dx = g.x - ax; dy = g.y - ay; }
+    let dx = wx - drag.grab.x, dy = wy - drag.grab.y;
+    const o = objects.find(x => x.id === drag.id)!;
+    if (o.kind === 'point') {
+      const [ax, ay] = drag.start.get(o.id)!;
+      const s = snap(v.px(ax + dx), v.py(ay + dy), drag.exclude);
+      applyPointSnap(o, s);
+      snappedTo = s.on ?? [];
+    } else if (o.def === 'equation') {
+      if (o.kind === 'circle') {
+        const [cx, cy, r] = o.coef!;
+        const sc = snap(v.px(cx + dx), v.py(cy + dy), drag.exclude);
+        if (sc.draft!.def !== 'free') {
+          const ptId = sc.id ?? add([sc.draft!])[0];
+          o.def = 'radius'; o.of = [ptId]; o.value = r; delete o.coef; delete o.text;
+          snappedTo = sc.on ?? [];
+        } else {
+          o.coef = [cx + dx, cy + dy, r]; delete o.text;
+        }
+      } else {
+        const [D, E, g] = o.coef!;
+        const sp = snap(p.x, p.y, drag.exclude);
+        if (sp.draft!.def !== 'free' && Math.abs(E) > 1e-12) {
+          const ptId = sp.id ?? add([sp.draft!])[0];
+          o.def = 'slope'; o.of = [ptId]; o.value = -D / E + 0; delete o.coef; delete o.text;
+          snappedTo = sp.on ?? [];
+        } else if (sp.draft!.def !== 'free') {
+          o.coef = [D, E, -D * sp.x - E * sp.y]; delete o.text;
+          snappedTo = sp.on ?? [];
+        } else {
+          o.coef = [D, E, g - D * dx - E * dy]; delete o.text;
+        }
+      }
+    } else {
+      let hitPt: { id: number; sx: number; sy: number; snap: Snap } | null = null;
+      for (const [ptId, [sx, sy]] of drag.start) {
+        const s = snap(v.px(sx + dx), v.py(sy + dy), drag.exclude);
+        if (s.draft!.def !== 'free') { hitPt = { id: ptId, sx, sy, snap: s }; break; }
+      }
+      const s0 = shapes.get(o.id);
+      const sp = !hitPt && isLine(s0) ? snap(p.x, p.y, drag.exclude) : null;
+      if (hitPt) {
+        dx = hitPt.snap.x - hitPt.sx; dy = hitPt.snap.y - hitPt.sy;
+        snappedTo = hitPt.snap.on ?? [];
+        for (const pt of objects) {
+          const start = drag.start.get(pt.id);
+          if (!start || pt.id === hitPt.id) continue;
+          if (pt.def !== 'free') applyPointSnap(pt, { x: start[0] + dx, y: start[1] + dy, draft: { kind: 'point', def: 'free', of: [], x: start[0] + dx, y: start[1] + dy } });
+          else { pt.x = start[0] + dx; pt.y = start[1] + dy; }
+        }
+        const target = objects.find(x => x.id === hitPt.id)!;
+        if (hitPt.snap.id !== undefined && o.of.includes(hitPt.id) && !o.of.includes(hitPt.snap.id)) {
+          o.of = o.of.map(id => id === hitPt.id ? hitPt.snap.id! : id);
+          if (o.kind === 'polygon') for (const edge of objects) if (edge.def === 'edge' && edge.of[2] === o.id) edge.of = [edge.of[0] === hitPt.id ? hitPt.snap.id : edge.of[0], edge.of[1] === hitPt.id ? hitPt.snap.id : edge.of[1], o.id];
+          if (target.def === 'free') { target.x = hitPt.snap.x; target.y = hitPt.snap.y; }
+        } else {
+          applyPointSnap(target, hitPt.snap);
+        }
+      } else if (sp && sp.draft!.def !== 'free' && sp.draft!.def !== 'on' && isLine(s0)) {
+        snappedTo = sp.on ?? [];
+        if (o.def === 'slope' || o.def === 'parallel' || o.def === 'perpendicular' || o.def === 'tangent') {
+          if (sp.id !== undefined) o.of[0] = sp.id;
+          else { const pt = objects.find(x => x.id === o.of[0]); if (pt) applyPointSnap(pt, sp); }
+        } else if (o.def === 'through' && o.of.length === 2) {
+          const g0 = pointOn(s0, project(s0, drag.grab.x, drag.grab.y))!;
+          dx = sp.x - g0.x; dy = sp.y - g0.y;
+          const [id1, id2] = o.of, st1 = drag.start.get(id1), st2 = drag.start.get(id2);
+          const nearId = st1 && st2 && Math.hypot(st2[0] - g0.x, st2[1] - g0.y) < Math.hypot(st1[0] - g0.x, st1[1] - g0.y) ? id2 : id1;
+          for (const pt of objects) {
+            const start = drag.start.get(pt.id);
+            if (!start || pt.id === nearId) continue;
+            if (pt.def !== 'free') applyPointSnap(pt, { x: start[0] + dx, y: start[1] + dy, draft: { kind: 'point', def: 'free', of: [], x: start[0] + dx, y: start[1] + dy } });
+            else { pt.x = start[0] + dx; pt.y = start[1] + dy; }
+          }
+          if (sp.id !== undefined && !o.of.includes(sp.id)) o.of = o.of.map(id => id === nearId ? sp.id! : id);
+          else { const pt = objects.find(x => x.id === nearId); if (pt) applyPointSnap(pt, sp); }
+        }
+      } else {
+        const [anchorId, [ax, ay]] = drag.start.entries().next().value!, anchor = objects.find(x => x.id === anchorId)!;
+        if (anchor.def === 'free') {
+          const g = gridPoint(v.px(ax + dx), v.py(ay + dy));
+          if (g) { dx = g.x - ax; dy = g.y - ay; }
+        }
+        for (const pt of objects) {
+          const start = drag.start.get(pt.id);
+          if (!start) continue;
+          if (pt.def === 'on') {
+            const s = shapes.get(pt.of[0]), g = gridPoint(p.x, p.y);
+            if (isCurve(s)) pt.t = g && distancePx(s, v.px(g.x), v.py(g.y)) < 1 ? project(s, g.x, g.y) : project(s, start[0] + dx, start[1] + dy);
+          } else if (pt.def === 'free') {
+            pt.x = start[0] + dx; pt.y = start[1] + dy;
+          } else {
+            applyPointSnap(pt, { x: start[0] + dx, y: start[1] + dy, draft: { kind: 'point', def: 'free', of: [], x: start[0] + dx, y: start[1] + dy } });
+          }
+        }
+      }
     }
-    for (const o of objects) {
-      const start = down.drag.start.get(o.id);
-      if (!start) continue;
-      if (o.def === 'on') {
-        const s = shapes.get(o.of[0]), g = gridPoint(p.x, p.y);
-        if (isCurve(s)) o.t = g && distancePx(s, v.px(g.x), v.py(g.y)) < 1 ? project(s, g.x, g.y) : project(s, wx, wy);
-      } else { o.x = start[0] + dx; o.y = start[1] + dy; }
-    }
-    selected = down.drag.id;
+    objects = topoSort(objects);
+    selected = drag.id;
     update();
   });
   const end = (e: PointerEvent) => {
@@ -933,6 +1085,7 @@ export function initGeometry(): void {
     const p = local(e), from = down;
     down = null;
     pressed = false;
+    snappedTo = [];
     canvas.classList.remove('grabbing');
     if (e.pointerType !== 'mouse') pointer = null;
     if (e.type === 'pointerup') {

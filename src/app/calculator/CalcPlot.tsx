@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button-clean';
 import { IconDownload, IconOpen, IconReset, IconSnap, IconZoomIn, IconZoomOut } from '@/components/icons';
 import type { Plot, Scene3 } from '../../cas/engine';
 import { mount3d, type Plot3Handle } from './plot3d';
+import { prettyText } from './composer-text';
 import { PANEL, color, handoff, mountPlot, snapping, toggleSnap, type PlotHandle } from './plot-engine';
 
 const WHAT = { graph: 'wykresy, krzywe, obszary i punkty, z analizą i parametrami', complex: 'funkcję zespoloną, z kolorowaniem płaszczyzny' };
@@ -85,14 +86,14 @@ function CalcPlot2D({ plot }: { plot: Plot }) {
               onClick={() => { const on = handle.current?.toggle(i) ?? true; setShown(v => v.map((x, k) => (k === i ? on : x))); }}
             >
               <span className={`b-sw${s.dash ? ' is-dash' : ''}${s.style && s.style !== 'line' ? ' is-dot' : ''}`} aria-hidden="true" />
-              {s.label}
+              {prettyText(s.label)}
             </button>
           ))}
           {plot.fills.map((f, i) => (
-            <span key={`f${i}`} className="b-cplot-key" style={{ '--c': color(0), '--c2': color(1) } as React.CSSProperties}><span className="b-sw is-area" aria-hidden="true" />{f.label}</span>
+            <span key={`f${i}`} className="b-cplot-key" style={{ '--c': color(0), '--c2': color(1) } as React.CSSProperties}><span className="b-sw is-area" aria-hidden="true" />{prettyText(f.label)}</span>
           ))}
           {plot.shapes.filter(s => !s.open).map((s, i) => (
-            <span key={`s${i}`} className="b-cplot-key" style={{ '--c': color(s.color ?? 0) } as React.CSSProperties}><span className={`b-sw ${s.fill ? 'is-area' : 'is-dash'}`} aria-hidden="true" />{s.label}</span>
+            <span key={`s${i}`} className="b-cplot-key" style={{ '--c': color(s.color ?? 0) } as React.CSSProperties}><span className={`b-sw ${s.fill ? 'is-area' : 'is-dash'}`} aria-hidden="true" />{prettyText(s.label)}</span>
           ))}
           {plot.bars.length > 0 && <span className="b-cplot-key" style={{ '--c': color(0) } as React.CSSProperties}><span className="b-sw is-area" aria-hidden="true" />liczba wartości w przedziale</span>}
         </div>

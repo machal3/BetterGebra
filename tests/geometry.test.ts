@@ -155,4 +155,56 @@ test('dragging with a construction tool creates a shape from press to release wi
   fire('pointerup', 260, 280);
   expect(geoStore.objects.map(o => o.kind)).toEqual(['point', 'point', 'circle']);
   expect(geoStore.shapes.get(geoStore.objects[2].id)).toMatchObject({ kind: 'circle', cx: 0, cy: 0, r: 5 });
+
+  // Moving a point or line snaps to characteristic points and updates its mathematical definition.
+  const { clearAll, define } = await import('../src/geometry/controller');
+  const { definition } = await import('../src/geometry/commands');
+  clearAll();
+  const nameOf = (id: number) => geoStore.objects.find(o => o.id === id)?.name ?? '?';
+  const defOf = (name: string) => definition(geoStore.objects.find(x => x.name === name)!, nameOf);
+  const px = (x: number) => 200 + x * 20;
+  const py = (y: number) => 200 - y * 20;
+
+  define('f: y = 0');
+  define('g: x = 2');
+  define('A = (-4; -2)');
+  define('B = (-4; 2)');
+  define('k = Odcinek(A; B)');
+  define('C = (5; 5)');
+  define('P = (-1; -3)');
+
+  setTool('move');
+  // Drag P from (-1; -3) onto the intersection of f and g at (2; 0).
+  fire('pointerdown', px(-1), py(-3));
+  fire('pointermove', px(2) + 2, py(0) - 1);
+  expect(defOf('P')).toBe('Przecięcie(f; g)');
+  near(geoStore.shapes.get(geoStore.objects.find(x => x.name === 'P')!.id), 2, 0);
+
+  // Keep dragging P onto the midpoint of segment k at (-4; 0).
+  fire('pointermove', px(-4) + 1, py(0));
+  expect(defOf('P')).toBe('Środek(k)');
+  near(geoStore.shapes.get(geoStore.objects.find(x => x.name === 'P')!.id), -4, 0);
+
+  // Keep dragging P onto line f at (0; 0).
+  fire('pointermove', px(0), py(0) + 2);
+  expect(defOf('P')).toBe('Punkt(f)');
+
+  // Keep dragging P onto point C at (5; 5).
+  fire('pointermove', px(5) - 1, py(5) + 1);
+  expect(defOf('P')).toBe('C');
+  near(geoStore.shapes.get(geoStore.objects.find(x => x.name === 'P')!.id), 5, 5);
+
+  // Drag P into empty space (1; 3): reverts to a free point.
+  fire('pointermove', px(1), py(3));
+  fire('pointerup', px(1), py(3));
+  expect(defOf('P')).toBe('(1; 3)');
+
+  // Dragging line h = Prosta(D; E) onto point C updates its definition to Prosta(C; E).
+  define('D = (0; -4)');
+  define('E = (4; -4)');
+  define('h = Prosta(D; E)');
+  fire('pointerdown', px(1), py(-4));
+  fire('pointermove', px(5), py(5));
+  fire('pointerup', px(5), py(5));
+  expect(defOf('h')).toBe('Prosta(C; E)');
 });

@@ -1,7 +1,8 @@
 /* Base: the page, text and scrollbars in the Affect UI values (tokens.css). */
 *, *::before, *::after { box-sizing: border-box; }
 * { scrollbar-width: thin; scrollbar-color: var(--b-faint) transparent; }
-html, body { height: 100%; }
+/* manipulation: no double-tap zoom; text-size-adjust: a rotated phone keeps the type size */
+html, body { height: 100%; touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   margin: 0;
   background: var(--b-page);

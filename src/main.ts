@@ -14,6 +14,7 @@ import { fitY, initCanvasInput } from './ui/canvas-input';
 import { initTooltips } from './app/tooltips';
 import { initSheetDrag } from './components/controls';
 import { openHelp } from './app/Help';
+import { startMathTidy } from './app/math-tidy';
 
 if (!restore()) {
   addFunction('x^2');
@@ -88,6 +89,8 @@ new ResizeObserver(() => {
 document.fonts?.ready.then(() => { scene.request(); redrawGeometry(); });
 
 createRoot(document.getElementById('root')!).render(createElement(StrictMode, null, createElement(App)));
+// roots in formulas: the hole after them taken back, a coefficient kept apart from an index (math-tidy.ts)
+startMathTidy();
 
 // Exposed for debugging in the console.
 Object.assign(window, { bettergebra: { state, scene } });

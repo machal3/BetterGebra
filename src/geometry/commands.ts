@@ -6,10 +6,10 @@ import { format } from '../format';
 import { MathError, buildReal, constant, parameterNames, parse } from '../math';
 import type { Draft, GeoObject, Kind } from './construct';
 
-/** P point, L line-like, S segment, C circle, R curve, G region, V vector, O any object, N number, A angle. */
-type Arg = 'P' | 'L' | 'S' | 'C' | 'R' | 'G' | 'V' | 'O' | 'N' | 'A';
+/** P point, L line-like, S segment, C circle, U round, R curve, G region, V vector, O any object, N number, A angle. */
+type Arg = 'P' | 'L' | 'S' | 'C' | 'U' | 'R' | 'G' | 'V' | 'O' | 'N' | 'A';
 const ROLES: Record<Kind, string> = {
-  point: 'PO', segment: 'SLRO', line: 'LRO', ray: 'LRO', vector: 'VLRO', circle: 'CRGO', arc: 'RO', sector: 'RGO', polygon: 'GO', angle: 'O', measure: '',
+  point: 'PO', segment: 'SLRO', line: 'LRO', ray: 'LRO', vector: 'VLRO', circle: 'CURGO', arc: 'URO', sector: 'URGO', polygon: 'GO', angle: 'O', measure: '',
 };
 
 interface Build {
@@ -55,6 +55,11 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
   { name: 'Ortocentrum', forms: [{ args: ['P', 'P', 'P'], usage: 'Ortocentrum(A; B; C)', what: 'punkt przecięcia wysokości', make: one('point', 'orthocenter') }] },
   { name: 'ŚrodekWpisanego', forms: [{ args: ['P', 'P', 'P'], usage: 'ŚrodekWpisanego(A; B; C)', what: 'środek okręgu wpisanego (przecięcie dwusiecznych)', make: one('point', 'incenter') }] },
   { name: 'ŚrodekOpisanego', forms: [{ args: ['P', 'P', 'P'], usage: 'ŚrodekOpisanego(A; B; C)', what: 'środek okręgu opisanego (przecięcie symetralnych)', make: one('point', 'circumcenter') }] },
+  { name: 'ŚrodekDziewięciuPunktów', forms: [{ args: ['P', 'P', 'P'], usage: 'ŚrodekDziewięciuPunktów(A; B; C)', what: 'środek okręgu 9 punktów (Eulera)', make: one('point', 'ninePointCenter') }] },
+  { name: 'ŚrodekDopisanego', forms: [{ args: ['P', 'P', 'P'], usage: 'ŚrodekDopisanego(A; B; C)', what: 'środek okręgu dopisanego naprzeciw A', make: one('point', 'excenter') }] },
+  { name: 'Podział', forms: [{ args: ['P', 'P', 'N'], usage: 'Podział(A; B; 1/3)', what: 'punkt dzielący odcinek AB w danej części od A', make: withValue('point', 'divide', 2) }] },
+  { name: 'Biegun', forms: [{ args: ['L', 'C'], usage: 'Biegun(f; c)', what: 'biegun prostej f względem okręgu c', make: one('point', 'pole') }] },
+  { name: 'Inwersja', forms: [{ args: ['P', 'C'], usage: 'Inwersja(A; c)', what: 'punkt symetryczny do A względem okręgu c (inwersja)', make: ([p, c], b) => b.push({ kind: 'point', def: 'invert', of: [p, c], imageOf: b.nameOf(p) }) }] },
   { name: 'Wierzchołek', forms: [{ args: ['P', 'P', 'N', 'N'], usage: 'Wierzchołek(A; B; 6; 3)', what: 'k-ty wierzchołek n-kąta foremnego o boku AB', make: ([p, q, n, k], b) => {
     const sides = count('Liczba boków', 3, 60)(n);
     return b.push({ kind: 'point', def: 'regular', of: [p, q], value: sides, index: count('Numer wierzchołka', 3, sides)(k) - 1 });
@@ -67,6 +72,8 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
       return b.push({ kind: 'segment', def: 'through', of: [p, b.push({ kind: 'point', def: 'offset', of: [p], coef: [l, 0] })] });
     } },
   ] },
+  { name: 'Środkowa', forms: [{ args: ['P', 'P', 'P'], usage: 'Środkowa(A; B; C)', what: 'środkowa trójkąta ABC z wierzchołka A', make: one('segment', 'median') }] },
+  { name: 'Wysokość', forms: [{ args: ['P', 'P', 'P'], usage: 'Wysokość(A; B; C)', what: 'wysokość trójkąta ABC z wierzchołka A', make: one('segment', 'altitude') }] },
   { name: 'Wektor', forms: [{ args: ['P', 'P'], usage: 'Wektor(A; B)', what: 'wektor od A do B', make: one('vector', 'through') }] },
   { name: 'Prosta', forms: [
     { args: ['P', 'P'], usage: 'Prosta(A; B)', what: 'prosta przez dwa punkty', make: one('line', 'through') },
@@ -85,6 +92,8 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
     { args: ['P', 'C'], usage: 'Styczna(A; c)', what: 'styczna z A do okręgu', make: one('line', 'tangent', { index: 0 }) },
     { args: ['P', 'C', 'N'], usage: 'Styczna(A; c; 2)', what: 'druga styczna z A', make: ([p, c, n], b) => b.push({ kind: 'line', def: 'tangent', of: [p, c], index: count('Numer stycznej', 1, 2)(n) - 1 }) },
   ] },
+  { name: 'Biegunowa', forms: [{ args: ['P', 'C'], usage: 'Biegunowa(A; c)', what: 'biegunowa punktu A względem okręgu c', make: one('line', 'polar') }] },
+  { name: 'OśPotęgowa', forms: [{ args: ['C', 'C'], usage: 'OśPotęgowa(c; d)', what: 'oś potęgowa dwóch okręgów', make: one('line', 'radicalAxis') }] },
 
   { name: 'Okrąg', forms: [
     { args: ['P', 'P'], usage: 'Okrąg(A; B)', what: 'okrąg o środku A przez B', make: one('circle', 'through') },
@@ -97,9 +106,12 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
   ] },
   { name: 'OkrągOpisany', forms: [{ args: ['P', 'P', 'P'], usage: 'OkrągOpisany(A; B; C)', what: 'okrąg opisany na trójkącie', make: one('circle', 'three') }] },
   { name: 'OkrągWpisany', forms: [{ args: ['P', 'P', 'P'], usage: 'OkrągWpisany(A; B; C)', what: 'okrąg wpisany w trójkąt', make: one('circle', 'incircle') }] },
+  { name: 'OkrągDziewięciuPunktów', forms: [{ args: ['P', 'P', 'P'], usage: 'OkrągDziewięciuPunktów(A; B; C)', what: 'okrąg 9 punktów (Eulera) trójkąta', make: one('circle', 'ninePoint') }] },
+  { name: 'OkrągDopisany', forms: [{ args: ['P', 'P', 'P'], usage: 'OkrągDopisany(A; B; C)', what: 'okrąg dopisany do trójkąta naprzeciw A', make: one('circle', 'excircle') }] },
   { name: 'Cyrkiel', forms: [{ args: ['P', 'P', 'P'], usage: 'Cyrkiel(A; B; C)', what: 'okrąg o środku C i promieniu |AB|', make: one('circle', 'compass') }] },
   { name: 'Półokrąg', forms: [{ args: ['P', 'P'], usage: 'Półokrąg(A; B)', what: 'półokrąg nad AB', make: one('arc', 'semicircle') }] },
   { name: 'Łuk', forms: [{ args: ['P', 'P', 'P'], usage: 'Łuk(O; A; B)', what: 'łuk o środku O od A do półprostej OB', make: one('arc', 'arc') }] },
+  { name: 'ŁukPrzez3', forms: [{ args: ['P', 'P', 'P'], usage: 'ŁukPrzez3(A; B; C)', what: 'łuk okręgu od A przez B do C', make: one('arc', 'arc3') }] },
   { name: 'Wycinek', forms: [{ args: ['P', 'P', 'P'], usage: 'Wycinek(O; A; B)', what: 'wycinek koła o środku O', make: one('sector', 'arc') }] },
 
   { name: 'Wielokąt', forms: [
@@ -111,6 +123,7 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
   ] },
   { name: 'Kąt', forms: [
     { args: ['P', 'P', 'P'], usage: 'Kąt(A; B; C)', what: 'kąt ABC (do 180°)', make: one('angle', 'through') },
+    { args: ['L', 'L'], usage: 'Kąt(f; g)', what: 'kąt między prostymi f i g', make: one('angle', 'through') },
     { args: ['P', 'P', 'A'], usage: 'Kąt(A; B; 40°)', what: 'kąt o wierzchołku B i danej mierze', make: ([p, v, t], b) => b.push({ kind: 'angle', def: 'oriented', of: [p, v, b.push({ kind: 'point', def: 'rotate', of: [p, v], value: t, imageOf: b.nameOf(p) })] }) },
   ] },
   { name: 'KątSkierowany', forms: [{ args: ['P', 'P', 'P'], usage: 'KątSkierowany(A; B; C)', what: 'kąt od BA do BC przeciwnie do wskazówek zegara', make: one('angle', 'oriented') }] },
@@ -120,6 +133,12 @@ const COMMANDS: { name: string; forms: Form[] }[] = [
   ] },
   { name: 'Długość', forms: [{ args: ['S'], usage: 'Długość(f)', what: 'długość odcinka', make: one('measure', 'distance') }] },
   { name: 'Pole', forms: [{ args: ['G'], usage: 'Pole(t₁)', what: 'pole wielokąta, koła lub wycinka', make: one('measure', 'area') }] },
+  { name: 'Obwód', forms: [
+    { args: ['G'], usage: 'Obwód(t₁)', what: 'obwód wielokąta, okręgu lub wycinka', make: one('measure', 'perimeter') },
+    { args: ['U'], usage: 'Obwód(c)', what: 'długość okręgu lub łuku', make: one('measure', 'perimeter') },
+  ] },
+  { name: 'Nachylenie', forms: [{ args: ['L'], usage: 'Nachylenie(f)', what: 'współczynnik kierunkowy prostej lub odcinka', make: one('measure', 'slopeMeasure') }] },
+  { name: 'Promień', forms: [{ args: ['U'], usage: 'Promień(c)', what: 'promień okręgu, łuku lub wycinka', make: one('measure', 'radiusMeasure') }] },
 
   { name: 'Odbicie', forms: [
     { args: ['O', 'L'], usage: 'Odbicie(A; f)', what: 'symetria osiowa względem f', make: image('reflect') },
@@ -214,12 +233,16 @@ export function parseInput(input: string, objects: GeoObject[]): Parsed {
 
   if (isPointLiteral(text)) { const [x, y] = coordinates(text.slice(1, -1)); return done(b.push({ kind: 'point', def: 'free', of: [], x, y })); }
 
+  if (name && byName.get(text)?.kind === 'point') {
+    return done(b.push({ kind: 'point', def: 'offset', of: [byName.get(text)!.id], coef: [0, 0] }));
+  }
+
   const shifted = text.match(/^(\S+)\s*\+\s*(\([^]*\))$/);
   if (shifted && byName.get(shifted[1])?.kind === 'point' && isPointLiteral(shifted[2])) {
     return done(b.push({ kind: 'point', def: 'offset', of: [byName.get(shifted[1])!.id], coef: coordinates(shifted[2].slice(1, -1)) }));
   }
 
-  const call = text.match(/^(\p{L}+)\s*\(([^]*)\)$/u);
+  const call = text.match(/^(\p{L}[\p{L}\p{N}]*)\s*\(([^]*)\)$/u);
   const command = call && BY_NAME.get(fold(call[1]));
   if (call && command) {
     const raw = splitArgs(call[2]);
@@ -290,9 +313,11 @@ const deg = (rad: number | undefined) => rad === undefined ? '?' : `${n(rad * 18
 const THROUGH: Partial<Record<Kind, string>> = { segment: 'Odcinek', line: 'Prosta', ray: 'Półprosta', vector: 'Wektor', circle: 'Okrąg', polygon: 'Wielokąt', angle: 'Kąt' };
 const SIMPLE: Partial<Record<Draft['def'], string>> = {
   on: 'Punkt', midpoint: 'Środek', foot: 'Rzut', centroid: 'ŚrodekCiężkości', orthocenter: 'Ortocentrum', incenter: 'ŚrodekWpisanego',
-  circumcenter: 'ŚrodekOpisanego', perpendicular: 'Prostopadła', parallel: 'Równoległa', bisector: 'Symetralna', angleBisector: 'Dwusieczna',
-  three: 'Okrąg', radiusSegment: 'Okrąg', incircle: 'OkrągWpisany', compass: 'Cyrkiel', semicircle: 'Półokrąg', oriented: 'KątSkierowany',
-  area: 'Pole', translate: 'Przesunięcie', reflect: 'Odbicie',
+  circumcenter: 'ŚrodekOpisanego', ninePointCenter: 'ŚrodekDziewięciuPunktów', excenter: 'ŚrodekDopisanego', pole: 'Biegun', invert: 'Inwersja',
+  median: 'Środkowa', altitude: 'Wysokość', perpendicular: 'Prostopadła', parallel: 'Równoległa', bisector: 'Symetralna', angleBisector: 'Dwusieczna',
+  polar: 'Biegunowa', radicalAxis: 'OśPotęgowa', three: 'Okrąg', radiusSegment: 'Okrąg', incircle: 'OkrągWpisany', ninePoint: 'OkrągDziewięciuPunktów',
+  excircle: 'OkrągDopisany', compass: 'Cyrkiel', semicircle: 'Półokrąg', arc3: 'ŁukPrzez3', oriented: 'KątSkierowany',
+  area: 'Pole', perimeter: 'Obwód', slopeMeasure: 'Nachylenie', radiusMeasure: 'Promień', translate: 'Przesunięcie', reflect: 'Odbicie',
 };
 
 /** "Okrąg(A; B; C)", "(1; 2)", "y = 2x + 1": how the object is defined, readable back by parseInput. */
@@ -304,7 +329,8 @@ export function definition(o: GeoObject, nameOf: (id: number) => string): string
     case 'edge': return call('Odcinek', a.slice(0, 2));
     case 'intersect': return call('Przecięcie', o.index ? [...a, String(o.index + 1)] : a);
     case 'tangent': return call('Styczna', o.index ? [...a, String(o.index + 1)] : a);
-    case 'offset': { const [dx, dy] = o.coef ?? [o.value, 0]; return `${a[0]} + (${n(dx)}; ${n(dy)})`; }
+    case 'offset': { const [dx, dy] = o.coef ?? [o.value, 0]; return !dx && !dy ? a[0] : `${a[0]} + (${n(dx)}; ${n(dy)})`; }
+    case 'divide': return call('Podział', [...a, n(o.value)]);
     case 'regular': return call('Wierzchołek', [...a, n(o.value), String((o.index ?? 2) + 1)]);
     case 'slope': return call('Prosta', [a[0], n(o.value)]);
     case 'radius': return call('Okrąg', [a[0], n(o.value)]);

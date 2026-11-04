@@ -13,34 +13,49 @@ export type Def =
   | 'foot'          // point: orthogonal projection of [P] on the line through [line]
   | 'centroid'      // point: centroid of the triangle [A, B, C]
   | 'orthocenter'   // point: where the altitudes of [A, B, C] meet
-  | 'incenter'      // point: centre of the circle inscribed in [A, B, C]
-  | 'circumcenter'  // point: centre of the circle through [A, B, C]
-  | 'intersect'     // point: intersection `index` of [curve, curve]
-  | 'offset'        // point [A] moved by the vector `coef` = [dx, dy] (older drawings: by `value` to the right)
-  | 'regular'       // point: vertex `index` of the regular `value`-gon on side [A, B]
-  | 'through'       // segment/line/ray/vector [A, B]; circle [centre, P]; polygon [A, B, C…]; angle [A, vertex, C]
-  | 'edge'          // segment [A, B, polygon]: a polygon side, removed with the polygon
-  | 'perpendicular' // line through [P] perpendicular to [line]
-  | 'parallel'      // line through [P] parallel to [line]
-  | 'bisector'      // line: perpendicular bisector of [A, B]
-  | 'angleBisector' // line bisecting the angle [A, vertex, C]
-  | 'tangent'       // line: tangent `index` from [P] to [circle]
-  | 'slope'         // line through [P] with slope `value`
-  | 'equation'      // line a·x + b·y + c = 0 with `coef` = [a, b, c]; circle with `coef` = [cx, cy, r]
-  | 'three'         // circle through [A, B, C]
-  | 'radius'        // circle around [centre] with radius `value`
-  | 'radiusSegment' // circle around [centre] with radius the length of [segment]
-  | 'incircle'      // circle inscribed in the triangle [A, B, C]
-  | 'compass'       // circle around [C] with radius |AB|: [A, B, C]
-  | 'semicircle'    // arc over [A, B], counter-clockwise from B to A
-  | 'arc'           // arc or sector around [centre], counter-clockwise from [A] to the ray towards [B]
-  | 'oriented'      // angle [A, vertex, C] counter-clockwise, may exceed 180°
-  | 'distance'      // measure: length of [segment], |PQ| of [P, Q], or distance of [P, line]
-  | 'area'          // measure: area of [polygon, circle or sector]
-  | 'reflect'       // image of [object] in [line or point]
-  | 'rotate'        // image of [object] rotated around [point] by `value` radians
-  | 'translate'     // image of [object] moved by [vector]
-  | 'dilate';       // image of [object] scaled by `value` from [point]
+  | 'incenter'        // point: centre of the circle inscribed in [A, B, C]
+  | 'circumcenter'    // point: centre of the circle through [A, B, C]
+  | 'ninePointCenter' // point: centre of the nine-point (Euler) circle of [A, B, C]
+  | 'excenter'        // point: centre of the excircle of [A, B, C] opposite A
+  | 'divide'          // point on [A, B] at ratio/part `value` from A: (1 − t)·A + t·B
+  | 'pole'            // point: pole of [line] with respect to [circle]
+  | 'invert'          // point: inverse of [P] with respect to [circle]
+  | 'intersect'       // point: intersection `index` of [curve, curve]
+  | 'offset'          // point [A] moved by the vector `coef` = [dx, dy] (older drawings: by `value` to the right)
+  | 'regular'         // point: vertex `index` of the regular `value`-gon on side [A, B]
+  | 'through'         // segment/line/ray/vector [A, B]; circle [centre, P]; polygon [A, B, C…]; angle [A, vertex, C] or [line, line]
+  | 'edge'            // segment [A, B, polygon]: a polygon side, removed with the polygon
+  | 'median'          // segment: median of triangle [A, B, C] from A to midpoint of BC
+  | 'altitude'        // segment: altitude of triangle [A, B, C] from A onto line BC
+  | 'perpendicular'   // line through [P] perpendicular to [line]
+  | 'parallel'        // line through [P] parallel to [line]
+  | 'bisector'        // line: perpendicular bisector of [A, B]
+  | 'angleBisector'   // line bisecting the angle [A, vertex, C]
+  | 'tangent'         // line: tangent `index` from [P] to [circle]
+  | 'polar'           // line: polar of [P] with respect to [circle]
+  | 'radicalAxis'     // line: radical axis of [circle, circle]
+  | 'slope'           // line through [P] with slope `value`
+  | 'equation'        // line a·x + b·y + c = 0 with `coef` = [a, b, c]; circle with `coef` = [cx, cy, r]
+  | 'three'           // circle through [A, B, C]
+  | 'radius'          // circle around [centre] with radius `value`
+  | 'radiusSegment'   // circle around [centre] with radius the length of [segment]
+  | 'incircle'        // circle inscribed in the triangle [A, B, C]
+  | 'ninePoint'       // circle: nine-point (Euler) circle of [A, B, C]
+  | 'excircle'        // circle: excircle of [A, B, C] opposite A
+  | 'compass'         // circle around [C] with radius |AB|: [A, B, C]
+  | 'semicircle'      // arc over [A, B], counter-clockwise from B to A
+  | 'arc'             // arc or sector around [centre], counter-clockwise from [A] to the ray towards [B]
+  | 'arc3'            // arc or sector through three points [A, B, C] from A through B to C
+  | 'oriented'        // angle [A, vertex, C] counter-clockwise, may exceed 180°
+  | 'distance'        // measure: length of [segment], |PQ| of [P, Q], or distance of [P, line]
+  | 'area'            // measure: area of [polygon, circle or sector]
+  | 'perimeter'       // measure: perimeter of [polygon or sector] or circumference/length of [circle or arc]
+  | 'slopeMeasure'    // measure: slope of [line]
+  | 'radiusMeasure'   // measure: radius of [circle, arc or sector]
+  | 'reflect'         // image of [object] in [line or point]
+  | 'rotate'          // image of [object] rotated around [point] by `value` radians
+  | 'translate'       // image of [object] moved by [vector]
+  | 'dilate';         // image of [object] scaled by `value` from [point]
 
 export interface GeoObject {
   id: number;
@@ -122,16 +137,37 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
       return pt(q.x1 + t * dx, q.y1 + t * dy);
     }
     case 'centroid': return isPoint(p) && isPoint(q) && isPoint(r) ? pt((p.x + q.x + r.x) / 3, (p.y + q.y + r.y) / 3) : null;
-    case 'circumcenter': case 'orthocenter': {
+    case 'circumcenter': case 'orthocenter': case 'ninePointCenter': case 'ninePoint': {
       const c = isPoint(p) && isPoint(q) && isPoint(r) ? circumcircle(p, q, r) : null;
       if (!c) return null;
       const [A, B, C] = a as Pt[];
-      // Euler: the orthocentre is A + B + C − 2·O.
-      return o.def === 'circumcenter' ? pt(c.cx, c.cy) : pt(A.x + B.x + C.x - 2 * c.cx, A.y + B.y + C.y - 2 * c.cy);
+      // Euler: the orthocentre H is A + B + C − 2·O; the nine-point centre N is (O + H)/2 = (A + B + C − O)/2, radius R/2.
+      if (o.def === 'circumcenter') return pt(c.cx, c.cy);
+      if (o.def === 'orthocenter') return pt(A.x + B.x + C.x - 2 * c.cx, A.y + B.y + C.y - 2 * c.cy);
+      const nx = (A.x + B.x + C.x - c.cx) / 2, ny = (A.y + B.y + C.y - c.cy) / 2;
+      return o.def === 'ninePointCenter' ? pt(nx, ny) : { kind: 'circle', cx: nx, cy: ny, r: c.r / 2 };
     }
     case 'incenter': case 'incircle': {
       const t = isPoint(p) && isPoint(q) && isPoint(r) ? incircle(p, q, r) : null;
       return !t ? null : o.def === 'incenter' ? pt(t.cx, t.cy) : t;
+    }
+    case 'excenter': case 'excircle': {
+      const t = isPoint(p) && isPoint(q) && isPoint(r) ? excircle(p, q, r) : null;
+      return !t ? null : o.def === 'excenter' ? pt(t.cx, t.cy) : t;
+    }
+    case 'divide': return isPoint(p) && isPoint(q) && Number.isFinite(value) ? pt(p.x + value * (q.x - p.x), p.y + value * (q.y - p.y)) : null;
+    case 'pole': {
+      if (!isLine(p) || q?.kind !== 'circle') return null;
+      const dx = p.x2 - p.x1, dy = p.y2 - p.y1, len2 = dx * dx + dy * dy;
+      if (!len2) return null;
+      const t = ((q.cx - p.x1) * dx + (q.cy - p.y1) * dy) / len2;
+      const hx = p.x1 + t * dx - q.cx, hy = p.y1 + t * dy - q.cy, d2 = hx * hx + hy * hy;
+      return d2 > 1e-18 * q.r * q.r ? pt(q.cx + q.r * q.r * hx / d2, q.cy + q.r * q.r * hy / d2) : null;
+    }
+    case 'invert': {
+      if (!isPoint(p) || q?.kind !== 'circle') return null;
+      const dx = p.x - q.cx, dy = p.y - q.cy, d2 = dx * dx + dy * dy;
+      return d2 > 1e-18 * q.r * q.r ? pt(q.cx + q.r * q.r * dx / d2, q.cy + q.r * q.r * dy / d2) : null;
     }
     case 'intersect': return intersections(p!, q!)[o.index ?? 0] ?? null;
     case 'offset': { const [dx, dy] = o.coef ?? [value, 0]; return isPoint(p) ? pt(p.x + dx, p.y + dy) : null; }
@@ -145,11 +181,27 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
     case 'through':
     case 'edge':
       if (o.kind === 'polygon') return a.length >= 3 && a.every(isPoint) ? { kind: 'polygon', pts: a as Pt[] } : null;
+      if (o.kind === 'angle' && a.length === 2 && isLine(p) && isLine(q)) {
+        const [hit] = intersections({ ...p, kind: 'line' }, { ...q, kind: 'line' });
+        return hit ? angle({ kind: 'point', x: hit.x + p.x2 - p.x1, y: hit.y + p.y2 - p.y1 }, hit, { kind: 'point', x: hit.x + q.x2 - q.x1, y: hit.y + q.y2 - q.y1 }, false) : null;
+      }
       if (!isPoint(p) || !isPoint(q)) return null;
       if (o.kind === 'circle') { const rad = Math.hypot(q.x - p.x, q.y - p.y); return rad > 0 ? { kind: 'circle', cx: p.x, cy: p.y, r: rad } : null; }
       if (o.kind === 'angle') return isPoint(r) ? angle(p, q, r, false) : null;
       if (!isLine({ kind: o.kind } as Shape)) return null;
       return p.x === q.x && p.y === q.y ? null : { kind: o.kind as Line['kind'], x1: p.x, y1: p.y, x2: q.x, y2: q.y };
+    case 'median': {
+      if (!isPoint(p) || !isPoint(q) || !isPoint(r)) return null;
+      const mx = (q.x + r.x) / 2, my = (q.y + r.y) / 2;
+      return p.x === mx && p.y === my ? null : { kind: 'segment', x1: p.x, y1: p.y, x2: mx, y2: my };
+    }
+    case 'altitude': {
+      if (!isPoint(p) || !isPoint(q) || !isPoint(r)) return null;
+      const dx = r.x - q.x, dy = r.y - q.y, len2 = dx * dx + dy * dy;
+      if (!len2) return null;
+      const t = ((p.x - q.x) * dx + (p.y - q.y) * dy) / len2, hx = q.x + t * dx, hy = q.y + t * dy;
+      return Math.hypot(hx - p.x, hy - p.y) <= 1e-12 * Math.sqrt(len2) ? null : { kind: 'segment', x1: p.x, y1: p.y, x2: hx, y2: hy };
+    }
     case 'perpendicular':
     case 'parallel': {
       if (!isPoint(p) || !isLine(q)) return null;
@@ -180,6 +232,20 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
       // P on the circle touches it itself: the tangent is perpendicular to the radius there.
       if (Math.hypot(tx - p.x, ty - p.y) <= 1e-9 * q.r) return { kind: 'line', x1: p.x, y1: p.y, x2: p.x - dy, y2: p.y + dx };
       return { kind: 'line', x1: p.x, y1: p.y, x2: tx, y2: ty };
+    }
+    case 'polar': {
+      if (!isPoint(p) || q?.kind !== 'circle') return null;
+      const dx = p.x - q.cx, dy = p.y - q.cy, d2 = dx * dx + dy * dy;
+      if (d2 <= 1e-18 * q.r * q.r) return null;
+      const ix = q.cx + q.r * q.r * dx / d2, iy = q.cy + q.r * q.r * dy / d2;
+      return { kind: 'line', x1: ix, y1: iy, x2: ix - dy, y2: iy + dx };
+    }
+    case 'radicalAxis': {
+      if (p?.kind !== 'circle' || q?.kind !== 'circle') return null;
+      const dx = q.cx - p.cx, dy = q.cy - p.cy, d = Math.hypot(dx, dy);
+      if (d <= 1e-12 * (p.r + q.r)) return null;
+      const m = (p.r * p.r - q.r * q.r + d * d) / (2 * d), mx = p.cx + m * dx / d, my = p.cy + m * dy / d;
+      return { kind: 'line', x1: mx, y1: my, x2: mx - dy, y2: my + dx };
     }
     case 'slope': return isPoint(p) && Number.isFinite(value) ? { kind: 'line', x1: p.x, y1: p.y, x2: p.x + 1, y2: p.y + value } : null;
     case 'equation': {
@@ -212,6 +278,14 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
       const from = Math.atan2(q.y - p.y, q.x - p.x);
       return { kind: o.kind === 'sector' ? 'sector' : 'arc', cx: p.x, cy: p.y, r: Math.hypot(q.x - p.x, q.y - p.y), from, sweep: mod(Math.atan2(r.y - p.y, r.x - p.x) - from) || TAU };
     }
+    case 'arc3': {
+      const c = isPoint(p) && isPoint(q) && isPoint(r) ? circumcircle(p, q, r) : null;
+      if (!c) return null;
+      const [A, B, C] = a as Pt[];
+      const tA = Math.atan2(A.y - c.cy, A.x - c.cx), tB = Math.atan2(B.y - c.cy, B.x - c.cx), tC = Math.atan2(C.y - c.cy, C.x - c.cx);
+      const dAB = mod(tB - tA), dAC = mod(tC - tA), ccw = dAB <= dAC;
+      return { kind: o.kind === 'sector' ? 'sector' : 'arc', cx: c.cx, cy: c.cy, r: c.r, from: ccw ? tA : tC, sweep: ccw ? dAC : TAU - dAC };
+    }
     case 'oriented': return isPoint(p) && isPoint(q) && isPoint(r) ? angle(p, q, r, true) : null;
     case 'distance': {
       if (a.length === 1) return isLine(p) ? measure((p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2, Math.hypot(p.x2 - p.x1, p.y2 - p.y1)) : null;
@@ -225,6 +299,22 @@ function build(o: GeoObject, a: (Shape | null)[]): Shape | null {
       if (p?.kind === 'sector') { const m = p.from + p.sweep / 2; return measure(p.cx + p.r / 2 * Math.cos(m), p.cy + p.r / 2 * Math.sin(m), p.r * p.r * p.sweep / 2); }
       return null;
     }
+    case 'perimeter': {
+      if (p?.kind === 'polygon') {
+        const sum = p.pts.reduce((acc, v, i) => { const w = p.pts[(i + 1) % p.pts.length]; return acc + Math.hypot(w.x - v.x, w.y - v.y); }, 0);
+        return measure(p.pts.reduce((s, v) => s + v.x, 0) / p.pts.length, p.pts.reduce((s, v) => s + v.y, 0) / p.pts.length, sum);
+      }
+      if (p?.kind === 'circle') return measure(p.cx, p.cy + p.r / 2, TAU * p.r);
+      if (p?.kind === 'arc') { const m = p.from + p.sweep / 2; return measure(p.cx + p.r * Math.cos(m), p.cy + p.r * Math.sin(m), p.r * p.sweep); }
+      if (p?.kind === 'sector') { const m = p.from + p.sweep / 2; return measure(p.cx + p.r / 2 * Math.cos(m), p.cy + p.r / 2 * Math.sin(m), (2 + p.sweep) * p.r); }
+      return null;
+    }
+    case 'slopeMeasure': {
+      if (!isLine(p)) return null;
+      const dx = p.x2 - p.x1, dy = p.y2 - p.y1;
+      return Math.abs(dx) > 1e-12 * Math.abs(dy) ? measure((p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2, dy / dx) : null;
+    }
+    case 'radiusMeasure': return isRound(p) ? measure(p.cx + p.r / 2, p.cy, p.r) : null;
     case 'reflect':
       if (isPoint(q)) return transform(p!, [-1, 0, 0, -1, 2 * q.x, 2 * q.y]);
       if (isLine(q)) {
@@ -255,6 +345,14 @@ function incircle(a: Pt, b: Pt, c: Pt): Circle | null {
   const r = Math.abs(area([a, b, c])) * 2 / sum;
   if (!(r > 1e-12 * sum)) return null; // collinear
   return { kind: 'circle', cx: (la * a.x + lb * b.x + lc * c.x) / sum, cy: (la * a.y + lb * b.y + lc * c.y) / sum, r };
+}
+
+/** Excircle opposite vertex A (tangent to side BC and the extensions of AB, AC). */
+function excircle(a: Pt, b: Pt, c: Pt): Circle | null {
+  const la = Math.hypot(b.x - c.x, b.y - c.y), lb = Math.hypot(a.x - c.x, a.y - c.y), lc = Math.hypot(a.x - b.x, a.y - b.y), den = -la + lb + lc;
+  const r = Math.abs(area([a, b, c])) * 2 / den;
+  if (!(r > 1e-12 * (la + lb + lc))) return null;
+  return { kind: 'circle', cx: (-la * a.x + lb * b.x + lc * c.x) / den, cy: (-la * a.y + lb * b.y + lc * c.y) / den, r };
 }
 
 function circumcircle(a: Pt, b: Pt, c: Pt): Circle | null {
@@ -478,28 +576,43 @@ const DETAIL: Record<Def, (a: string[], o: GeoObject) => string> = {
   orthocenter: a => `ortocentrum trójkąta ${names(a)}`,
   incenter: a => `środek okręgu wpisanego w ${names(a)}`,
   circumcenter: a => `środek okręgu opisanego na ${names(a)}`,
+  ninePointCenter: a => `środek okręgu 9 punktów trójkąta ${names(a)}`,
+  excenter: a => `środek okręgu dopisanego do ${names(a)} naprzeciw ${a[0]}`,
+  divide: (a, o) => `punkt dzielący ${names(a)} w części ${num(o.value ?? NaN)}`,
+  pole: a => `biegun prostej ${a[0]} względem ${a[1]}`,
+  invert: a => `inwersja ${a[0]} względem ${a[1]}`,
   slope: (a, o) => `prosta przez ${a[0]} o nachyleniu ${num(o.value ?? NaN)}`,
   equation: (_, o) => `${KIND[o.kind]} z równania`,
   radiusSegment: a => `okrąg o środku ${a[0]}, r = |${a[1]}|`,
   incircle: a => `okrąg wpisany w trójkąt ${names(a)}`,
+  ninePoint: a => `okrąg 9 punktów trójkąta ${names(a)}`,
+  excircle: a => `okrąg dopisany do ${names(a)} naprzeciw ${a[0]}`,
   intersect: a => `przecięcie ${a.join(', ')}`,
-  offset: (a, o) => { const [dx, dy] = o.coef ?? [o.value ?? NaN, 0]; return `${a[0]} przesunięty o [${num(dx)}; ${num(dy)}]`; },
+  offset: (a, o) => { const [dx, dy] = o.coef ?? [o.value ?? NaN, 0]; return dx === 0 && dy === 0 ? `punkt ${a[0]}` : `${a[0]} przesunięty o [${num(dx)}; ${num(dy)}]`; },
   regular: (a, o) => `wierzchołek ${o.value}-kąta foremnego ${names(a)}`,
   through: (a, o) => o.kind === 'circle' ? `okrąg o środku ${a[0]} przez ${a[1]}` : `${KIND[o.kind]} ${names(a)}`,
   edge: a => `bok ${names(a.slice(0, 2))}`,
+  median: a => `środkowa trójkąta ${names(a)} z ${a[0]}`,
+  altitude: a => `wysokość trójkąta ${names(a)} z ${a[0]}`,
   perpendicular: a => `prostopadła do ${a[1]} przez ${a[0]}`,
   parallel: a => `równoległa do ${a[1]} przez ${a[0]}`,
   bisector: a => a.length === 1 ? `symetralna ${a[0]}` : `symetralna ${names(a)}`,
   angleBisector: a => `dwusieczna kąta ${names(a)}`,
   tangent: a => `styczna z ${a[0]} do ${a[1]}`,
+  polar: a => `biegunowa ${a[0]} względem ${a[1]}`,
+  radicalAxis: a => `oś potęgowa ${a.join(', ')}`,
   three: a => `okrąg przez ${names(a)}`,
   radius: (a, o) => `okrąg o środku ${a[0]}, r = ${num(o.value ?? NaN)}`,
   compass: a => `okrąg o środku ${a[2]}, r = |${names(a.slice(0, 2))}|`,
   semicircle: a => `półokrąg ${names(a)}`,
   arc: (a, o) => `${KIND[o.kind]} o środku ${a[0]} od ${a[1]} do ${a[2]}`,
+  arc3: (a, o) => `${KIND[o.kind]} przez ${names(a)}`,
   oriented: a => `kąt ${names(a)}`,
   distance: a => a.length === 1 ? `długość ${a[0]}` : `odległość ${a.join(', ')}`,
   area: a => `pole ${a[0]}`,
+  perimeter: a => `obwód ${a[0]}`,
+  slopeMeasure: a => `nachylenie ${a[0]}`,
+  radiusMeasure: a => `promień ${a[0]}`,
   reflect: a => `odbicie ${a[0]} względem ${a[1]}`,
   rotate: (a, o) => `obrót ${a[0]} wokół ${a[1]} o ${deg(o.value ?? NaN)}`,
   translate: a => `przesunięcie ${a[0]} o ${a[1]}`,
@@ -521,7 +634,7 @@ export function describe(o: GeoObject, s: Shape | null, nameOf: (id: number) => 
     case 'polygon': return { text: `${o.name} = ${num(Math.abs(area(s.pts)))}`, detail: `${detail}, pole` };
     case 'angle': return { text: `${o.name} = ${deg(s.sweep)}`, detail };
     case 'measure': {
-      const label = o.def === 'area' ? `P(${args[0]})` : args.length === 1 ? `|${args[0]}|` : args.every(n => /^[A-Z]/.test(n)) ? `|${names(args)}|` : `d(${args.join(', ')})`;
+      const label = o.def === 'area' ? `P(${args[0]})` : o.def === 'perimeter' ? `Obw(${args[0]})` : o.def === 'slopeMeasure' ? `a(${args[0]})` : o.def === 'radiusMeasure' ? `r(${args[0]})` : args.length === 1 ? `|${args[0]}|` : args.every(n => /^[A-Z]/.test(n)) ? `|${names(args)}|` : `d(${args.join(', ')})`;
       return { text: `${label} = ${num(s.value)}`, detail };
     }
   }

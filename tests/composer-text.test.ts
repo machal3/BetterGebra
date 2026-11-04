@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillTemplate, nextSlot, oneLine, prettify, withSlots } from '../src/app/calculator/composer-text';
+import { fillTemplate, nextSlot, oneLine, prettify, prettyText, withSlots } from '../src/app/calculator/composer-text';
 import { PALETTE } from '../src/app/calculator/content';
 import { parse } from '../src/cas/parse';
 import { sugar } from '../src/cas/sugar';
@@ -46,6 +46,21 @@ describe('prettify', () => {
     for (const s of ['x <= 2*pi', 'sqrt(x) >= 1', 'granica (1 + 1/n)^n przy n->inf']) {
       expect(JSON.stringify(parse(sugar(type(s))))).toBe(JSON.stringify(parse(sugar(s))));
     }
+  });
+});
+
+describe('prettyText', () => {
+  it('writes text formulas as they are read', () => {
+    expect(prettyText('y = x^3 - 3x + 1')).toBe('y = x³ − 3x + 1');
+    expect(prettyText('solve(x^2 - 2 = 0)')).toBe('solve(x² − 2 = 0)');
+    expect(prettyText('x^(-1) + 2*x <= sqrt(pi)')).toBe('x⁻¹ + 2·x ≤ √(π)');
+    expect(prettyText('limit(sin x/x, x->inf)')).toBe('limit(sin x/x, x→∞)');
+  });
+  it('leaves what a superscript cannot say', () => {
+    expect(prettyText('x^(1/2)')).toBe('x^(1/2)');
+    expect(prettyText('x^2.5')).toBe('x^2.5');
+    expect(prettyText('A .* B')).toBe('A .* B');
+    expect(prettyText('pierwiastki')).toBe('pierwiastki');
   });
 });
 

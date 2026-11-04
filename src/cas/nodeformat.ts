@@ -101,7 +101,7 @@ function ml(n: Node): string {
 const relSym = (op: string) => ({ '<=': '≤', '>=': '≥', '!=': '≠', '->': '→' } as Record<string, string>)[op] ?? op;
 
 function dOf(v: string, k?: string): string {
-  const d = mi('d');
+  const d = mi('d', true); // upright, as the results write it
   return k ? `<mfrac><msup>${d}${mn(k)}</msup><mrow>${d}<msup>${mi(v)}${mn(k)}</msup></mrow></mfrac>` : `<mfrac>${d}<mrow>${d}${mi(v)}</mrow></mfrac>`;
 }
 
@@ -128,7 +128,7 @@ function call(name: string, args: Node[], sup?: string): string {
     }
     case 'integrate': {
       const x = v(1) ?? 'x';
-      const body = row(wrap(args[0], 2), '<mspace width="0.17em"/>', mi('d'), mi(x));
+      const body = row(wrap(args[0], 2), '<mspace width="0.17em"/>', mi('d', true), mi(x));
       if (args.length >= 4) return row(`<msubsup>${mo('∫')}${row(a[2])}${row(a[3])}</msubsup>`, body);
       return row(mo('∫'), body);
     }
@@ -147,7 +147,14 @@ function call(name: string, args: Node[], sup?: string): string {
       break;
     }
   }
+  // of a matrix written out: A⁻¹, Aᵀ, det [ … ], its brackets enough without ( ) around them
+  const matrix = args.length === 1 && args[0].t === 'list' && args[0].bracket === '[';
+  if (matrix && name === 'inverse') return `<msup>${a[0]}${row(mo('−'), mn('1'))}</msup>`;
+  if (matrix && name === 'transpose') return `<msup>${a[0]}${mi('T', true)}</msup>`;
   const label = FN_NAMES[name] ?? COMMAND_NAMES[name] ?? name;
   const head = sup ? `<msup>${mi(label, true)}${row(sup)}</msup>` : mi(label, true);
-  return row(head, APPLY, paren(a.join(mo(';'))));
+  if (matrix) return row(head, APPLY, '<mspace width="0.17em"/>', a[0]);
+  // sin x, ln 2: a function of one letter or a whole number goes without brackets, as the results write it
+  const bare = FN_NAMES[name] && args.length === 1 && (args[0].t === 'id' || (args[0].t === 'num' && /^\d+$/.test(args[0].v))) && name !== 'gamma' && name !== 'zeta';
+  return row(head, APPLY, bare ? `<mspace width="0.17em"/>${a[0]}` : paren(a.join(mo(';'))));
 }
