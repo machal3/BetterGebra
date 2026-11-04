@@ -35,14 +35,14 @@ const fn = (f: string, name = f, text = `${f}(□)`): Key => key(`<mi mathvarian
 const word = (label: string, text: string, name: string): Key => ({ label, text, name, word: true });
 /**
  * The root keys are drawn: at a key's size Chromium sets a radical's bar apart from its √, half a pixel higher and
- * thicker, with a step where they meet. Here the √ and its bar are one stroke (its short down-stroke heavy, as in the
+ * thicker, with a step where they meet. Here the √ and its bar are one stroke (its ascending stem heavy, as in the
  * math font); the index sits clear of the hook.
  */
 const RADICAL = (index: boolean) => {
-  const x = index ? 6 : 0, w = 30 + x;
+  const x = index ? 7 : 0, w = 30 + x;
   return `<svg class="b-key-svg" viewBox="0 0 ${w} 24" width="${w}" height="24" aria-hidden="true">${
-    index ? '<text x="0.5" y="10.5" class="b-key-index">𝑛</text>' : ''
-  }<path d="M${2 + x} 13.6 ${4.6 + x} 12.2 ${9 + x} 20.6 ${14 + x} 3.6H${28.5 + x}" class="b-key-stroke"/><path d="M${4.8 + x} 12.6 ${9 + x} 20.6" class="b-key-stroke is-heavy"/><rect x="${16.5 + x}" y="6.8" width="9.6" height="11.8" rx="2" class="b-key-slot"/></svg>`;
+    index ? '<text x="2" y="10.5" class="b-key-index">𝑛</text>' : ''
+  }<path d="M${2 + x} 13.5 L${4.5 + x} 12 L${8.5 + x} 20.5 L${13.5 + x} 4 H${28.5 + x}" class="b-key-stroke"/><rect x="${16 + x}" y="6.5" width="9.5" height="11.5" rx="2" class="b-key-slot"/></svg>`;
 };
 const drawn = (label: string, text: string, name: string): Key => ({ label, text, name });
 const mat = (rows: number, cols: number) => `<mrow><mo>[</mo><mtable columnspacing="0.3em" rowspacing="0.25em">${`<mtr>${`<mtd>${B}</mtd>`.repeat(cols)}</mtr>`.repeat(rows)}</mtable><mo>]</mo></mrow>`;

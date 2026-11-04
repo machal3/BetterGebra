@@ -51,31 +51,34 @@ function drawRadical(el: MathMLElement): void {
   const box = el.getBoundingClientRect();
   const kids = [...el.children] as MathMLElement[];
   const radicand = el.localName === 'mroot' ? kids.slice(0, 1) : kids;
-  if (!box.width || !radicand.length) return;
+  if (!box.width || !box.height || !radicand.length) return;
   const zoom = zoomOf(el), fs = fontSize(el), ink = getComputedStyle(el).color;
   const rects = radicand.map(c => c.getBoundingClientRect());
   const W = box.width / zoom, H = box.height / zoom;
   const left = (Math.min(...rects.map(r => r.left)) - box.left) / zoom;
   const right = (Math.max(...rects.map(r => r.right)) - box.left) / zoom;
-  if (!(left > 0) || !(right > left)) return;
-  const thin = 0.06 * fs, heavy = 0.12 * fs; // the weight of the font's strokes
+  const radTop = (Math.min(...rects.map(r => r.top)) - box.top) / zoom;
+  const radBottom = (Math.max(...rects.map(r => r.bottom)) - box.top) / zoom;
+  if (!(left > 0) || !(right > left) || !(radBottom > radTop)) return;
+  const stroke = 0.075 * fs; // uniform stroke matching the formula ink
   // the √'s left end: the root's own edge, or for ⁿ√ under its index, which overlaps the hook as in print
   let x0 = 0.04 * fs;
   if (el.localName === 'mroot' && kids[1]) {
     const index = kids[1].getBoundingClientRect();
-    x0 = Math.max(x0, Math.min((index.right - box.left) / zoom - 0.4 * fs, left - 0.62 * fs));
+    x0 = Math.max(x0, Math.min((index.right - box.left) / zoom - 0.35 * fs, left - 0.65 * fs));
   }
   const x3 = left - 0.04 * fs; // the top of the long stroke, where the bar begins
-  const bar = 1.5 * thin, bottom = H - 0.04 * fs;
-  const hook = bottom - Math.min(0.52 * fs, (bottom - bar) * 0.55);
   const span = x3 - x0;
-  const p0 = [x0, hook + 0.09 * fs], p1 = [x0 + span * 0.2, hook], p2 = [x0 + span * 0.5, bottom];
-  const end = Math.min(W - thin, right + 0.06 * fs);
+  if (!(span > 0)) return;
+  const bar = Math.max(stroke * 0.8, radTop - 0.12 * fs);
+  const bottom = Math.min(H - 0.04 * fs, radBottom + 0.06 * fs);
+  const hook = bottom - Math.min(0.55 * fs, (bottom - bar) * 0.52);
+  const p0 = [x0, hook + 0.08 * fs], p1 = [x0 + span * 0.22, hook], p2 = [x0 + span * 0.52, bottom];
+  const end = Math.min(W - stroke * 0.5, right + 0.06 * fs);
   const pt = (p: number[]) => `${r1(p[0])} ${r1(p[1])}`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r1(W)}" height="${r1(H)}" viewBox="0 0 ${r1(W)} ${r1(H)}">`
     + `<g fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M${pt(p0)} L${pt(p1)} M${pt(p2)} L${r1(x3)} ${r1(bar)} H${r1(end)}" stroke-width="${r1(thin)}"/>`
-    + `<path d="M${pt(p1)} L${pt(p2)}" stroke-width="${r1(heavy)}"/></g></svg>`;
+    + `<path d="M${pt(p0)} L${pt(p1)} L${pt(p2)} L${r1(x3)} ${r1(bar)} H${r1(end)}" stroke-width="${r1(stroke)}"/></g></svg>`;
   el.style.background = `url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0 / 100% 100% no-repeat`;
   // the native √ and bar are painted in the root's colour; its radicand and index keep the ink
   el.style.color = 'transparent';
