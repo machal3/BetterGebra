@@ -70,9 +70,9 @@ function RowView({ row }: { row: Row }) {
 function PodCard({ pod, primary, run }: { pod: Pod; primary: boolean; run: (q: string) => void }) {
   const text = pod.rows.map(r => r.text).join('\n');
   return (
-    <section className={cx('b-pod', primary && 'is-primary', primary && !pod.plot && 'is-solid', (!!pod.plot || !pod.rows.length) && 'is-wide')} data-ui-message aria-label={pod.title}>
+    <section className={cx('b-pod', primary && 'is-primary', (!!pod.plot || !pod.rows.length) && 'is-wide')} data-ui-message aria-label={pod.title}>
       <header className="b-pod-head">
-        <h3>{pod.title}</h3>
+        {primary ? <div className="b-pod-title"><span className="b-pod-badge">Wynik</span><h3>{pod.title}</h3></div> : <h3>{pod.title}</h3>}
         {pod.rows.length > 0 && <MessageActions actions={['copy']} text={text} label={`Działania: ${pod.title}`} />}
       </header>
       {pod.rows.map((r, i) => <RowView key={i} row={r} />)}
@@ -146,7 +146,11 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
         </header>
       )}
       {result.error && <section className="b-pod is-error" role="alert"><p>{result.error}</p></section>}
-      {grouped(result.pods).map((p, i) => (Array.isArray(p) ? <FactsCard key={i} pods={p} /> : <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />))}
+      {grouped(result.pods).map((p, i) => {
+        const card = Array.isArray(p) ? <FactsCard key={i} pods={p} /> : <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />;
+        // the answer first, then the cards that explain it under a quiet heading
+        return i === 1 && !result.error ? [<h2 key="details" className="b-calc-section">Szczegóły</h2>, card] : card;
+      })}
       {!busy && <NextSteps ans={result.ans} next={result.next} query={query} run={run} />}
     </div>
   );
