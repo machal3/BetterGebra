@@ -10,7 +10,7 @@
 @keyframes b-land-right { from { opacity: 0; transform: translateX(10px) scale(0.92); filter: blur(4px); } 55% { filter: blur(0); } }
 
 .sidebar-body { animation: b-land var(--b-land) var(--b-spring) backwards; }
-.b-fn, .b-gobj { animation-name: b-land; animation-duration: var(--b-land); animation-timing-function: var(--b-spring); }
+.b-fn { animation-name: b-land; animation-duration: var(--b-land); animation-timing-function: var(--b-spring); }
 .b-param { animation: b-land var(--b-land) var(--b-spring) backwards; }
 .b-param:nth-child(2) { animation-delay: 50ms; }
 .b-param:nth-child(n + 3) { animation-delay: 100ms; }
@@ -34,8 +34,8 @@
 }
 
 /* ---------- Press: ink spreads from the finger (motion.ts installRipple) ---------- */
-:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-gpalette-tool, .b-calc-tile)[data-ripple] { position: relative; overflow: hidden; isolation: isolate; }
-:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-gpalette-tool, .b-calc-tile)[data-ripple]::after {
+:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-calc-tile)[data-ripple] { position: relative; overflow: hidden; isolation: isolate; }
+:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-calc-tile)[data-ripple]::after {
   content: ""; position: absolute; z-index: -1; left: var(--rx); top: var(--ry); width: var(--rs); height: var(--rs);
   margin: calc(var(--rs) / -2) 0 0 calc(var(--rs) / -2); border-radius: 50%; background: currentColor; pointer-events: none;
   opacity: 0; transform: scale(0);
@@ -87,10 +87,8 @@
 .b-param-play svg { transition: transform 360ms var(--b-spring); }
 .b-param-play:active svg { transform: scale(0.82); }
 
-/* ---------- Geometria: a picked tool's glyph lands ---------- */
-.b-gpalette-tool[aria-pressed="true"] .b-gtool-icon { animation: b-tool-pick 520ms var(--b-spring); }
-@keyframes b-tool-pick { from { transform: scale(0.78) rotate(-6deg); } }
-.b-gpalette-tool:active .b-gtool-icon { transform: scale(0.9); transition: transform var(--b-press) var(--b-ease); }
+/* ---------- Geometria: a tool gives a little under the finger, nothing more ---------- */
+.b-gpalette-tool:active .b-gtool-icon { transform: scale(0.94); transition: transform var(--b-press) var(--b-ease); }
 
 /* ---------- Kalkulator ---------- */
 /* the field lifts a step while it is written in; the arrow leans forward when pointed at */

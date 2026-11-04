@@ -75,7 +75,7 @@ export function pop(el: Element | null, by = 0.16): void {
  * monochrome). The ring is the element's ::after (controls.css), placed by --rx/--ry and restarted by flipping
  * data-ripple between two names; React never owns either, so a render doesn't cut it short.
  */
-const RIPPLE = '.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-gpalette-tool, .b-calc-tile';
+const RIPPLE = '.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-calc-tile';
 export function installRipple(): void {
   document.addEventListener('pointerdown', e => {
     if (e.button !== 0 || reduced()) return;

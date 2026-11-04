@@ -16,7 +16,8 @@
  *    only fades. Only transform, opacity, filter and clip-path move, so the compositor runs it. What lands (rows,
  *    cards, popovers, tools) lands on --b-spring, a 3 % overshoot, never a bounce; a press spreads ink from the
  *    finger in the ink's own alpha (motion.css). On the canvases a graph is drawn in by a pen in its colour,
- *    morphs into its edited form, its points pop, and the view glides and coasts (render/anim.ts).
+ *    morphs into its edited form, its points pop, and the view glides and coasts (render/anim.ts); on Geometria
+ *    a new object only settles in over 150ms.
  *
  * Two deliberate steps away from the components: icons at .55 instead of .447 and field edges a little stronger
  * than the hairline, both for contrast (WCAG 1.4.11). Dark mode follows data-theme="dark" on <html>, which the
