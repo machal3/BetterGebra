@@ -20,8 +20,8 @@ const TIMES = '<mo>&#x2062;</mo>', APPLY = '<mo>&#x2061;</mo>';
 export const FN_NAMES: Record<string, string> = {
   sin: 'sin', cos: 'cos', tan: 'tg', cot: 'ctg', sec: 'sec', csc: 'cosec', asin: 'arcsin', acos: 'arccos', atan: 'arctg', acot: 'arcctg',
   asec: 'arcsec', acsc: 'arccosec', sinh: 'sinh', cosh: 'cosh', tanh: 'tgh', coth: 'ctgh', sech: 'sech', csch: 'csch',
-  asinh: 'arsinh', acosh: 'arcosh', atanh: 'artgh', acoth: 'arctgh', ln: 'ln', sign: 'sgn', gamma: 'Γ', zeta: 'ζ', erf: 'erf', erfc: 'erfc',
-  re: 'Re', im: 'Im', arg: 'arg', max: 'max', min: 'min', mod: 'mod', frac: 'frac', round: 'round',
+  asinh: 'arsinh', acosh: 'arcosh', atanh: 'artgh', acoth: 'arctgh', ln: 'ln', sign: 'sgn', gamma: 'Γ', beta: 'B', zeta: 'ζ', erf: 'erf', erfc: 'erfc',
+  heaviside: 'θ', dirac: 'δ', re: 'Re', im: 'Im', arg: 'arg', max: 'max', min: 'min', mod: 'mod', frac: 'frac', round: 'round',
 };
 const SYMBOLS: Record<string, string> = { pi: 'π', inf: '∞', gammaconst: 'γ' };
 
@@ -151,7 +151,7 @@ function fnML(n: string, a: readonly Expr[], sup?: string): string {
   }
   const label = mi(FN_NAMES[n] ?? n, true);
   const head = sup ? `<msup>${label}${row(sup)}</msup>` : label;
-  const simple = a.length === 1 && (a[0].k === 's' || (a[0].k === 'n' && a[0].v.d === 1n && a[0].v.n >= 0n)) && n !== 'gamma' && n !== 'zeta';
+  const simple = a.length === 1 && (a[0].k === 's' || (a[0].k === 'n' && a[0].v.d === 1n && a[0].v.n >= 0n)) && n !== 'gamma' && n !== 'zeta' && n !== 'heaviside' && n !== 'dirac';
   const body = simple ? `<mspace width="0.17em"/>${x}` : paren(a.map(toML).join(mo(';')));
   return row(head, APPLY, body);
 }
@@ -159,7 +159,7 @@ function fnML(n: string, a: readonly Expr[], sup?: string): string {
 // --- Text (re-parsable) ---
 
 const SYMBOL_TEXT: Record<string, string> = { pi: 'π', inf: '∞', gammaconst: 'γ' };
-const TEXT_FN: Record<string, string> = { ...FN_NAMES, gamma: 'gamma', zeta: 'zeta', sign: 'sgn', re: 're', im: 'im', csc: 'csc' };
+const TEXT_FN: Record<string, string> = { ...FN_NAMES, gamma: 'gamma', beta: 'beta', zeta: 'zeta', heaviside: 'heaviside', dirac: 'dirac', sign: 'sgn', re: 're', im: 'im', csc: 'csc' };
 
 /** e in the parser's own notation, every part bracketed: how the workspace stores a value. Not for reading. */
 export function toCode(e: Expr): string {

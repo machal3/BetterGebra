@@ -69,6 +69,7 @@ function outer(n: string, u: Expr): Expr {
     case 'frac': return ONE;
     case 'erf': return mul(TWO, pow(PI, num(-1, 2)), pow(E, neg(u2)));
     case 'erfc': return neg(mul(TWO, pow(PI, num(-1, 2)), pow(E, neg(u2))));
+    case 'heaviside': return fn('dirac', u);
   }
   return fail(`Nie umiem obliczyć pochodnej funkcji ${n}.`);
 }

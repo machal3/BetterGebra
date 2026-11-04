@@ -182,6 +182,8 @@ function table(f: Expr, x: string): Expr | null {
         case 'erf': return add(mul(u, fn('erf', u)), div(pow(E, neg(pow(u, TWO))), sqrt(PI)));
         case 'abs': return mul(HALF, u, fn('abs', u));
         case 'sign': return fn('abs', u);
+        case 'heaviside': return mul(u, fn('heaviside', u));
+        case 'dirac': return fn('heaviside', u);
       }
       return null;
     })();

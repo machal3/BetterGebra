@@ -5,7 +5,7 @@
  */
 import {
   E, Expr, HALF, I, INF, MINUS_ONE, ONE, PI, RULES, TWO, ZERO, add, div, expand, fn, freeOf, infSign, isConstant, isFn, isInt, isNegative, isNum, isOne,
-  isSym, isZero, key, mul, neg, num, pow, same, split, sqrt, sub,
+  isSym, isZero, key, mul, neg, num, pow, same, split, sqrt, sub, sym,
 } from './expr';
 import { signOf, evalC } from './numeric';
 import { Q, Q1, QHALF, fail, q, qadd, qcmp, qfloor, qmul, qneg, qsign, qsub, qeq, MAX_BITS, bitLength } from './q';
@@ -564,6 +564,23 @@ RULES.zeta = ([s]) => {
 };
 RULES.erf = ([x]) => isZero(x) ? ZERO : infSign(x) ? num(infSign(x)) : isNegative(x) ? neg(fn('erf', neg(x))) : null;
 RULES.erfc = ([x]) => isZero(x) ? ONE : null;
+RULES.beta = ([a, b]) => {
+  if (isNum(a) && isNum(b) && (a.v.d === 1n || a.v.d === 2n) && (b.v.d === 1n || b.v.d === 2n)) {
+    const ga = fn('gamma', a), gb = fn('gamma', b), gab = fn('gamma', add(a, b));
+    if (!isFn(ga, 'gamma') && !isFn(gb, 'gamma') && !isFn(gab, 'gamma')) return div(mul(ga, gb), gab);
+  }
+  return null;
+};
+RULES.heaviside = ([x]) => {
+  if (isZero(x)) return num(1, 2);
+  const s = infSign(x) || constSign(x);
+  return s === null ? null : s > 0 ? ONE : s < 0 ? ZERO : num(1, 2);
+};
+RULES.dirac = ([x]) => {
+  if (isZero(x)) return sym('inf');
+  const s = infSign(x) || constSign(x);
+  return s ? ZERO : null;
+};
 
 // --- Complex parts ---
 

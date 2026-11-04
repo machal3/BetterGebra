@@ -4,18 +4,20 @@
  * (Nelder–Mead as MATLAB's, restarted once), fsolve (Levenberg–Marquardt on the residuals) and integral2 (exact by
  * iterated antiderivatives when they exist, else nested Gauss–Kronrod). Each result is checked before it is shown.
  */
-import { Expr, isConstant, num, sub, subst, sym, variables } from './expr';
+import { Expr, ONE, ZERO, add, div, fn, isConstant, mul, num, pow, sqrt, sub, subst, sym, variables } from './expr';
 import { Value, approxValue, component, ex, scalar } from './evaluate';
 import { grid, valueOf } from './arrays';
 import { diff } from './calculus';
 import * as D from './dense';
 import { compileDouble } from './fast';
+import { toText } from './format';
 import { definite, integrate, quad } from './integrate';
 import { Card, Linalg, tiny } from './linalg';
+import { det } from './matrix';
 import { approx } from './numeric';
 import { fmt } from './plot';
 import { fail, qFromDouble } from './q';
-import { simplify } from './simplify';
+import { simplify, zeroTest } from './simplify';
 import { solveEquation } from './solve';
 
 const tidy = (e: Expr) => { try { return simplify(e); } catch { return e; } };
@@ -42,6 +44,8 @@ export function funOf(v: Value, n: number, what: string): Fun {
   }
   const outs = outsOf(v), vars = [...new Set(outs.flatMap(e => variables(e)))].sort();
   if (vars.length > n) fail(`${what}: wyrażenie ma zmienne ${vars.join(', ')}, a potrzeba ${n}. Zapisz funkcję jako @(…) …`);
+  const std = ['x', 'y', 'z', 't'].slice(0, n);
+  if ((n === 2 || n === 3) && vars.every(c => std.includes(c))) return { vars: std, outs };
   // a constant, or fewer letters than needed: the rest are named after x
   for (const c of ['x', 'y', 'z', 't']) if (vars.length < n && !vars.includes(c)) vars.push(c);
   return { vars: vars.slice(0, n), outs };
@@ -284,10 +288,300 @@ export const NUMERICS: Record<string, Command> = {
     const total = outer!.error + err;
     return { cards: [card('Całka podwójna', [['', approxNum(outer!.value)]], `Numerycznie: zagnieżdżona kwadratura Gaussa–Kronroda; szacowany błąd ${tiny(total)}.`)], outputs: [approxNum(outer!.value)] };
   },
+  integral3: (args) => integral3Cmd(args),
+  arclength: (args) => arclengthCmd(args),
+  curvature: (args) => curvatureCmd(args),
+  lineintegral: (args) => lineIntegralCmd(args),
+  wronskian: (args, nout) => wronskianCmd(args, nout),
 };
 /** integral(f, a, b): the integrand and its variable, for the engine's own definite integral. */
 export function integrand(v: Value): { e: Expr; x: string } {
   const f = funOf(v, 1, 'integral');
   if (f.outs.length !== 1) fail('integral: funkcja ma dawać jedną liczbę.');
   return { e: f.outs[0], x: f.vars[0] };
+}
+
+
+// --- Triple integral, arc length, curvature, line integrals, Wronskian ---
+
+// 8-point Gauss-Legendre nodes & weights on [-1, 1] for fast 3D quadrature verification & fallback
+const GL8_X = [-0.9602898564975363, -0.7966664774136267, -0.525532409916329, -0.1834346424956498, 0.1834346424956498, 0.525532409916329, 0.7966664774136267, 0.9602898564975363];
+const GL8_W = [0.1012285362903763, 0.2223810344533745, 0.3137066458778873, 0.362683783378362, 0.362683783378362, 0.3137066458778873, 0.2223810344533745, 0.1012285362903763];
+
+function gl1D(f: (t: number) => number, a: number, b: number, panels = 1): number {
+  if (a === b) return 0;
+  const h = (b - a) / panels;
+  let total = 0;
+  for (let p = 0; p < panels; p++) {
+    const lo = a + p * h, hi = lo + h, mid = 0.5 * (lo + hi), half = 0.5 * (hi - lo);
+    let s = 0;
+    for (let i = 0; i < 8; i++) s += GL8_W[i] * f(mid + half * GL8_X[i]);
+    total += half * s;
+  }
+  return total;
+}
+
+function integral3Cmd([fv, xa, xb, ya, yb, za, zb]: Value[]): Linalg {
+  const f = funOf(fv, 3, 'integral3'), [x, y, z] = f.vars, e = f.outs[0];
+  const bound1 = (v: Value, what: string): Expr => {
+    if (v.t === 'fn') {
+      const body = v.params.length === 1 && v.body.t === 'expr' ? v.body.e : fail(`${what}: granica to liczba albo funkcja ${x}.`);
+      return subst(body, v.params[0], sym(x));
+    }
+    const b = scalar(v, what), vs = variables(b);
+    return vs.length === 1 && vs[0] !== x ? subst(b, vs[0], sym(x)) : b;
+  };
+  const bound2 = (v: Value, what: string): Expr => {
+    if (v.t === 'fn') {
+      const body = v.params.length <= 2 && v.body.t === 'expr' ? v.body.e : fail(`${what}: granica to liczba albo funkcja (${x}, ${y}).`);
+      let out = body;
+      if (v.params[0]) out = subst(out, v.params[0], sym(x));
+      if (v.params[1]) out = subst(out, v.params[1], sym(y));
+      return out;
+    }
+    return scalar(v, what);
+  };
+  const [x0, x1] = [scalar(xa, 'Granica x'), scalar(xb, 'Granica x')];
+  if (!isConstant(x0) || !isConstant(x1)) fail('integral3: zewnętrzne granice x muszą być liczbami.');
+  const [y0, y1] = [bound1(ya, 'Granica y'), bound1(yb, 'Granica y')];
+  const [z0, z1] = [bound2(za, 'Granica z'), bound2(zb, 'Granica z')];
+
+  const params: Record<string, number> = { [x]: 0, [y]: 0 };
+  const fz = compileDouble(e, z, params);
+  const Y0 = compileDouble(y0, x), Y1 = compileDouble(y1, x);
+  const Z0 = compileDouble(z0, y, params), Z1 = compileDouble(z1, y, params);
+  const ax0 = approx(x0).re, ax1 = approx(x1).re;
+  const eval3D = (panels: number) => gl1D(xv => {
+    params[x] = xv;
+    return gl1D(yv => {
+      params[y] = yv;
+      return gl1D(zv => fz(zv), Z0(yv), Z1(yv), panels);
+    }, Y0(xv), Y1(xv), panels);
+  }, ax0, ax1, panels);
+
+  const coarse = eval3D(1);
+  if (!Number.isFinite(coarse)) fail('integral3: całka numeryczna się nie zbiegła.');
+
+  try {
+    const Fz = integrate(e, z);
+    if (Fz) {
+      const Gz = tidy(sub(subst(Fz, z, z1), subst(Fz, z, z0)));
+      const Fy = integrate(Gz, y);
+      if (Fy) {
+        const Gy = tidy(sub(subst(Fy, y, y1), subst(Fy, y, y0)));
+        const d = definite(Gy, x, x0, x1);
+        if (d.exact) {
+          const v = tidy(d.exact), zv = approx(v);
+          if (Math.abs(zv.re - coarse) <= 1e-5 * (1 + Math.abs(coarse)) && Math.abs(zv.im) < 1e-12) {
+            return {
+              cards: [card('Całka potrójna', [['', ex(v)]], `Dokładnie: całki iterowane po ${z}, ${y}, ${x}; zgodne z kwadraturą 3D (≈ ${fmt(zv.re)}).`)],
+              outputs: [ex(v)],
+            };
+          }
+        }
+      }
+    }
+  } catch { /* fallback to numerical quadrature */ }
+
+  const fine = eval3D(3);
+  if (!Number.isFinite(fine)) fail('integral3: całka numeryczna się nie zbiegła.');
+  const err = Math.abs(fine - coarse);
+  return {
+    cards: [card('Całka potrójna', [['', approxNum(fine)]], `Numerycznie: zagnieżdżona kwadratura Gaussa–Legendre’a 3D; szacowany błąd ${tiny(err)}.`)],
+    outputs: [approxNum(fine)],
+  };
+}
+
+function curveParts(v: Value, varArg: Value | undefined, what: string): { comps: Expr[]; t: string; explicit: boolean } {
+  const comps = v.t === 'list' ? v.items.map(i => scalar(i, what))
+    : v.t === 'matrix' && (v.rows.length === 1 || v.rows[0]?.length === 1) ? v.rows.flat()
+    : v.t === 'fn' ? funOf(v, v.params.length, what).outs
+    : [scalar(v, what)];
+  let t: string | null = null;
+  if (varArg && varArg.t === 'expr' && varArg.e.k === 's' && !['pi', 'e', 'i', 'inf'].includes(varArg.e.n)) {
+    t = varArg.e.n;
+  } else if (v.t === 'fn' && v.params.length === 1) {
+    t = v.params[0];
+  } else {
+    const vs = [...new Set(comps.flatMap(c => variables(c)))];
+    if (vs.length > 1) fail(`${what}: krzywa powinna zależeć od jednego parametru (znaleziono: ${vs.join(', ')}).`);
+    t = vs[0] ?? (comps.length > 1 ? 't' : 'x');
+  }
+  return { comps, t, explicit: comps.length === 1 };
+}
+
+function arclengthCmd(args: Value[]): Linalg {
+  // arclength(f), arclength(f, a, b), arclength(f, x, a, b)
+  const hasVar = args.length === 4;
+  const { comps, t, explicit } = curveParts(args[0], hasVar ? args[1] : undefined, 'arclength');
+  const derivs = comps.map(c => tidy(diff(c, t)));
+  const ds2 = explicit ? add(ONE, pow(derivs[0], num(2))) : add(...derivs.map(d => pow(d, num(2))));
+  const ds = tidy(sqrt(tidy(ds2)));
+  const rows: [string, Value][] = [['Element łuku ds/d' + t, ex(ds)]];
+  if (args.length === 1) {
+    const F = (() => { try { return integrate(ds, t); } catch { return null; } })();
+    if (F) rows.push(['Funkcja długości łuku s(' + t + ')', ex(tidy(F))]);
+    return { cards: [card('Element długości łuku', rows, `Zmienna: ${t}. Podaj przedział [a, b], np. arclength(${toText(comps[0])}, 0, 1).`)], outputs: [ex(ds)] };
+  }
+  const aVal = hasVar ? args[2] : args[1], bVal = hasVar ? args[3] : args[2];
+  if (!aVal || !bVal) fail('arclength: podaj początek i koniec przedziału, np. arclength(f, a, b).');
+  const a = scalar(aVal, 'Początek przedziału'), b = scalar(bVal, 'Koniec przedziału');
+  const d = definite(ds, t, a, b);
+  if (d.exact) {
+    const v = tidy(d.exact);
+    rows.push(['Długość łuku L', ex(v)]);
+    return { cards: [card(`Długość łuku dla ${t} ∈ ⟨${toText(a)}; ${toText(b)}⟩`, rows, `Dokładnie${d.numeric ? ` (≈ ${fmt(d.numeric.value)})` : ''}.`)], outputs: [ex(v)] };
+  }
+  if (d.numeric && Number.isFinite(d.numeric.value)) {
+    const v = approxNum(d.numeric.value);
+    rows.push(['Długość łuku L', v]);
+    return { cards: [card(`Długość łuku dla ${t} ∈ ⟨${toText(a)}; ${toText(b)}⟩`, rows, `Numerycznie (kwadratura Gaussa–Kronroda, błąd ≈ ${tiny(d.numeric.error)}).`)], outputs: [v] };
+  }
+  return fail('arclength: nie udało się obliczyć całki długości łuku.');
+}
+
+function curvatureCmd(args: Value[]): Linalg {
+  // curvature(f), curvature(f, t0), curvature(f, t, t0)
+  const hasVar = args.length === 3 || (args.length === 2 && args[1].t === 'expr' && args[1].e.k === 's' && !['pi', 'e', 'i', 'inf'].includes(args[1].e.n) && variables(args[0].t === 'expr' ? args[0].e : ZERO).includes(args[1].e.n));
+  const { comps, t, explicit } = curveParts(args[0], hasVar ? args[1] : undefined, 'curvature');
+  const ptVal = args.length === 3 ? args[2] : (!hasVar && args.length === 2 ? args[1] : undefined);
+  const t0 = ptVal ? scalar(ptVal, 'Punkt') : null;
+
+  let kappa: Expr;
+  let torsion: Expr | null = null;
+  if (explicit) {
+    const y1 = tidy(diff(comps[0], t)), y2 = tidy(diff(y1, t));
+    kappa = tidy(div(fn('abs', y2), pow(add(ONE, pow(y1, num(2))), num(3, 2))));
+  } else if (comps.length === 2) {
+    const [x1, y1] = comps.map(c => tidy(diff(c, t)));
+    const [x2, y2] = [x1, y1].map(c => tidy(diff(c, t)));
+    const cross2 = tidy(sub(mul(x1, y2), mul(y1, x2)));
+    const speed2 = tidy(add(pow(x1, num(2)), pow(y1, num(2))));
+    if (zeroTest(speed2)) fail('curvature: krzywa ma zerową prędkość r′(t) = 0.');
+    kappa = tidy(div(fn('abs', cross2), pow(speed2, num(3, 2))));
+  } else if (comps.length === 3) {
+    const r1 = comps.map(c => tidy(diff(c, t)));
+    const r2 = r1.map(c => tidy(diff(c, t)));
+    const r3 = r2.map(c => tidy(diff(c, t)));
+    const cx = tidy(sub(mul(r1[1], r2[2]), mul(r1[2], r2[1])));
+    const cy = tidy(sub(mul(r1[2], r2[0]), mul(r1[0], r2[2])));
+    const cz = tidy(sub(mul(r1[0], r2[1]), mul(r1[1], r2[0])));
+    const crossNorm2 = tidy(add(pow(cx, num(2)), pow(cy, num(2)), pow(cz, num(2))));
+    const speed2 = tidy(add(pow(r1[0], num(2)), pow(r1[1], num(2)), pow(r1[2], num(2))));
+    if (zeroTest(speed2)) fail('curvature: krzywa ma zerową prędkość r′(t) = 0.');
+    kappa = tidy(div(sqrt(crossNorm2), pow(speed2, num(3, 2))));
+    if (!zeroTest(crossNorm2)) {
+      const triple = tidy(add(mul(cx, r3[0]), mul(cy, r3[1]), mul(cz, r3[2])));
+      torsion = tidy(div(triple, crossNorm2));
+    } else {
+      torsion = ZERO;
+    }
+  } else {
+    return fail('curvature: podaj funkcję y = f(x) albo krzywą parametryczną 2D/3D.');
+  }
+
+  const radius = zeroTest(kappa) ? sym('inf') : tidy(div(ONE, kappa));
+  const rows: [string, Value][] = [
+    ['Krzywizna κ(' + t + ')', ex(kappa)],
+    ['Promień krzywizny R = 1/κ', ex(radius)],
+  ];
+  if (torsion) rows.push(['Skręcenie (torsja) τ(' + t + ')', ex(torsion)]);
+
+  let out = kappa;
+  if (t0) {
+    const kAt = tidy(subst(kappa, t, t0));
+    const rAt = zeroTest(kAt) ? sym('inf') : tidy(div(ONE, kAt));
+    rows.push([`κ(${toText(t0)})`, ex(kAt)], [`R(${toText(t0)})`, ex(rAt)]);
+    if (torsion) rows.push([`τ(${toText(t0)})`, ex(tidy(subst(torsion, t, t0)))]);
+    out = kAt;
+  }
+  return { cards: [card('Krzywizna krzywej', rows, `Parametr: ${t}.`)], outputs: [ex(out)] };
+}
+
+function lineIntegralCmd(args: Value[]): Linalg {
+  // lineintegral(F, [x(t), y(t)], a, b) or lineintegral(F, [x(t), y(t)], t, a, b)
+  if (args.length < 4) fail('lineintegral: podaj pole, krzywą parametryczną [x(t), y(t)] oraz przedział [a, b].');
+  const hasVar = args.length === 5;
+  const { comps: r, t } = curveParts(args[1], hasVar ? args[2] : undefined, 'lineintegral');
+  if (r.length < 2 || r.length > 3) fail('lineintegral: krzywa parametryczna musi mieć 2 albo 3 składowe, np. [cos(t), sin(t)].');
+  const a = scalar(hasVar ? args[3] : args[2], 'Początek przedziału');
+  const b = scalar(hasVar ? args[4] : args[3], 'Koniec przedziału');
+  const F = args[0].t === 'list' ? args[0].items.map(i => scalar(i, 'Pole'))
+    : args[0].t === 'matrix' && (args[0].rows.length === 1 || args[0].rows[0]?.length === 1) ? args[0].rows.flat()
+    : args[0].t === 'fn' ? funOf(args[0], r.length, 'lineintegral').outs
+    : [scalar(args[0], 'Pole')];
+  const coordVars = args[0].t === 'fn' && args[0].params.length === r.length ? args[0].params : ['x', 'y', 'z'].slice(0, r.length);
+  const subCurve = (e: Expr) => {
+    // substitute via temporary symbols so x(t) containing y doesn't collide
+    const tmps = coordVars.map((_, i) => `\u0001c${i}`);
+    let out = e;
+    coordVars.forEach((v, i) => { out = subst(out, v, sym(tmps[i])); });
+    tmps.forEach((tmp, i) => { out = subst(out, tmp, r[i]); });
+    return tidy(out);
+  };
+  const dr = r.map(c => tidy(diff(c, t)));
+
+  let integrandExpr: Expr;
+  let kindTitle: string;
+  if (F.length === 1) {
+    // Scalar line integral ∫_C f ds
+    const ds = tidy(sqrt(tidy(add(...dr.map(d => pow(d, num(2)))))));
+    integrandExpr = tidy(mul(subCurve(F[0]), ds));
+    kindTitle = 'Całka krzywoliniowa nieskierowana (I rodzaju) ∫_C f ds';
+  } else {
+    if (F.length !== r.length) fail(`lineintegral: wymiar pola (${F.length}) musi być równy wymiarowi krzywej (${r.length}).`);
+    // Vector line integral ∫_C F · dr
+    const Fsub = F.map(subCurve);
+    integrandExpr = tidy(add(...Fsub.map((fi, i) => mul(fi, dr[i]))));
+    kindTitle = 'Całka krzywoliniowa skierowana (II rodzaju) ∫_C F · dr';
+  }
+
+  const rows: [string, Value][] = [
+    ['Funkcja podcałkowa po ' + t, ex(integrandExpr)],
+  ];
+  const d = definite(integrandExpr, t, a, b);
+  if (d.exact) {
+    const v = tidy(d.exact);
+    rows.push(['Wartość całki', ex(v)]);
+    return { cards: [card(kindTitle, rows, `Dokładnie dla ${t} ∈ ⟨${toText(a)}; ${toText(b)}⟩${d.numeric ? ` (≈ ${fmt(d.numeric.value)})` : ''}.`)], outputs: [ex(v)] };
+  }
+  if (d.numeric && Number.isFinite(d.numeric.value)) {
+    const v = approxNum(d.numeric.value);
+    rows.push(['Wartość całki', v]);
+    return { cards: [card(kindTitle, rows, `Numerycznie dla ${t} ∈ ⟨${toText(a)}; ${toText(b)}⟩ (błąd ≈ ${tiny(d.numeric.error)}).`)], outputs: [v] };
+  }
+  return fail('lineintegral: nie udało się obliczyć całki krzywoliniowej.');
+}
+
+function wronskianCmd(args: Value[], nout: number): Linalg {
+  const fs = args[0].t === 'list' ? args[0].items.map(i => scalar(i, 'wronskian'))
+    : args[0].t === 'matrix' && (args[0].rows.length === 1 || args[0].rows[0]?.length === 1) ? args[0].rows.flat()
+    : [scalar(args[0], 'wronskian')];
+  if (!fs.length) fail('wronskian: podaj listę funkcji, np. wronskian([sin(x), cos(x)]).');
+  let x = 'x';
+  if (args[1]) {
+    const v = scalar(args[1], 'Zmienna');
+    if (v.k !== 's') return fail('wronskian: drugi argument musi być nazwą zmiennej.');
+    x = v.n;
+  } else {
+    const vs = [...new Set(fs.flatMap(f => variables(f)))];
+    if (vs.length === 1) x = vs[0];
+    else if (vs.includes('x')) x = 'x';
+    else if (vs.includes('t')) x = 't';
+    else if (vs.length) x = vs[0];
+  }
+  const n = fs.length;
+  const W: Expr[][] = [fs.map(tidy)];
+  for (let i = 1; i < n; i++) W.push(W[i - 1].map(f => tidy(diff(f, x))));
+  const detW = tidy(det(W));
+  const indep = !zeroTest(detW);
+  const Wval: Value = { t: 'matrix', rows: W };
+  const rows: [string, Value][] = [
+    ['Wrońskian W(' + x + ') = det M', ex(detW)],
+    ['Macierz Wrońskiego M', Wval],
+  ];
+  const note = indep
+    ? `W(${x}) ≠ 0 — układ funkcji [${fs.map(toText).join('; ')}] jest liniowo niezależny.`
+    : `W(${x}) ≡ 0 — wrońskian znika tożsamościowo (funkcje są liniowo zależne na każdym przedziale, na którym są analityczne).`;
+  return { cards: [card('Wrońskian', rows, note)], outputs: nout >= 2 ? [ex(detW), Wval] : [ex(detW)] };
 }

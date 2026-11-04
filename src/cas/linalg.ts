@@ -5,15 +5,15 @@
  * Hermite interpolation); in floating point otherwise (dense.ts). Each numeric result is checked by its residual and
  * not shown when the check fails; each exact one is checked against the numeric one where they could disagree.
  */
-import { E, Expr, I, INF, ONE, ZERO, add, children, div, fn, hasSym, infSign, isConstant, isNum, mul, num, pow, size, sub } from './expr';
+import { E, Expr, I, INF, ONE, ZERO, add, children, div, fn, hasSym, infSign, isConstant, isNum, mul, neg, num, pow, size, sqrt, sub, variables } from './expr';
 import { Value, approxValue, ex, fromMat, isApprox, toMat } from './evaluate';
 import { grid, valueOf } from './arrays';
 import * as D from './dense';
 import * as LA from './matrix';
 import { approx } from './numeric';
-import { polyOf, solvePoly } from './poly';
+import { coeffsOf, polyOf, solvePoly } from './poly';
 import { fail } from './q';
-import { simplify } from './simplify';
+import { simplify, zeroTest } from './simplify';
 import type { Plot } from './plot';
 
 /** A card: rows of name = value, and what was checked. */
@@ -346,6 +346,29 @@ export const LINALG: Record<string, Command> = {
     const M = numeric(v, 'rank');
     return { cards: [{ title: 'Rząd (numeryczny)', rows: [['rank A', ex(num(D.rank(M)))]], note: 'Liczba wartości szczególnych większych od max(m, n)·eps·σ₁, jak w MATLAB-ie.' }], outputs: [ex(num(D.rank(M)))] };
   },
+  gramschmidt: ([v], nout) => gramSchmidtCmd(v, nout),
+  schur: ([v], nout) => {
+    const M = numeric(v, 'schur');
+    square(M, 'schur');
+    const { U, T } = D.schurDecomp(M);
+    const err = Math.max(D.relErr(M, D.mul(D.mul(U, T), D.transpose(U))), D.relErr(D.eye(M.length), D.mul(D.transpose(U), U)));
+    const note = `${checked('‖A − U·T·Uᵀ‖/‖A‖', err, 1e-9)} Macierz U jest ortogonalna, T quasi-górnotrójkątna (bloki 1×1 dla rzeczywistych i 2×2 dla zespolonych wartości własnych).`;
+    const [Uv, Tv] = [numMatrix(U), numMatrix(T)];
+    return { cards: [{ title: 'Rzeczywisty rozkład Schura A = U·T·Uᵀ', rows: [['T', Tv], ['U', Uv]], note }], outputs: nout >= 2 ? [Uv, Tv] : [Tv] };
+  },
+  hess: ([v], nout) => {
+    const M = numeric(v, 'hess');
+    square(M, 'hess');
+    const { P, H } = D.hessDecomp(M);
+    const err = Math.max(D.relErr(M, D.mul(D.mul(P, H), D.transpose(P))), D.relErr(D.eye(M.length), D.mul(D.transpose(P), P)));
+    const note = `${checked('‖A − P·H·Pᵀ‖/‖A‖', err, 1e-11)} Macierz P jest ortogonalna (odbicia Householdera), H górna Hessenberga.`;
+    const [Pv, Hv] = [numMatrix(P), numMatrix(H)];
+    return { cards: [{ title: 'Rozkład Hessenberga A = P·H·Pᵀ', rows: [['H', Hv], ['P', Pv]], note }], outputs: nout >= 2 ? [Pv, Hv] : [Hv] };
+  },
+  sylvester: ([av, bv, cv]) => sylvesterCmd(av, bv, cv, false),
+  lyap: ([av, qv]) => sylvesterCmd(av, av, qv, true),
+  jordan: ([v], nout) => jordanCmd(v, nout),
+  companion: ([v]) => companionCmd(v),
 };
 
 const fromNum = (x: number): Expr => (fromMat([[x]]) as { e: Expr }).e;
@@ -434,4 +457,273 @@ function exactFunm(A: Expr[][], En: D.Mat, f: (l: Expr, j: number) => Expr): Exp
   out = out.map(r => r.map(tidy));
   if (out.some(r => r.some(x => hasSym(x, 'i')))) return null;
   return out.every((r, i) => r.every((x, j) => { const z = approx(x); return Math.abs(z.im) < 1e-12 && Math.abs(z.re - En[i][j]) <= 1e-9 * (1 + Math.abs(En[i][j])); })) ? out : null;
+}
+
+
+// --- Gram–Schmidt, Sylvester & Lyapunov equations, Jordan canonical form, Companion matrix ---
+
+function gramSchmidtCmd(v: Value, nout: number): Linalg {
+  const A = exactMatrix(v);
+  if (A && isRational(A) && A.length * A[0].length <= 49) {
+    const m = A.length, n = A[0].length;
+    const cols = Array.from({ length: n }, (_, j) => A.map(r => r[j]));
+    const uCols: Expr[][] = [];
+    const uDots: Expr[] = [];
+    const qCols: Expr[][] = [];
+    const dotE = (a: Expr[], b: Expr[]) => tidy(add(...a.map((x, i) => mul(x, b[i]))));
+    for (const col of cols) {
+      let u: Expr[] = col.slice();
+      for (let i = 0; i < uCols.length; i++) {
+        const proj = tidy(div(dotE(uCols[i], col), uDots[i]));
+        u = u.map((x, r) => tidy(sub(x, mul(proj, uCols[i][r]))));
+      }
+      const uu = dotE(u, u);
+      if (LA.nonzero(uu)) {
+        uCols.push(u);
+        uDots.push(uu);
+        const normU = tidy(sqrt(uu));
+        qCols.push(u.map(x => tidy(div(x, normU))));
+      }
+    }
+    if (!uCols.length) fail('gramschmidt: wszystkie wektory są zerowe.');
+    const U = Array.from({ length: m }, (_, i) => uCols.map(c => c[i]));
+    const Q = Array.from({ length: m }, (_, i) => qCols.map(c => c[i]));
+    const Qv = asMatrix(Q), Uv = asMatrix(U);
+    return {
+      cards: [{
+        title: 'Ortogonalizacja Grama–Schmidta',
+        rows: [['Baza ortonormalna Q', Qv], ['Baza ortogonalna (bez normowania) U', Uv]],
+        note: `Dokładnie: z ${n} kolumn wyznaczono ${uCols.length} wzajemnie prostopadłych wektorów (Qᵀ·Q = I).`,
+      }],
+      outputs: nout >= 2 ? [Qv, Uv] : [Qv],
+    };
+  }
+  const M = numeric(v, 'gramschmidt');
+  const { Q } = D.qr(M);
+  const Qv = numMatrix(Q);
+  return {
+    cards: [{
+      title: 'Ortonormalizacja Grama–Schmidta',
+      rows: [['Baza ortonormalna Q', Qv]],
+      note: checked('‖Qᵀ·Q − I‖', D.relErr(D.eye(Q[0].length), D.mul(D.transpose(Q), Q)), 1e-12),
+    }],
+    outputs: [Qv],
+  };
+}
+
+function sylvesterCmd(av: Value, bv: Value, cv: Value, isLyap: boolean): Linalg {
+  const what = isLyap ? 'lyap' : 'sylvester';
+  const Aex = exactMatrix(av), Bex0 = exactMatrix(bv), Cex0 = exactMatrix(cv);
+  if (Aex && Bex0 && Cex0 && isRational(Aex) && isRational(Bex0) && isRational(Cex0)) {
+    const Bex = isLyap ? LA.transpose(Aex) : Bex0;
+    const Cex = isLyap ? Cex0.map(r => r.map(neg)) : Cex0;
+    square(Aex, what);
+    square(Bex, what);
+    const m = Aex.length, n = Bex.length;
+    if (Cex.length !== m || (Cex[0]?.length ?? 0) !== n) fail(`${what}: rozmiar prawej strony C (${Cex.length}×${Cex[0]?.length ?? 0}) nie pasuje do A (${m}×${m}) i B (${n}×${n}).`);
+    if (m * n <= 36) {
+      // (I_n ⊗ A + Bᵀ ⊗ I_m) vec(X) = vec(C), column-major vec
+      const N = m * n;
+      const K: Expr[][] = Array.from({ length: N }, () => Array<Expr>(N).fill(ZERO));
+      const rhs: Expr[][] = Array.from({ length: N }, () => [ZERO]);
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < m; i++) {
+          const row = j * m + i;
+          rhs[row] = [Cex[i][j]];
+          for (let k = 0; k < m; k++) K[row][j * m + k] = add(K[row][j * m + k], Aex[i][k]);
+          for (let l = 0; l < n; l++) K[row][l * m + i] = add(K[row][l * m + i], Bex[l][j]);
+        }
+      }
+      let sol: Expr[][] | null = null;
+      try { sol = LA.leftSolve(K, rhs); } catch { sol = null; }
+      if (!sol) fail(`${what}: równanie nie ma jednoznacznego rozwiązania (widma A i −B mają część wspólną).`);
+      const X: Expr[][] = Array.from({ length: m }, (_, i) => Array.from({ length: n }, (__, j) => tidy(sol![j * m + i][0])));
+      // Verify A*X + X*B - C == 0
+      const AX = LA.matMulE(Aex, X), XB = LA.matMulE(X, Bex);
+      const ok = AX.every((r, i) => r.every((v, j) => !LA.nonzero(sub(add(v, XB[i][j]), Cex[i][j]))));
+      if (!ok) fail(`${what}: weryfikacja dokładnego rozwiązania nie powiodła się.`);
+      const Xv = asMatrix(X);
+      return {
+        cards: [{
+          title: isLyap ? 'Równanie Lapunowa A·X + X·Aᵀ + Q = 0' : 'Równanie Sylvestera A·X + X·B = C',
+          rows: [['X', Xv]],
+          note: isLyap ? 'Dokładnie nad ℚ; zweryfikowano: A·X + X·Aᵀ + Q = 0.' : 'Dokładnie nad ℚ; zweryfikowano: A·X + X·B = C.',
+        }],
+        outputs: [Xv],
+      };
+    }
+  }
+  const A = numeric(av, what);
+  const B = isLyap ? D.transpose(A) : numeric(bv, what);
+  const C0 = numeric(cv, what);
+  const C = isLyap ? C0.map(r => r.map(x => -x)) : C0;
+  square(A, what);
+  square(B, what);
+  const m = A.length, n = B.length;
+  if (C.length !== m || (C[0]?.length ?? 0) !== n) fail(`${what}: rozmiar macierzy nie pasuje.`);
+  const N = m * n;
+  const K = D.zeros(N, N), rhs = D.zeros(N, 1);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < m; i++) {
+      const row = j * m + i;
+      rhs[row][0] = C[i][j];
+      for (let k = 0; k < m; k++) K[row][j * m + k] += A[i][k];
+      for (let l = 0; l < n; l++) K[row][l * m + i] += B[l][j];
+    }
+  }
+  const sol = D.solve(K, rhs);
+  if (!sol) return fail(`${what}: równanie jest osobliwe (brak jednoznacznego rozwiązania).`);
+  const X = D.zeros(m, n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < m; i++) X[i][j] = sol[j * m + i][0];
+  const res = D.minus(D.mul(A, X), D.minus(C, D.mul(X, B)));
+  const denom = D.normFro(C) + (D.normFro(A) + D.normFro(B)) * D.normFro(X) || 1;
+  const note = checked(isLyap ? '‖A·X + X·Aᵀ + Q‖' : '‖A·X + X·B − C‖', D.normFro(res) / denom, 1e-10);
+  const Xv = numMatrix(X);
+  return {
+    cards: [{
+      title: isLyap ? 'Równanie Lapunowa A·X + X·Aᵀ + Q = 0' : 'Równanie Sylvestera A·X + X·B = C',
+      rows: [['X', Xv]],
+      note,
+    }],
+    outputs: [Xv],
+  };
+}
+
+function extendBasis(base: Expr[][], candidates: Expr[][]): Expr[][] {
+  const cur = base.slice();
+  const added: Expr[][] = [];
+  for (const v of candidates) {
+    if (!cur.length) {
+      cur.push(v);
+      added.push(v);
+      continue;
+    }
+    const mat = Array.from({ length: v.length }, (_, i) => [...cur.map(c => c[i]), v[i]]);
+    if (LA.rank(mat) > cur.length) {
+      cur.push(v);
+      added.push(v);
+    }
+  }
+  return added;
+}
+
+function jordanCmd(v: Value, nout: number): Linalg {
+  const A = exactMatrix(v);
+  if (!A) return fail('jordan: postać Jordana wyznaczam dla dokładnych macierzy liczbowych.');
+  square(A, 'jordan');
+  const n = A.length;
+  if (n > 6) return fail('jordan: postać Jordana wyznaczam dla macierzy o rozmiarze do 6×6.');
+  const lams = exactEigenvalues(A);
+  if (!lams) return fail('jordan: wartości własne nie mają jawnej postaci algebraicznej.');
+
+  const distinct: [Expr, number][] = [];
+  for (const l of lams) {
+    const d = distinct.find(([x]) => !LA.nonzero(sub(x, l)));
+    if (d) d[1]++;
+    else distinct.push([l, 1]);
+  }
+
+  const Vcols: Expr[][] = [];
+  const blocks: { lam: Expr; size: number }[] = [];
+  const I: Expr[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (__, j) => (i === j ? ONE : ZERO)));
+
+  for (const [lam, mult] of distinct) {
+    const N = A.map((r, i) => r.map((x, j) => (i === j ? tidy(sub(x, lam)) : x)));
+    // Powers N^0, N^1, ..., N^mult and nullspaces K_p = ker(N^p)
+    const Np: Expr[][][] = [I, N];
+    const Kp: Expr[][][] = [[], LA.nullspace(N)];
+    for (let p = 2; p <= mult; p++) {
+      const nextN = LA.matMulE(Np[p - 1], N).map(r => r.map(tidy));
+      Np.push(nextN);
+      Kp.push(LA.nullspace(nextN));
+    }
+
+    // Build Jordan chains from highest order p down to 1
+    const chains: Expr[][][] = [];
+    for (let p = mult; p >= 1; p--) {
+      // Existing vectors at level p in ker(N^p): Kp[p-1] plus N^(len - p) * top of longer chains
+      const spanAtP: Expr[][] = [...Kp[p - 1]];
+      for (const ch of chains) {
+        if (ch.length >= p) spanAtP.push(ch[p - 1]);
+      }
+      const newTops = extendBasis(spanAtP, Kp[p]);
+      for (const w of newTops) {
+        // Chain: v_1 = N^(p-1) w, v_2 = N^(p-2) w, ..., v_p = w
+        const chain: Expr[][] = [];
+        for (let k = p - 1; k >= 0; k--) {
+          const vk = LA.matMulE(Np[k], w.map(c => [c])).map(r => tidy(r[0]));
+          chain.push(vk);
+        }
+        chains.push(chain);
+      }
+    }
+    // Sort blocks for this eigenvalue by size ascending (or keep natural order)
+    chains.sort((a, b) => a.length - b.length);
+    for (const ch of chains) {
+      blocks.push({ lam, size: ch.length });
+      for (const vec of ch) Vcols.push(vec);
+    }
+  }
+
+  if (Vcols.length !== n) fail('jordan: nie udało się wyznaczyć pełnej bazy Jordana.');
+
+  const J: Expr[][] = Array.from({ length: n }, () => Array<Expr>(n).fill(ZERO));
+  let offset = 0;
+  for (const b of blocks) {
+    for (let i = 0; i < b.size; i++) {
+      J[offset + i][offset + i] = b.lam;
+      if (i + 1 < b.size) J[offset + i][offset + i + 1] = ONE;
+    }
+    offset += b.size;
+  }
+  const V: Expr[][] = Array.from({ length: n }, (_, i) => Vcols.map(c => c[i]));
+
+  // Verify A·V = V·J and det(V) != 0
+  const AV = LA.matMulE(A, V), VJ = LA.matMulE(V, J);
+  const ok = AV.every((r, i) => r.every((x, j) => !LA.nonzero(sub(x, VJ[i][j])))) && LA.nonzero(LA.det(V));
+  if (!ok) fail('jordan: weryfikacja rozkładu A·V = V·J nie powiodła się.');
+
+  const Jv = asMatrix(J), Vv = asMatrix(V);
+  const blockDesc = blocks.map(b => `${b.size}×${b.size}`).join(', ');
+  return {
+    cards: [{
+      title: 'Postać kanoniczna Jordana A = V·J·V⁻¹',
+      rows: [['Macierz Jordana J', Jv], ['Macierz przejścia (baza Jordana) V', Vv]],
+      note: `Dokładnie: bloki Jordana o rozmiarach (${blockDesc}); zweryfikowano symbolicznie A·V = V·J.`,
+    }],
+    outputs: nout >= 2 ? [Vv, Jv] : [Jv],
+  };
+}
+
+function companionCmd(v: Value): Linalg {
+  let csDesc: Expr[];
+  if (v.t === 'expr' && variables(v.e).length === 1) {
+    const x = variables(v.e)[0];
+    const asc = coeffsOf(v.e, x, 60);
+    if (!asc || asc.length < 2) return fail('companion: podaj wielomian stopnia co najmniej 1.');
+    csDesc = asc.slice().reverse();
+  } else {
+    const flat = grid(v, 'companion').flat();
+    let start = 0;
+    while (start < flat.length && zeroTest(flat[start])) start++;
+    csDesc = flat.slice(start);
+    if (csDesc.length < 2) fail('companion: wektor współczynników musi odpowiadać wielomianowi stopnia ≥ 1.');
+  }
+  const lead = csDesc[0];
+  const n = csDesc.length - 1;
+  const C: Expr[][] = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (__, j) => {
+      if (i === 0) return tidy(neg(div(csDesc[j + 1], lead)));
+      return i - 1 === j ? ONE : ZERO;
+    }),
+  );
+  const Cv = isApprox(v) ? approxValue(asMatrix(C)) : asMatrix(C);
+  return {
+    cards: [{
+      title: `Macierz towarzysząca (${n}×${n})`,
+      rows: [['C', Cv]],
+      note: 'Wartościami własnymi macierzy towarzyszącej C są dokładnie pierwiastki wielomianu.',
+    }],
+    outputs: [Cv],
+  };
 }

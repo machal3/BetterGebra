@@ -48,7 +48,8 @@ export const FUNCTIONS: Record<string, [number, number]> = {
   asinh: [1, 1], acosh: [1, 1], atanh: [1, 1], acoth: [1, 1],
   sqrt: [1, 1], cbrt: [1, 1], root: [2, 2], exp: [1, 1], ln: [1, 1], log: [1, 2], log2: [1, 1], log10: [1, 1],
   abs: [1, 1], sign: [1, 1], floor: [1, 1], ceil: [1, 1], round: [1, 1], frac: [1, 1],
-  gamma: [1, 1], factorial: [1, 1], binomial: [2, 2], zeta: [1, 1], erf: [1, 1], erfc: [1, 1],
+  gamma: [1, 1], beta: [2, 2], factorial: [1, 1], binomial: [2, 2], zeta: [1, 1], erf: [1, 1], erfc: [1, 1],
+  heaviside: [1, 1], dirac: [1, 1],
   re: [1, 1], im: [1, 1], conj: [1, 1], arg: [1, 1], atan2: [2, 2], max: [1, Infinity], min: [1, Infinity], mod: [2, 2],
   // MATLAB's, written by the parser in the functions above
   fix: [1, 1], rem: [2, 2], nthroot: [2, 2], hypot: [2, 2],
@@ -89,6 +90,15 @@ export const COMMANDS: Record<string, [number, number]> = {
   betacdf: [3, 3], betainv: [3, 3],
   fft: [1, 2], ifft: [1, 2], fftshift: [1, 1], ifftshift: [1, 1], filter: [3, 3], periodogram: [1, 2],
   meshgrid: [1, 2], contour: [1, 4], quiver: [1, 4], surf: [1, 4], mesh: [1, 4], plot3: [1, 4],
+  legendre: [1, 2], chebyshevt: [1, 2], chebyshevu: [1, 2], hermite: [1, 2], laguerre: [1, 2],
+  bernoulli: [1, 2], stirling1: [2, 2], stirling2: [2, 2], bell: [1, 1], partitions: [1, 1],
+  gradient: [1, 3], divergence: [1, 2], curl: [1, 2], potential: [1, 2], laplacian: [1, 2],
+  jacobian: [1, 2], hessian: [1, 3], directional: [2, 4], tangentplane: [2, 3],
+  integral3: [7, 7], arclength: [1, 4], curvature: [1, 3], lineintegral: [3, 5], wronskian: [1, 2],
+  laplace: [1, 3], ilaplace: [1, 3], ztrans: [1, 3], iztrans: [1, 3], fourierseries: [1, 4],
+  bode: [1, 2], step: [1, 2], impulse: [1, 2], pzmap: [1, 2],
+  gramschmidt: [1, 1], schur: [1, 1], hess: [1, 1], sylvester: [3, 3], lyap: [2, 2], jordan: [1, 1], companion: [1, 1],
+  ttest: [1, 2], ttest2: [2, 2], pca: [1, 1],
 };
 
 /** Every alias (Polish with and without diacritics, English, the app's spellings) → canonical name. */
@@ -140,6 +150,21 @@ export const ALIAS: Record<string, string> = {
   dominanta: 'mode', rozstep: 'range', percentyl: 'prctile', kwantyl: 'quantile', skosnosc: 'skewness', kurtoza: 'kurtosis',
   kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance', angle: 'arg', filtr: 'filter', widmo: 'fft',
   fsurf: 'surf', fmesh: 'mesh', fcontour: 'contour', fplot3: 'plot3', powierzchnia: 'surf', poziomice: 'contour',
+  unitstep: 'heaviside', skokjednostkowy: 'heaviside', deltadiraca: 'dirac',
+  legendrep: 'legendre', czebyszewt: 'chebyshevt', czebyszew: 'chebyshevt', czebyszewu: 'chebyshevu',
+  hermiteh: 'hermite', laguerrel: 'laguerre', podzialy: 'partitions', numberofpartitions: 'partitions',
+  grad: 'gradient', nabla: 'gradient', div: 'divergence', dywergencja: 'divergence',
+  rot: 'curl', rotacja: 'curl', potencjal: 'potential', laplasjan: 'laplacian', del2: 'laplacian',
+  jakobian: 'jacobian', hesjan: 'hessian', pochodnakierunkowa: 'directional', dirderiv: 'directional',
+  plaszczyznastyczna: 'tangentplane', calkapotrojna: 'integral3', dlugoscluku: 'arclength',
+  krzywizna: 'curvature', calkakrzywoliniowa: 'lineintegral',
+  transformatalaplacea: 'laplace', odwrotnalaplacea: 'ilaplace', invlaplace: 'ilaplace',
+  transformataz: 'ztrans', odwrotnaz: 'iztrans', invztrans: 'iztrans',
+  szeregfouriera: 'fourierseries', fourier: 'fourierseries',
+  skokowa: 'step', impulsowa: 'impulse', biegunyzera: 'pzmap',
+  ortogonalizuj: 'gramschmidt', gs: 'gramschmidt', hessenberg: 'hess',
+  lapunow: 'lyap', lyapunov: 'lyap', towarzyszaca: 'companion', compan: 'companion',
+  testt: 'ttest', skladoweglowne: 'pca',
 };
 for (const f of Object.keys(FUNCTIONS)) ALIAS[f] ??= f;
 for (const c of Object.keys(COMMANDS)) ALIAS[c] ??= c;
@@ -169,7 +194,7 @@ export function normalize(input: string, limit = MAX_INPUT, names: ReadonlySet<s
     .replace(/\\(?=([a-z]{2,}))/g, (m, w: string) => (names.has(w) ? m : ''))
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, s => `^(${[...s].map(c => SUPERSCRIPT[c]).join('')})`)
     .replace(/π/g, ' pi ').replace(/τ/g, ' tau ').replace(/[φϕ]/g, ' phi ').replace(/∞/g, ' inf ')
-    .replace(/√/g, ' sqrt ').replace(/∛/g, ' cbrt ').replace(/∑/g, ' sum ').replace(/∏/g, ' product ').replace(/∫/g, ' integrate ')
+    .replace(/√/g, ' sqrt ').replace(/∛/g, ' cbrt ').replace(/∑/g, ' sum ').replace(/∏/g, ' product ').replace(/∫/g, ' integrate ').replace(/∇/g, ' gradient ')
     .replace(/[·⋅∙×]/g, '*').replace(/÷/g, '/').replace(/[−–—]/g, '-').replace(/\*\*/g, '^')
     .replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/≠/g, '!=').replace(/→|⟶/g, '->').replace(/==/g, '=').replace(/[′’]/g, "'")
     .replace(/[⟨〈]/g, '[').replace(/[⟩〉]/g, ']')
@@ -183,7 +208,7 @@ export const isStr = (t: string | undefined) => t !== undefined && t[0] === '"';
 const endsOperand = (t: string | undefined) => t !== undefined && !isStr(t) && (/^\.?\d|^[a-zα-ω]/i.test(t) || [')', ']', '}', "'", ".'", '!', '°'].includes(t));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** MATLAB's names with a digit in them, read whole (interp1 is not interp·1). */
-const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv|fplot3|plot3|sym2poly|poly2sym)(?![a-z0-9_])/y;
+const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv|fplot3|plot3|sym2poly|poly2sym|del2|ttest2|stirling1|stirling2)(?![a-z0-9_])/y;
 
 /** Tokens, each with whether a space came before it (inside [ ] a space can separate elements). */
 function lex(source: string, names: readonly string[]): { toks: string[]; space: boolean[] } {

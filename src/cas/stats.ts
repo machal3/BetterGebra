@@ -9,9 +9,11 @@ import { E, Expr, ONE, PI, ZERO, add, div, fn, isConstant, isNum, mul, neg, num,
 import { Value, approxValue, ex, isApprox } from './evaluate';
 import { grid, valueOf } from './arrays';
 import { constSign } from './functions';
+import * as D from './dense';
 import { Card, Linalg, tiny } from './linalg';
 import * as LA from './matrix';
 import { approx } from './numeric';
+import { fromMat, toMat } from './evaluate';
 import { dataPlot, fmt } from './plot';
 import { Q, fail, qFromDouble } from './q';
 import { simplify } from './simplify';
@@ -343,6 +345,9 @@ export const STATS: Record<string, Command> = {
     random!.reseed(seed);
     return { cards: [card('Generator liczb losowych', [['', text(s?.t === 'str' && s.s === 'shuffle' ? 'Losowe ziarno' : `Ziarno: ${seed}`)]], 'Kolejne rand, randn i randi dadzą ten sam ciąg po tym samym ziarnie.')], outputs: [] };
   },
+  ttest: ([xv, m0v], nout) => ttestCmd(xv, m0v, nout),
+  ttest2: ([xv, yv], nout) => ttest2Cmd(xv, yv, nout),
+  pca: ([Xv], nout) => pcaCmd(Xv, nout),
 };
 for (const name of Object.keys(DISTRIBUTIONS)) STATS[name] = args => distributionCard(name, DISTRIBUTIONS[name](args));
 
@@ -390,5 +395,146 @@ function fitlm(X0: Value, y0: Value): Linalg {
       card('Współczynniki', rows, `Test t: czy współczynnik różni się od zera (p < 0,05 zwykle uznaje się za istotne). Test F całego modelu: F ≈ ${fmt(F)}, p ≈ ${pv(pF)}.${exact ? ' Współczynniki dokładne (najmniejsze kwadraty nad ℚ).' : ''}`),
     ],
     outputs: [bv],
+  };
+}
+
+
+// --- Hypothesis tests (one-sample & two-sample t-test) and Principal Component Analysis (PCA) ---
+
+function ttestCmd(xv: Value, m0v: Value | undefined, nout: number): Linalg {
+  const xs = vector(xv, 'ttest'), n = xs.length;
+  if (n < 2) fail('ttest: próba musi zawierać co najmniej 2 obserwacje.');
+  const mu0 = m0v ? grid(m0v, 'ttest')[0][0] : ZERO;
+  const mean = tidy(meanE(xs));
+  const s2 = tidy(varE(xs, 0));
+  if (sign(s2) === 0) fail('ttest: próba ma zerową wariancję (wszystkie obserwacje są równe).');
+  const sd = tidy(sqrt(s2));
+  const se = tidy(div(sd, sqrt(num(n))));
+  const tStat = tidy(div(sub(mean, mu0), se));
+  const df = n - 1;
+  const tNum = real(tStat), seNum = real(se), meanNum = real(mean);
+  const pVal = 2 * (1 - tcdfN(Math.abs(tNum), df));
+  const tCrit = invert(u => tcdfN(u, df), 0.975, -6, 6, 'ttest');
+  const ciLo = meanNum - tCrit * seNum, ciHi = meanNum + tCrit * seNum;
+  const ap = isApprox(xv) || (!!m0v && isApprox(m0v));
+  const wrap = (e: Expr): Value => (ap ? approxValue(ex(e)) : ex(e));
+  const pValue = approxValue(ex(dbl(pVal)));
+  const ciVal = approxValue(valueOf([[dbl(ciLo), dbl(ciHi)]]));
+  const reject = pVal < 0.05;
+  const rows: [string, Value][] = [
+    ['Statystyka t', wrap(tStat)],
+    ['Wartość p (dwustronna)', pValue],
+    ['Stopnie swobody df', ex(num(df))],
+    ['Średnia próby x̄', wrap(mean)],
+    ['Odchylenie standardowe s', wrap(sd)],
+    ['Błąd standardowy SE = s/√n', wrap(se)],
+    ['95% przedział ufności dla μ', ciVal],
+  ];
+  const note = `Hipoteza zerowa H₀: μ = ${toText(mu0)} (n = ${n}). Na poziomie istotności α = 0,05: ${reject ? 'odrzucamy H₀ (różnica istotna statystycznie, p < 0,05)' : 'brak podstaw do odrzucenia H₀ (p ≥ 0,05)'}.`;
+  const tOut = wrap(tStat);
+  return {
+    cards: [card('Test t-Studenta dla jednej próby', rows, note)],
+    outputs: nout >= 3 ? [tOut, pValue, ciVal] : nout === 2 ? [tOut, pValue] : [tOut],
+  };
+}
+
+function ttest2Cmd(xv: Value, yv: Value, nout: number): Linalg {
+  const xs = vector(xv, 'ttest2'), ys = vector(yv, 'ttest2');
+  const n1 = xs.length, n2 = ys.length;
+  if (n1 < 2 || n2 < 2) fail('ttest2: obie próby muszą zawierać co najmniej po 2 obserwacje.');
+  const m1 = tidy(meanE(xs)), m2 = tidy(meanE(ys));
+  const diffMean = tidy(sub(m1, m2));
+  const v1 = tidy(varE(xs, 0)), v2 = tidy(varE(ys, 0));
+  const se2 = tidy(add(div(v1, num(n1)), div(v2, num(n2))));
+  if (sign(se2) === 0) fail('ttest2: obie próby mają zerową wariancję.');
+  const se = tidy(sqrt(se2));
+  const tStat = tidy(div(diffMean, se));
+
+  // Welch–Satterthwaite degrees of freedom
+  const vn1 = real(v1) / n1, vn2 = real(v2) / n2;
+  const dfWelch = (vn1 + vn2) ** 2 / (vn1 ** 2 / (n1 - 1) + vn2 ** 2 / (n2 - 1));
+  const tNum = real(tStat), seNum = real(se), dNum = real(diffMean);
+  const pVal = 2 * (1 - tcdfN(Math.abs(tNum), dfWelch));
+  const tCrit = invert(u => tcdfN(u, dfWelch), 0.975, -6, 6, 'ttest2');
+  const ciLo = dNum - tCrit * seNum, ciHi = dNum + tCrit * seNum;
+
+  // Also compute pooled Student t-test for reference note
+  const dfPool = n1 + n2 - 2;
+  const sp2 = ((n1 - 1) * real(v1) + (n2 - 1) * real(v2)) / dfPool;
+  const tPool = dNum / Math.sqrt(sp2 * (1 / n1 + 1 / n2));
+
+  const ap = isApprox(xv) || isApprox(yv);
+  const wrap = (e: Expr): Value => (ap ? approxValue(ex(e)) : ex(e));
+  const pValue = approxValue(ex(dbl(pVal)));
+  const ciVal = approxValue(valueOf([[dbl(ciLo), dbl(ciHi)]]));
+  const reject = pVal < 0.05;
+  const rows: [string, Value][] = [
+    ['Statystyka t (Welcha)', wrap(tStat)],
+    ['Wartość p (dwustronna)', pValue],
+    ['Stopnie swobody df (Welcha–Satterthwaite’a)', approxValue(ex(dbl(dfWelch)))],
+    ['Różnica średnich x̄₁ − x̄₂', wrap(diffMean)],
+    ['Średnie prób (x̄₁; x̄₂)', valueOf([[m1, m2]])],
+    ['95% przedział ufności dla μ₁ − μ₂', ciVal],
+  ];
+  const note = `H₀: μ₁ = μ₂ (n₁ = ${n1}, n₂ = ${n2}). Test Welcha (bez założenia równości wariancji): ${reject ? 'odrzucamy H₀ (p < 0,05)' : 'brak podstaw do odrzucenia H₀ (p ≥ 0,05)'}. Dla równych wariancji (test t-Studenta, df = ${dfPool}): t ≈ ${fmt(tPool)}.`;
+  const tOut = wrap(tStat);
+  return {
+    cards: [card('Test t dla dwóch prób niezależnych', rows, note)],
+    outputs: nout >= 3 ? [tOut, pValue, ciVal] : nout === 2 ? [tOut, pValue] : [tOut],
+  };
+}
+
+function pcaCmd(Xv: Value, nout: number): Linalg {
+  const m = grid(Xv, 'pca');
+  const n = m.length, p = m[0]?.length ?? 0;
+  if (n < 2 || p < 2) fail('pca: podaj macierz danych n×p (co najmniej 2 wiersze-obserwacje i 2 kolumny-zmienne).');
+  const X = toMat(m, 'pca');
+  const means = Array.from({ length: p }, (_, j) => X.reduce((s, r) => s + r[j], 0) / n);
+  const Xc = X.map(r => r.map((x, j) => x - means[j]));
+  const C = D.zeros(p, p);
+  for (let i = 0; i < p; i++) {
+    for (let j = i; j < p; j++) {
+      let s = 0;
+      for (let k = 0; k < n; k++) s += Xc[k][i] * Xc[k][j];
+      C[i][j] = C[j][i] = s / (n - 1);
+    }
+  }
+  const { values: d, vectors: V } = D.eigSym(C);
+  // Sort eigenvalues descending
+  const order = d.map((_, i) => i).sort((a, b) => d[b] - d[a]);
+  const latent = order.map(j => Math.max(0, d[j]));
+  const totalVar = latent.reduce((a, b) => a + b, 0) || 1;
+  const explained = latent.map(l => (100 * l) / totalVar);
+  // Enforce MATLAB sign convention: largest magnitude element in each column of coeff is positive
+  const coeff = D.zeros(p, p);
+  order.forEach((colIdx, j) => {
+    let maxRow = 0;
+    for (let i = 1; i < p; i++) if (Math.abs(V[i][colIdx]) > Math.abs(V[maxRow][colIdx])) maxRow = i;
+    const sgn = V[maxRow][colIdx] < 0 ? -1 : 1;
+    for (let i = 0; i < p; i++) coeff[i][j] = sgn * V[i][colIdx];
+  });
+  const score = D.mul(Xc, coeff);
+
+  const numMat = (M: D.Mat): Value => {
+    const v = fromMat(M);
+    return v.t === 'matrix' ? v : { t: 'matrix', rows: [M[0].map(dbl)], approx: true };
+  };
+  const coeffVal = numMat(coeff);
+  const scoreVal = numMat(score);
+  const latentVal = approxValue(valueOf([latent.map(dbl)]));
+  const explainedVal = approxValue(valueOf([explained.map(dbl)]));
+
+  const plot = dataPlot([{ xs: score.map(r => r[0]), ys: score.map(r => r[1]), label: 'obserwacje (PC1 vs PC2)', style: 'dots' }]);
+  const rows: [string, Value][] = [
+    ['Wektory ładunków (kierunki głównych składowych) coeff', coeffVal],
+    ['Wariancje składowych (wartości własne) latent', latentVal],
+    ['Wyjaśniona wariancja [%]', explainedVal],
+    ['Współrzędne obserwacji (rzuty) score', scoreVal],
+  ];
+  const cum2 = explained[0] + (explained[1] ?? 0);
+  const note = `${n} obserwacji, ${p} zmiennych (dane wycentrowane). Pierwsze dwie składowe główne (PC1 + PC2) wyjaśniają ${fmt(cum2)}% całkowitej wariancji.`;
+  return {
+    cards: [card('Analiza głównych składowych (PCA)', rows, note, plot)],
+    outputs: nout >= 4 ? [coeffVal, scoreVal, latentVal, explainedVal] : nout === 3 ? [coeffVal, scoreVal, latentVal] : nout === 2 ? [coeffVal, scoreVal] : [coeffVal],
   };
 }

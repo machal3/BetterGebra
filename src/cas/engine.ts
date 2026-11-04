@@ -15,6 +15,7 @@ import { conditionOf, dsolveCommand } from './dsolve';
 import { RandomSource, STATS, percentile, setRandom } from './stats';
 import { SIGNAL } from './signal';
 import { FIELDS } from './fields';
+import { TRANSFORMS } from './transforms';
 import * as DN from './dense';
 import { MAX_VARS, Saved, Workspace, freeSymbols, save } from './workspace';
 export type { Saved } from './workspace';
@@ -1436,26 +1437,50 @@ const grid_ = (v: Value): Expr[][] => (v.t === 'list' ? [v.items.map(i => (i as 
 
 function command(name: string, args: Node[], env0: Env, nout = 1): Out {
   const env = shadow(env0, bound(name, args));
+  const symEnv = (a: Node) => {
+    const coord = ['x', 'y', 'z', 't', 's', 'n', 'k'];
+    const drop = letters(a).filter(l => {
+      if (a.t === 'id' && !coord.includes(l)) return false;
+      const v = env.vars?.get(l);
+      return v?.t === 'expr' && isConstant(v.e);
+    });
+    return drop.length ? shadow(env, drop) : env;
+  };
   if (Object.hasOwn(ARRAYS, name)) {
     const r = arrayCommand(name, args, env, nout);
     if (r) return r;
   }
   if (Object.hasOwn(LINALG, name)) {
-    const r = LINALG[name](args.map(a => evaluate(a, env)), nout);
+    const r = LINALG[name](args.map(a => evaluate(a, name === 'companion' ? symEnv(a) : env)), nout);
     if (r) return linalgOut(r);
   }
   if (Object.hasOwn(NUMERICS, name)) {
-    // fzero(x^2 - 2, 1): the function's letters are its own, whatever the workspace holds (also integral2's y limits)
-    const own = (k: number) => k === 0 || (name === 'integral2' && k >= 3);
-    const r = NUMERICS[name](args.map((a, k) => evaluate(a, own(k) ? shadow(env, letters(a)) : env)), nout);
+    // fzero(x^2 - 2, 1): the function's letters are its own, whatever the workspace holds (also integral2/integral3 limits)
+    const own = (k: number) => k === 0 || ((name === 'integral2' || name === 'integral3') && k >= 3) || ((name === 'arclength' || name === 'curvature' || name === 'lineintegral' || name === 'wronskian') && k <= 2);
+    const r = NUMERICS[name](args.map((a, k) => evaluate(a, own(k) ? symEnv(a) : env)), nout);
     if (r) return linalgOut(r);
   }
   if (name === 'ode45' || name === 'ode23' || name === 'ode15s') return linalgOut(odeCommand(name, args, env, nout));
   if (name === 'dsolve') return linalgOut(dsolveCommand(args, env));
   if (Object.hasOwn(FIELDS, name)) {
     // surf(x^2 - y^2): the letters of an expression are its own; surf(X, Y, Z) of variables reads the workspace
-    const read = (a: Node) => evaluate(a, a.t === 'id' || a.t === 'index' || a.t === 'list' && a.items.every(i => i.t === 'num' || i.t === 'neg') ? env : shadow(env, letters(a)));
+    const isPlotCmd = ['meshgrid', 'contour', 'quiver', 'surf', 'mesh', 'plot3'].includes(name);
+    const read = (a: Node, k: number) => {
+      if (k >= 1 && a.t === 'list' && a.items.length && a.items.every(i => i.t === 'id' && i.n.length === 1)) {
+        return { t: 'list', set: false, items: a.items.map(i => ex(sym((i as { t: 'id'; n: string }).n))) } as Value;
+      }
+      if (isPlotCmd) return evaluate(a, a.t === 'id' || a.t === 'index' || a.t === 'list' && a.items.every(i => i.t === 'num' || i.t === 'neg') ? env : shadow(env, letters(a)));
+      return evaluate(a, symEnv(a));
+    };
     const r = FIELDS[name](args.map(read), nout);
+    if (r) return linalgOut(r);
+  }
+  if (Object.hasOwn(TRANSFORMS, name)) {
+    const read = (a: Node, k: number) => {
+      if (k >= 1 && a.t === 'id' && ['t', 's', 'n', 'z', 'x', 'k', 'w', 'p'].includes(a.n)) return ex(sym(a.n));
+      return evaluate(a, symEnv(a));
+    };
+    const r = TRANSFORMS[name](args.map(read), nout);
     if (r) return linalgOut(r);
   }
   if (Object.hasOwn(SIGNAL, name)) {
@@ -1556,6 +1581,13 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
     case 'fibonacci': return one('Liczba Fibonacciego', num(NT.fibonacci(bigArg(args[0], env, 'Numer'))));
     case 'lucas': return one('Liczba Lucasa', num(NT.lucas(bigArg(args[0], env, 'Numer'))));
     case 'catalan': { const n = bigArg(args[0], env, 'Numer'); if (n < 0n) fail('Numer musi być nieujemny.'); return one('Liczba Catalana', num(binomialBig(2n * n, n) / (n + 1n))); }
+    case 'bernoulli': return bernoulliCommand(args, symEnv(args[1] ?? args[0]));
+    case 'stirling1': return one('Liczba Stirlinga I rodzaju s(n, k)', num(NT.stirling1(intArg(args[0], env, 'n'), intArg(args[1], env, 'k'))));
+    case 'stirling2': return one('Liczba Stirlinga II rodzaju S(n, k)', num(NT.stirling2(intArg(args[0], env, 'n'), intArg(args[1], env, 'k'))));
+    case 'bell': return one('Liczba Bella B_n', num(NT.bellNumber(intArg(args[0], env, 'n'))));
+    case 'partitions': return one('Liczba podziałów p(n)', num(NT.partitionCount(intArg(args[0], env, 'n'))));
+    case 'legendre': case 'chebyshevt': case 'chebyshevu': case 'hermite': case 'laguerre':
+      return orthoPolyCommand(name, args, symEnv(args[1] ?? args[0]));
     case 'powmod': {
       const [a, b, m] = args.map((x, k) => bigArg(x, env, ['Podstawa', 'Wykładnik', 'Moduł'][k]));
       if (m <= 0n) fail('Moduł musi być dodatni.');
@@ -2169,8 +2201,10 @@ function plotCommand(args: Node[], env: Env): Out {
 
 function analyzeCommand(args: Node[], env: Env, onlyExtrema = false): Out {
   const e = exprArg(args[0], env, 'Funkcja');
+  const vs = variables(e);
+  if (vs.length === 2 && (onlyExtrema || !args[1])) return extrema2DCommand(e, vs as [string, string]);
   const x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
-  if (variables(e).length > 1) fail('Badam funkcje jednej zmiennej (bez parametrów).');
+  if (vs.length > 1) fail('Badam funkcje jednej lub dwóch zmiennych (bez parametrów).');
   const X = sym(x);
   const pods: Pod[] = [];
   const fML = `<mi>f</mi>${mo('(')}${mi(x)}${mo(')')}`;
@@ -2305,3 +2339,111 @@ function analyzeCommand(args: Node[], env: Env, onlyExtrema = false): Out {
 
 const isInf = (e: Expr) => infSign(e) !== 0;
 const isOneE = (e: Expr) => isNum(e) && e.v.n === 1n && e.v.d === 1n;
+
+
+// --- Orthogonal polynomials, Bernoulli numbers/polynomials & 2D extrema ---
+
+function bernoulliCommand(args: Node[], env: Env): Out {
+  const n = intArg(args[0], env, 'Indeks liczby Bernoulliego n');
+  if (n < 0 || n > 300) fail('Indeks n musi być od 0 do 300.');
+  if (!args[1]) {
+    const b = NT.bernoulliNum(n);
+    return one(`Liczba Bernoulliego B_${n}`, num(b));
+  }
+  const xExpr = exprArg(args[1], env, 'Argument');
+  const terms: Expr[] = [];
+  for (let k = 0; k <= n; k++) {
+    const bnk = NT.bernoulliNum(n - k);
+    if (!bnk.n) continue;
+    const c = binomialBig(BigInt(n), BigInt(k));
+    terms.push(mul(num(c), num(bnk), pow(xExpr, num(k))));
+  }
+  const poly = simplify(expand(add(...terms)));
+  return one(`Wielomian Bernoulliego B_${n}(${toText(xExpr)})`, poly);
+}
+
+function orthoPolyCommand(name: 'legendre' | 'chebyshevt' | 'chebyshevu' | 'hermite' | 'laguerre', args: Node[], env: Env): Out {
+  const n = intArg(args[0], env, 'Stopień wielomianu n');
+  if (n < 0 || n > 60) fail('Stopień wielomianu ortogonalnego n musi być od 0 do 60.');
+  const xExpr = args[1] ? exprArg(args[1], env, 'Argument') : sym('x');
+  const t = '\u0001x', T = sym(t);
+
+  let p0: Expr = ONE;
+  let p1: Expr = name === 'chebyshevu' || name === 'hermite' ? mul(TWO, T) : name === 'laguerre' ? sub(ONE, T) : T;
+  let pk: Expr = n === 0 ? p0 : p1;
+  for (let k = 1; k < n; k++) {
+    if (name === 'legendre') {
+      pk = expand(div(sub(mul(num(2 * k + 1), T, p1), mul(num(k), p0)), num(k + 1)));
+    } else if (name === 'chebyshevt' || name === 'chebyshevu') {
+      pk = expand(sub(mul(TWO, T, p1), p0));
+    } else if (name === 'hermite') {
+      pk = expand(sub(mul(TWO, T, p1), mul(num(2 * k), p0)));
+    } else {
+      pk = expand(div(sub(mul(sub(num(2 * k + 1), T), p1), mul(num(k), p0)), num(k + 1)));
+    }
+    p0 = p1;
+    p1 = pk;
+  }
+
+  const val = simplify(expand(subst(pk, t, xExpr)));
+  const meta: Record<typeof name, { title: string; sym: string; dom: [number, number]; note: string }> = {
+    legendre: { title: 'Wielomian Legendre’a', sym: 'P', dom: [-1, 1], note: 'Ortogonalne na ⟨−1; 1⟩ z wagą w(x) = 1.' },
+    chebyshevt: { title: 'Wielomian Czebyszewa I rodzaju', sym: 'T', dom: [-1, 1], note: 'Ortogonalne na ⟨−1; 1⟩ z wagą w(x) = 1/√(1 − x²).' },
+    chebyshevu: { title: 'Wielomian Czebyszewa II rodzaju', sym: 'U', dom: [-1, 1], note: 'Ortogonalne na ⟨−1; 1⟩ z wagą w(x) = √(1 − x²).' },
+    hermite: { title: 'Wielomian Hermite’a (fizyczny)', sym: 'H', dom: [-2.5, 2.5], note: 'Ortogonalne na (−∞; ∞) z wagą w(x) = e^(−x²).' },
+    laguerre: { title: 'Wielomian Laguerre’a', sym: 'L', dom: [0, 8], note: 'Ortogonalne na ⟨0; ∞) z wagą w(x) = e^(−x).' },
+  };
+  const m = meta[name];
+  const pods: Pod[] = [{ title: `${m.title} ${m.sym}_${n}(${toText(xExpr)})`, rows: [row(val)], note: m.note }];
+  if (xExpr.k === 's') {
+    const plot = safe(() => plotOf([val], xExpr.n, { range: m.dom, labels: [`${m.sym}_${n}(${xExpr.n}) = ${toText(val)}`] }));
+    if (plot) pods.push({ title: 'Wykres', rows: [], plot });
+  }
+  return { pods, value: ex(val) };
+}
+
+function extrema2DCommand(e: Expr, [x, y]: [string, string]): Out {
+  const fx = simplify(diff(e, x)), fy = simplify(diff(e, y));
+  const fxx = simplify(diff(fx, x)), fxy = simplify(diff(fx, y)), fyy = simplify(diff(fy, y));
+  const detH = simplify(sub(mul(fxx, fyy), pow(fxy, TWO)));
+  const H = [[fxx, fxy], [fxy, fyy]];
+
+  const pods: Pod[] = [
+    {
+      title: 'Gradient i hesjan',
+      rows: [
+        { ml: M(`<mo>∇</mo><mi>f</mi>${mo('=')}${toML(fx)}${mo(',')}<mspace width="0.4em"/>${toML(fy)}`), text: `∇f = [${toText(fx)}; ${toText(fy)}]` },
+        matRow(H),
+        { ml: M(`<mi mathvariant="normal">det</mi><mspace width="0.17em"/><mi>H</mi>${mo('=')}${toML(detH)}`), text: `det H = ${toText(detH)}` },
+      ],
+    },
+  ];
+
+  const sys = safe(() => solveSystem([fx, fy], [x, y]));
+  const ptRows: Row[] = [];
+  if (sys && sys.kind === 'solutions') {
+    for (const [x0, y0] of sys.list) {
+      if (!x0 || !y0 || !isConstant(x0) || !isConstant(y0)) continue;
+      const ax = approx(x0), ay = approx(y0);
+      if (Math.abs(ax.im) > 1e-10 || Math.abs(ay.im) > 1e-10) continue;
+      const subPt = (expr: Expr) => simplify(subst(subst(expr, x, x0), y, y0));
+      const z0 = subPt(e), dAt = subPt(detH), aAt = subPt(fxx);
+      const dNum = approx(dAt).re, aNum = approx(aAt).re;
+      let kind = 'punkt stacjonarny (kryterium nierozstrzygające: det H = 0)';
+      if (dNum > 1e-11) kind = aNum > 0 ? 'minimum lokalne' : 'maksimum lokalne';
+      else if (dNum < -1e-11) kind = 'punkt siodłowy';
+      ptRows.push({
+        ml: M(`<mo>(</mo>${toML(x0)}${mo(';')}<mspace width="0.2em"/>${toML(y0)}<mo>)</mo><mo>:</mo><mspace width="0.4em"/><mi>f</mi>${mo('=')}${toML(z0)}`),
+        text: `(${toText(x0)}; ${toText(y0)}): f = ${toText(z0)}`,
+        note: `${kind} (det H = ${toText(dAt)}, f_${x}${x} = ${toText(aAt)})`,
+      });
+    }
+  }
+  pods.push({
+    title: 'Punkty stacjonarne i ekstrema lokalne',
+    rows: ptRows.length ? ptRows : [textRow('Brak rzeczywistych punktów stacjonarnych (∇f ≠ 0).')],
+    note: 'Klasyfikacja z kryterium Sylvestera: det H > 0 i f_xx > 0 → minimum; det H > 0 i f_xx < 0 → maksimum; det H < 0 → punkt siodłowy.',
+  });
+  pods.push(...fieldPods(e));
+  return { pods, value: ex(e) };
+}

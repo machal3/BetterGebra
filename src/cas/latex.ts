@@ -15,7 +15,7 @@ const WORDS: Record<string, string> = {
   circ: '°', degree: '°', partial: 'd', lfloor: ' floor(', rfloor: ')', lceil: ' ceil(', rceil: ')', vert: '|', lvert: '|', rvert: '|', mid: '|',
   quad: ' ', qquad: ' ', displaystyle: '', textstyle: '', scriptstyle: '', limits: '', nolimits: '', cdots: '', ldots: '', dots: '',
   big: '', Big: '', bigg: '', Bigg: '', bigl: '', bigr: '', Bigl: '', Bigr: '', biggl: '', biggr: '', middle: '',
-  tg: ' tan', ctg: ' cot', cotg: ' cot', arctg: ' atan', arcctg: ' acot', sgn: ' sign', exp: ' exp',
+  tg: ' tan', ctg: ' cot', cotg: ' cot', arctg: ' atan', arcctg: ' acot', sgn: ' sign', exp: ' exp', nabla: ' gradient ',
 };
 /** One-character commands: spacing, escaped braces, the \[ … \] and \( … \) delimiters, row breaks. */
 const SYMBOL: Record<string, string> = { ',': ' ', ';': ' ', ':': ' ', '!': '', ' ': ' ', '{': '{', '}': '}', '|': '|', '[': '', ']': '', '(': '', ')': '', '\\': ', ', '%': '%' };

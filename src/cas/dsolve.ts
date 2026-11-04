@@ -5,8 +5,8 @@
  * does not satisfy it; initial conditions then fix the constants. Where none of this applies, the card says so and
  * points to ode45.
  */
-import { E, Expr, ONE, ZERO, add, div, expand, fn, freeOf, isConstant, isNum, mapChildren, mul, neg, num, pow, sub, subst, sym, variables } from './expr';
-import { Env, Value, evaluate, ex } from './evaluate';
+import { E, Expr, ONE, ZERO, add, div, expand, fn, freeOf, isConstant, isNum, mapChildren, mul, neg, num, numDen, pow, sub, subst, sym, together, variables } from './expr';
+import { Env, Value, evaluate, ex, shadow } from './evaluate';
 import { diff } from './calculus';
 import { compileDouble } from './fast';
 import { complexParts, constSign } from './functions';
@@ -18,10 +18,11 @@ import type { Node } from './parse';
 import { plotOf } from './plot';
 import { coeffsOf, solvePoly } from './poly';
 import { Q, Q0, fail, q, qadd, qmul } from './q';
-import { simplify } from './simplify';
+import { cancel, simplify, zeroTest } from './simplify';
 import { solveEquation } from './solve';
 import { Equation, derivative, readEquation } from './ode';
 import { toText } from './format';
+import { ilaplaceOf, laplaceOf } from './transforms';
 
 const tidy = (e: Expr) => { try { return simplify(e); } catch { return e; } };
 const CONSTANTS = ['C₁', 'C₂', 'C₃', 'C₄', 'C₅', 'C₆'];
@@ -197,7 +198,86 @@ function general(eq: Equation): { y: Expr; method: string; implicit?: Expr } | n
       }
     }
   }
+  // Exact ODE: M(t, y) + N(t, y) y′ = 0 with ∂M/∂y = ∂N/∂t (or with integrating factor μ(t) / μ(y))
+  const exactSol = tryExactOde(eq, rest, a1, R);
+  if (exactSol) return exactSol;
+  // Homogeneous first-order ODE: y′ = f(y/t) via y = u·t
+  const homSol = tryHomogeneousOde(eq, R);
+  if (homSol) return homSol;
   return null;
+}
+
+type Solution = { y: Expr; method: string; implicit?: Expr };
+
+function solveImplicit(eq: Equation, U: Expr, method: string): Solution {
+  const implicit = tidy(sub(U, sym(CONSTANTS[0])));
+  const explicit: Expr[] = [];
+  try {
+    const sols = solveEquation(implicit, eq.y);
+    if (sols.kind === 'list') for (const s of sols.sols) if (s.exact && !s.family && satisfies(eq, s.exact)) explicit.push(tidy(s.exact));
+  } catch { /* implicit only */ }
+  return { y: explicit[0] ?? ZERO, method, implicit };
+}
+
+function potential2D(M: Expr, N: Expr, t: string, y: string): Expr | null {
+  const dMy = tidy(diff(M, y)), dNt = tidy(diff(N, t));
+  if (!sameFunction(dMy, dNt, [t, y])) return null;
+  const U1 = integrate(M, t);
+  if (!U1) return null;
+  const rem = tidy(sub(N, diff(U1, y)));
+  if (!freeOf(rem, t)) return null;
+  const U2 = constSign(rem) === 0 ? ZERO : integrate(rem, y);
+  if (U2 === null) return null;
+  const U = tidy(add(U1, U2));
+  if (!sameFunction(diff(U, t), M, [t, y]) || !sameFunction(diff(U, y), N, [t, y])) return null;
+  return U;
+}
+
+function tryExactOde(eq: Equation, M0: Expr, N0: Expr, R: Expr): Solution | null {
+  const { t, y } = eq;
+  const [rNum, rDen] = numDen(together(R));
+  const pairs: [Expr, Expr][] = [[tidy(M0), tidy(N0)], [tidy(neg(rNum)), tidy(rDen)]];
+  for (const [M, N] of pairs) {
+    if (constSign(N) === 0) continue;
+    const U = potential2D(M, N, t, y);
+    if (U) return solveImplicit(eq, U, 'równanie różniczkowe zupełne (∂M/∂y = ∂N/∂t)');
+    const diffMN = tidy(sub(diff(M, y), diff(N, t)));
+    // Integrating factor μ(t): (∂M/∂y − ∂N/∂t) / N depends only on t
+    const pt = tidy(cancel(together(div(diffMN, N))));
+    if (freeOf(pt, y)) {
+      const P = integrate(pt, t);
+      if (P) {
+        const mu = tidy(pow(E, dropAbs(P)));
+        const Umu = potential2D(tidy(mul(mu, M)), tidy(mul(mu, N)), t, y);
+        if (Umu) return solveImplicit(eq, Umu, `równanie sprowadzalne do zupełnego (czynnik całkujący μ(${t}) = ${toText(mu)})`);
+      }
+    }
+    // Integrating factor μ(y): (∂N/∂t − ∂M/∂y) / M depends only on y
+    if (constSign(M) !== 0) {
+      const qy = tidy(cancel(together(div(neg(diffMN), M))));
+      if (freeOf(qy, t)) {
+        const Qy = integrate(qy, y);
+        if (Qy) {
+          const mu = tidy(pow(E, dropAbs(Qy)));
+          const Umu = potential2D(tidy(mul(mu, M)), tidy(mul(mu, N)), t, y);
+          if (Umu) return solveImplicit(eq, Umu, `równanie sprowadzalne do zupełnego (czynnik całkujący μ(${y}) = ${toText(mu)})`);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function tryHomogeneousOde(eq: Equation, R: Expr): Solution | null {
+  const { t, y } = eq, u = '\u0001u';
+  const fu = tidy(cancel(together(subst(R, y, mul(sym(u), sym(t))))));
+  if (!freeOf(fu, t)) return null;
+  const denom = tidy(sub(fu, sym(u)));
+  if (constSign(denom) === 0) return { y: mul(sym(CONSTANTS[0]), sym(t)), method: 'równanie jednorodne y′ = y/t' };
+  const Hu = integrate(tidy(div(ONE, denom)), u);
+  if (!Hu) return null;
+  const U = tidy(sub(subst(Hu, u, div(sym(y), sym(t))), fn('ln', sym(t))));
+  return solveImplicit(eq, U, `równanie jednorodne y′ = f(${y}/${t}) (podstawienie u = ${y}/${t})`);
 }
 const sameFunction = (a: Expr, b: Expr, vars: string[]) => {
   for (const [s, base] of [0.41, 1.37, 2.13, 0.77].entries()) {
@@ -255,7 +335,140 @@ function fix(y: Expr, conds: Condition[], t: string): Expr | null {
 
 // --- The command ---
 
+function tryLinearSystem(args: Node[], env: Env): Linalg | null {
+  // Check if at least 2 arguments are first-order ODEs in distinct dependent variables (e.g. x' = ..., y' = ...)
+  const odeNodes: Node[] = [];
+  const condNodes: Node[] = [];
+  const depVars: string[] = [];
+  for (const a of args) {
+    if (a.t !== 'rel' || a.ops.length !== 1 || a.ops[0] !== '=') return null;
+    const [l] = a.parts;
+    if (l.t === 'post' && l.o === "'" && l.a.t === 'id') {
+      odeNodes.push(a);
+      depVars.push(l.a.n);
+    } else {
+      condNodes.push(a);
+    }
+  }
+  const n = odeNodes.length;
+  if (n < 2 || n > 3 || new Set(depVars).size !== n) return null;
+  const sEnv = shadow(env, [...depVars, 't']);
+  const rhsExprs = odeNodes.map(node => {
+    const r = (node as { parts: Node[] }).parts[1];
+    const v = evaluate(r, sEnv);
+    return v.t === 'expr' ? v.e : null;
+  });
+  if (rhsExprs.some(e => !e)) return null;
+  const rhs = rhsExprs as Expr[];
+  const allVars = [...new Set(rhs.flatMap(e => variables(e)))].filter(v => !depVars.includes(v));
+  if (allVars.length > 1) return null;
+  const t = allVars[0] ?? 't';
+  const S = sym('s');
+
+  // Extract constant matrix A and forcing vector f(t): rhs_i = Σ_j A_{ij} x_j + f_i(t)
+  const A: Expr[][] = [];
+  const forcing: Expr[] = [];
+  for (let i = 0; i < n; i++) {
+    let rem = rhs[i];
+    const row: Expr[] = [];
+    for (let j = 0; j < n; j++) {
+      const aij = tidy(diff(rem, depVars[j]));
+      if (variables(aij).some(v => depVars.includes(v) || v === t)) return null;
+      row.push(aij);
+      rem = tidy(sub(rem, mul(aij, sym(depVars[j]))));
+    }
+    if (variables(rem).some(v => depVars.includes(v))) return null;
+    A.push(row);
+    forcing.push(rem);
+  }
+
+  // Compute (sI − A)⁻¹ and inverse Laplace transform to get Φ(t) = e^(At)
+  const sImA = A.map((row, i) => row.map((aij, j) => (i === j ? sub(S, aij) : neg(aij))));
+  let resolvent: Expr[][];
+  try { resolvent = LA.inverse(sImA); } catch { return null; }
+
+  const Phi: Expr[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: Expr[] = [];
+    for (let j = 0; j < n; j++) {
+      const phi_ij = ilaplaceOf(resolvent[i][j], 's', t);
+      if (!phi_ij) return null;
+      row.push(phi_ij);
+    }
+    Phi.push(row);
+  }
+
+  // Particular solution via Laplace transform of forcing F(s)
+  const Fs: Expr[] = [];
+  for (let i = 0; i < n; i++) {
+    if (zeroTest(forcing[i])) { Fs.push(ZERO); continue; }
+    const Lf = laplaceOf(forcing[i], t, 's');
+    if (!Lf) return null;
+    Fs.push(Lf);
+  }
+  const yp: Expr[] = [];
+  for (let i = 0; i < n; i++) {
+    const sumS = tidy(add(...resolvent[i].map((rij, j) => mul(rij, Fs[j]))));
+    const ypi = zeroTest(sumS) ? ZERO : ilaplaceOf(sumS, 's', t);
+    if (!ypi) return null;
+    yp.push(ypi);
+  }
+
+  const Csyms = depVars.map((_, i) => sym(CONSTANTS[i]));
+  const genSol = Phi.map((row, i) => tidy(add(yp[i], ...row.map((phi_ij, j) => mul(phi_ij, Csyms[j])))));
+
+  // Verify general solution by substituting into X'(t) = A X(t) + f(t)
+  for (let i = 0; i < n; i++) {
+    const lhs = diff(genSol[i], t);
+    let rhsCheck = rhs[i];
+    for (let j = 0; j < n; j++) rhsCheck = subst(rhsCheck, depVars[j], genSol[j]);
+    if (!sameFunction(lhs, rhsCheck, [t, ...CONSTANTS.slice(0, n)])) return null;
+  }
+
+  const rowsGen: [string, Value][] = depVars.map((v, i) => [`${v}(${t})`, ex(genSol[i])]);
+  const cards: Card[] = [{
+    title: 'Rozwiązanie ogólne układu równań różniczkowych',
+    rows: rowsGen,
+    note: `Układ liniowy o stałych współczynnikach (macierz fundamentalna e^(A·${t})). ${CONSTANTS.slice(0, n).join(', ')} — dowolne stałe; sprawdzone przez podstawienie.`,
+  }];
+  let outputs: Value[] = genSol.map(ex);
+
+  if (condNodes.length) {
+    if (condNodes.length !== n) fail(`dsolve: układ ${n} równań wymaga ${n} warunków początkowych.`);
+    const conds = depVars.map(v => {
+      const node = condNodes.find(cn => {
+        const l = (cn as { parts: Node[] }).parts[0];
+        return (l.t === 'op' && l.o === '*' && l.a.t === 'id' && l.a.n === v) || (l.t === 'index' && l.n === v);
+      });
+      if (!node) return fail(`dsolve: brakuje warunku początkowego dla funkcji ${v}(t₀).`);
+      return conditionOf(node, v, env);
+    });
+    const eqs = conds.map((c, i) => tidy(sub(subst(genSol[i], t, c.t0), c.value)));
+    const coef = eqs.map(e => CONSTANTS.slice(0, n).map(c => tidy(diff(e, c))));
+    const rhsC = eqs.map((e, i) => [tidy(neg(sub(e, add(...coef[i].map((k, j) => mul(k, sym(CONSTANTS[j])))))))]);
+    const solC = LA.leftSolve(coef, rhsC);
+    const partSol = genSol.map(g => tidy(CONSTANTS.slice(0, n).reduce((acc, c, j) => subst(acc, c, solC[j][0]), g)));
+    const t0 = approx(conds[0].t0).re;
+    const plot = partSol.every(p => variables(p).every(v => v === t))
+      ? plotOf(partSol, t, { range: [t0 - 1, t0 + 6], labels: depVars.map((v, i) => `${v}(${t}) = ${toText(partSol[i])}`) })
+      : null;
+    cards.push({
+      title: 'Rozwiązanie szczególne układu',
+      rows: depVars.map((v, i) => [`${v}(${t})`, ex(partSol[i])]),
+      note: `${conds.map((c, i) => `${depVars[i]}(${toText(c.t0)}) = ${toText(c.value)}`).join(', ')}; sprawdzone.`,
+      plot: plot ?? undefined,
+    });
+    outputs = partSol.map(ex);
+  }
+  return { cards, outputs };
+}
+
 export function dsolveCommand(args: Node[], env: Env): Linalg {
+  const flatArgs = args.length === 1 && args[0].t === 'list' ? args[0].items : args;
+  if (flatArgs.length >= 2) {
+    const sys = tryLinearSystem(flatArgs, env);
+    if (sys) return sys;
+  }
   const eq = readEquation(args[0], env);
   if (!eq) fail("dsolve: zapisz równanie z pochodną, np. dsolve(y' = -2*y) albo dsolve(y'' + y = 0, y(0) = 1, y'(0) = 0).");
   const e = eq!;

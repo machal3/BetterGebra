@@ -3,7 +3,7 @@
  * counterexample; reported as such). Factoring: trial division, then Pollard–Brent; a factor it can't split in
  * its budget is reported as unfactored, never guessed.
  */
-import { babs, bitLength, fail, gcd, isqrt, Q, q } from './q';
+import { babs, bitLength, fail, gcd, isqrt, Q, Q0, Q1, q, qdiv, qmul, qsub } from './q';
 
 export function modpow(b: bigint, e: bigint, m: bigint): bigint {
   if (m === 1n) return 0n;
@@ -394,4 +394,88 @@ export function fromContinuedFraction(a: bigint[]): Q {
   let n = 1n, d = 0n;
   for (let k = a.length - 1; k >= 0; k--) [n, d] = [a[k] * n + d, n];
   return q(n, d);
+}
+
+
+/** Exact Bernoulli number B_n (with standard convention B_1 = −1/2). */
+export function bernoulliNum(n: number): Q {
+  if (!Number.isInteger(n) || n < 0) fail('Indeks liczby Bernoulliego musi być liczbą całkowitą nieujemną.');
+  if (n > 300) fail('Obliczam liczby Bernoulliego dla n ≤ 300.');
+  if (n === 0) return Q1;
+  if (n === 1) return q(-1n, 2n);
+  if (n % 2 === 1) return Q0;
+  const A: Q[] = [];
+  for (let m = 0; m <= n; m++) {
+    A[m] = q(1n, BigInt(m + 1));
+    for (let j = m; j >= 1; j--) A[j - 1] = qmul(q(BigInt(j)), qsub(A[j - 1], A[j]));
+  }
+  return qdiv(A[0], Q1);
+}
+
+/** Signed Stirling numbers of the first kind s(n, k): Σ_k s(n, k) x^k = x(x−1)⋯(x−n+1). */
+export function stirling1(n: number, k: number): bigint {
+  if (!Number.isInteger(n) || !Number.isInteger(k) || n < 0 || k < 0) fail('Argumenty liczb Stirlinga muszą być nieujemnymi liczbami całkowitymi.');
+  if (n > 500) fail('Obliczam liczby Stirlinga dla n ≤ 500.');
+  if (k > n) return 0n;
+  if (n === 0) return k === 0 ? 1n : 0n;
+  let row = Array.from({ length: k + 1 }, () => 0n);
+  row[0] = 1n;
+  for (let i = 1; i <= n; i++) {
+    const next = Array.from({ length: k + 1 }, () => 0n);
+    const m = BigInt(i - 1);
+    for (let j = 1; j <= Math.min(i, k); j++) next[j] = row[j - 1] - m * row[j];
+    row = next;
+  }
+  return row[k];
+}
+
+/** Stirling numbers of the second kind {n \brace k}: partitions of an n-set into k non-empty subsets. */
+export function stirling2(n: number, k: number): bigint {
+  if (!Number.isInteger(n) || !Number.isInteger(k) || n < 0 || k < 0) fail('Argumenty liczb Stirlinga muszą być nieujemnymi liczbami całkowitymi.');
+  if (n > 500) fail('Obliczam liczby Stirlinga dla n ≤ 500.');
+  if (k > n) return 0n;
+  if (n === 0) return k === 0 ? 1n : 0n;
+  let row = Array.from({ length: k + 1 }, () => 0n);
+  row[0] = 1n;
+  for (let i = 1; i <= n; i++) {
+    const next = Array.from({ length: k + 1 }, () => 0n);
+    for (let j = 1; j <= Math.min(i, k); j++) next[j] = row[j - 1] + BigInt(j) * row[j];
+    row = next;
+  }
+  return row[k];
+}
+
+/** Bell number B_n: total number of partitions of an n-element set (by Aitken's array / Bell triangle). */
+export function bellNumber(n: number): bigint {
+  if (!Number.isInteger(n) || n < 0) fail('Indeks liczby Bella musi być nieujemną liczbą całkowitą.');
+  if (n > 500) fail('Obliczam liczby Bella dla n ≤ 500.');
+  if (n === 0) return 1n;
+  let row = [1n];
+  for (let i = 1; i < n; i++) {
+    const next = [row[row.length - 1]];
+    for (let j = 0; j < row.length; j++) next.push(next[j] + row[j]);
+    row = next;
+  }
+  return row[row.length - 1];
+}
+
+/** Partition function p(n) by Euler's pentagonal number theorem. */
+export function partitionCount(n: number): bigint {
+  if (!Number.isInteger(n) || n < 0) fail('Liczba podziałów p(n) jest określona dla n ≥ 0.');
+  if (n > 5000) fail('Obliczam p(n) dla n ≤ 5000.');
+  const p = Array.from({ length: n + 1 }, () => 0n);
+  p[0] = 1n;
+  for (let m = 1; m <= n; m++) {
+    let s = 0n;
+    for (let k = 1; ; k++) {
+      const g1 = (k * (3 * k - 1)) >> 1;
+      const g2 = (k * (3 * k + 1)) >> 1;
+      if (g1 > m) break;
+      const sign = k & 1 ? 1n : -1n;
+      s += sign * p[m - g1];
+      if (g2 <= m) s += sign * p[m - g2];
+    }
+    p[m] = s;
+  }
+  return p[n];
 }

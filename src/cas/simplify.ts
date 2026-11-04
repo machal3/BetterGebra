@@ -377,4 +377,6 @@ const hasRootOrI = (e: Expr): boolean => (e.k === '^' && isNum(e.e) && e.e.v.d !
 
 /** Simplified for display: like simplify(), but keeps numbers times sums distributed (x/2 + 1/2 → (x + 1)/2 only if shorter). */
 export const tidy = simplify;
+export const zeroTest = (e: Expr): boolean => isZero(e) || isZero(expand(e)) || isZero(cancel(together(e))) || isZero(simplify(e));
+
 

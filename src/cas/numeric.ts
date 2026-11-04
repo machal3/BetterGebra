@@ -328,6 +328,16 @@ function evFn(n: string, a: C[], p: number): C {
       return cdiv(cgamma(cadd(u, C1, wp), wp), cmul(cgamma(cadd(v, C1, wp), wp), cgamma(cadd(csub(u, v, wp), C1, wp), wp), wp), p);
     }
     case 'gamma': return cgamma(z, p);
+    case 'beta': return cdiv(cmul(cgamma(a[0], wp), cgamma(a[1], wp), wp), cgamma(cadd(a[0], a[1], wp), wp), p);
+    case 'heaviside': {
+      const r = needReal(z, 'Funkcja Heaviside’a');
+      return real(r.m === 0n ? { m: 1n, e: -1 } : bfInt(r.m > 0n ? 1 : 0));
+    }
+    case 'dirac': {
+      const r = needReal(z, 'Delta Diraca');
+      if (r.m === 0n) throw new CasError('δ(0) nie ma skończonej wartości liczbowej.');
+      return real(BZERO);
+    }
     case 'factorial': return cgamma(cadd(z, C1, wp), p);
     case 'erf': return cerf(z, p);
     case 'erfc': return csub(C1, cerf(z, wp), p);

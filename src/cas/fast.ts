@@ -39,6 +39,8 @@ const F1: Record<string, (x: number) => number> = {
   round: x => Math.sign(x) * Math.round(Math.abs(x)), frac: x => x - Math.floor(x),
   gamma, factorial: x => gamma(x + 1), erf, erfc: x => 1 - erf(x), re: x => x, im: () => 0, conj: x => x,
   arg: x => x > 0 ? 0 : x < 0 ? Math.PI : NaN,
+  heaviside: x => x < 0 ? 0 : x > 0 ? 1 : x === 0 ? 0.5 : NaN,
+  dirac: x => x === 0 ? Infinity : Number.isFinite(x) ? 0 : NaN,
 };
 
 /** A closure computing e at x = v; NaN where e is undefined or not real. */
@@ -86,6 +88,7 @@ export function compileDouble(e: Expr, x: string, params: Record<string, number>
       if (e.n === 'max' || e.n === 'min') { const m = Math[e.n]; return v => m(...args.map(f => f(v))); }
       if (e.n === 'mod') return v => { const a = args[0](v), b = args[1](v); return ((a % b) + b) % b; };
       if (e.n === 'binomial') return v => { const n = args[0](v), k = args[1](v); return gamma(n + 1) / (gamma(k + 1) * gamma(n - k + 1)); };
+      if (e.n === 'beta') return v => { const a = args[0](v), b = args[1](v); return gamma(a) * gamma(b) / gamma(a + b); };
       const f = F1[e.n];
       if (!f) return () => NaN;
       const [a] = args;

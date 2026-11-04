@@ -475,3 +475,132 @@ export function logm(A: Mat): Mat | null {
   }
   return L.map(r => r.map(x => x * 2 ** k));
 }
+
+
+/** Upper Hessenberg decomposition A = P·H·Pᵀ with orthogonal P and upper Hessenberg H. */
+export function hessDecomp(A: Mat): { P: Mat; H: Mat } {
+  const n = A.length, H = copy(A), P = eye(n);
+  for (let k = 0; k < n - 2; k++) {
+    const x = H.slice(k + 1).map(r => r[k]), nx = hypot(x);
+    if (nx === 0) continue;
+    const v = x.slice();
+    v[0] += sign(x[0]) * nx;
+    const nv = hypot(v);
+    for (let i = 0; i < v.length; i++) v[i] /= nv;
+    for (let j = 0; j < n; j++) {
+      let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * H[k + 1 + i][j];
+      for (let i = 0; i < v.length; i++) H[k + 1 + i][j] -= 2 * s * v[i];
+    }
+    for (let i = 0; i < n; i++) {
+      let s = 0; for (let l = 0; l < v.length; l++) s += H[i][k + 1 + l] * v[l];
+      for (let l = 0; l < v.length; l++) H[i][k + 1 + l] -= 2 * s * v[l];
+    }
+    for (let i = 0; i < n; i++) {
+      let s = 0; for (let l = 0; l < v.length; l++) s += P[i][k + 1 + l] * v[l];
+      for (let l = 0; l < v.length; l++) P[i][k + 1 + l] -= 2 * s * v[l];
+    }
+    for (let i = k + 2; i < n; i++) H[i][k] = 0;
+  }
+  return { P, H };
+}
+
+/** Real Schur decomposition A = U·T·Uᵀ with orthogonal U and quasi-upper-triangular T. */
+export function schurDecomp(A: Mat): { U: Mat; T: Mat } {
+  const n = A.length;
+  if (n <= 1) return { U: eye(n), T: copy(A) };
+  const { P: U, H: T } = hessDecomp(A);
+  const anorm = normFro(T) || 1;
+
+  // Apply Givens rotation in planes (i, i+1) with cos c, sin s to T and U
+  const applyGivens = (i: number, c: number, s: number) => {
+    for (let j = 0; j < n; j++) {
+      const a = T[i][j], b = T[i + 1][j];
+      T[i][j] = c * a + s * b;
+      T[i + 1][j] = -s * a + c * b;
+    }
+    for (let j = 0; j < n; j++) {
+      const a = T[j][i], b = T[j][i + 1];
+      T[j][i] = c * a + s * b;
+      T[j][i + 1] = -s * a + c * b;
+      const ua = U[j][i], ub = U[j][i + 1];
+      U[j][i] = c * ua + s * ub;
+      U[j][i + 1] = -s * ua + c * ub;
+    }
+  };
+
+  // Apply Householder reflector on rows/cols idx..idx+v.length-1
+  const applyHouse = (idx: number, v: number[]) => {
+    const m = v.length, nv = hypot(v);
+    if (nv === 0) return;
+    const u = v.map(x => x / nv);
+    for (let j = 0; j < n; j++) {
+      let s = 0; for (let i = 0; i < m; i++) s += u[i] * T[idx + i][j];
+      for (let i = 0; i < m; i++) T[idx + i][j] -= 2 * s * u[i];
+    }
+    for (let i = 0; i < n; i++) {
+      let s = 0; for (let l = 0; l < m; l++) s += T[i][idx + l] * u[l];
+      for (let l = 0; l < m; l++) T[i][idx + l] -= 2 * s * u[l];
+      let su = 0; for (let l = 0; l < m; l++) su += U[i][idx + l] * u[l];
+      for (let l = 0; l < m; l++) U[i][idx + l] -= 2 * su * u[l];
+    }
+  };
+
+  let hi = n - 1, its = 0;
+  while (hi > 0) {
+    for (let i = hi; i >= 1; i--) {
+      const scale = Math.abs(T[i - 1][i - 1]) + Math.abs(T[i][i]) || anorm;
+      if (Math.abs(T[i][i - 1]) <= EPS * scale) T[i][i - 1] = 0;
+    }
+    if (T[hi][hi - 1] === 0) { hi--; its = 0; continue; }
+    if (hi === 1 || T[hi - 1][hi - 2] === 0) {
+      // 2x2 block at (hi-1, hi): if real eigenvalues, split by Givens rotation; if complex conjugate, keep 2x2 Schur block
+      const a = T[hi - 1][hi - 1], b = T[hi - 1][hi], c = T[hi][hi - 1], d = T[hi][hi];
+      const p = 0.5 * (a - d), disc = p * p + b * c;
+      if (disc >= 0) {
+        const root = p + (p >= 0 ? Math.sqrt(disc) : -Math.sqrt(disc));
+        const x = c, y = root, r = Math.hypot(x, y);
+        if (r > 0) applyGivens(hi - 1, y / r, x / r);
+        T[hi][hi - 1] = 0;
+      }
+      hi -= 2;
+      its = 0;
+      continue;
+    }
+
+    let lo = hi - 1;
+    while (lo > 0 && T[lo][lo - 1] !== 0) lo--;
+
+    if (++its > 80) fail('schur: iteracja QR nie zbiegła się.');
+
+    // Francis double shift on active block lo..hi
+    const a11 = T[hi - 1][hi - 1], a12 = T[hi - 1][hi], a21 = T[hi][hi - 1], a22 = T[hi][hi];
+    let tr = a11 + a22, det2 = a11 * a22 - a12 * a21;
+    if (its === 15 || its === 30) {
+      const s = Math.abs(T[hi][hi - 1]) + Math.abs(T[hi - 1][hi - 2]);
+      tr = 1.5 * s; det2 = 0.5625 * s * s;
+    }
+    const x0 = T[lo][lo], x1 = T[lo + 1][lo];
+    let p = x0 * x0 - tr * x0 + det2 + T[lo][lo + 1] * x1;
+    let q = x1 * (x0 + T[lo + 1][lo + 1] - tr);
+    let r = lo + 2 <= hi ? x1 * T[lo + 2][lo + 1] : 0;
+
+    for (let k = lo; k <= hi - 1; k++) {
+      if (k > lo) {
+        p = T[k][k - 1];
+        q = T[k + 1][k - 1];
+        r = k + 2 <= hi ? T[k + 2][k - 1] : 0;
+      }
+      const v = k + 2 <= hi ? [p, q, r] : [p, q];
+      const nv = hypot(v);
+      if (nv > 0) {
+        v[0] += sign(v[0]) * nv;
+        applyHouse(k, v);
+        if (k > lo) {
+          T[k + 1][k - 1] = 0;
+          if (k + 2 <= hi) T[k + 2][k - 1] = 0;
+        }
+      }
+    }
+  }
+  return { U, T };
+}

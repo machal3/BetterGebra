@@ -28,6 +28,11 @@ export const COMMAND_NAMES: Record<string, string> = {
   sort: 'sortuj', total: 'suma', degree: 'stopień', coeffs: 'współczynniki', discriminant: 'Δ', quotient: 'iloraz', remainder: 'reszta',
   polygcd: 'NWD', resultant: 'rugownik', trigexpand: 'rozwiń trygonometrycznie', trigreduce: 'linearyzuj', expandlog: 'rozwiń logarytmy',
   clear: 'usuń zmienne', who: 'zmienne', sum: 'sum', product: 'prod', dsolve: 'dsolve',
+  gradient: '∇', divergence: 'div', curl: 'rot', laplacian: 'Δ', potential: 'potencjał', jacobian: 'jakobian', hessian: 'hesjan',
+  directional: 'pochodna kierunkowa', tangentplane: 'płaszczyzna styczna', arclength: 'długość łuku', curvature: 'krzywizna',
+  lineintegral: 'całka krzywoliniowa', wronskian: 'wrońskian', laplace: 'ℒ', ilaplace: 'ℒ⁻¹', ztrans: '𝒵', iztrans: '𝒵⁻¹',
+  fourierseries: 'szereg Fouriera', legendre: 'P', chebyshevt: 'T', chebyshevu: 'U', hermite: 'H', laguerre: 'L',
+  bernoulli: 'B', stirling1: 's', stirling2: 'S', bell: 'Bell', partitions: 'p',
 };
 const ID: Record<string, string> = { pi: 'π', inf: '∞', phi: 'φ', tau: 'τ', ans: 'ans' };
 const PREC: Record<string, number> = { rel: 0, '+': 1, '-': 1, '*': 2, '/': 2, '.*': 2, './': 2, '\\': 2, neg: 3, '^': 4, '.^': 4, post: 5 };
