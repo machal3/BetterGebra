@@ -197,7 +197,7 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 .b-pt { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 
 /* ---------- Side panel: history and examples ---------- */
-.b-history { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.b-history { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 0; padding: 0; list-style: none; }
 .b-history-row { padding: 4px 8px 4px 6px; }
 .b-history-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: var(--b-r-sm); background: var(--b-fill); color: var(--b-icon); }
 .b-history-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: var(--b-fs-sm)/18px var(--b-mono); }
