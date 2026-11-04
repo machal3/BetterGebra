@@ -9,7 +9,7 @@ import type { Dot, RealFunction } from '../math';
 import { compiled, type Compiled } from '../model';
 import { activeFn, state, type AxisUnit, type FnState } from '../state';
 import { paintDomain } from './domain';
-import { dashPattern, dot, drawAxes, drawGrid, readTheme, traceCurve, type Theme } from './plot2d';
+import { STROKE, dashPattern, dot, drawAxes, drawGrid, ink, readTheme, traceCurve, type Theme } from './plot2d';
 import { drawParametric, paintCondition, type SetFound } from './sets';
 import { NO_INSET, Viewport, axisSteps, minorOf, type Inset } from './viewport';
 
@@ -107,19 +107,27 @@ export class Scene {
       }
       for (const { f, c } of graphs) {
         ctx.beginPath();
-        ctx.lineWidth = f.width + (f === active ? 1 : 0);
-        ctx.strokeStyle = f.color;
-        ctx.setLineDash(dashPattern(f.dash, f.width));
         for (const e of traceCurve(ctx, vp, c.fn!)) ends.push({ ...e, color: f.color, fn: c.fn!, expr: f.expression });
+        const color = ink(f.color);
+        // The active graph among several: a soft halo of its colour under the line (the line keeps its width).
+        if (f === active && graphs.length > 1) {
+          ctx.save();
+          ctx.globalAlpha = STROKE.haloAlpha; ctx.lineWidth = f.width + STROKE.halo; ctx.strokeStyle = color;
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.lineWidth = f.width;
+        ctx.strokeStyle = color;
+        ctx.setLineDash(dashPattern(f.dash, f.width));
         ctx.stroke();
+        ctx.setLineDash([]);
       }
-      ctx.setLineDash([]);
     }
     this.ends = ends;
     // Roots and intersections: small neutral dots, so they don't read as hollow endpoints (a set draws its own points).
-    if (!activeRow?.c.set) for (const m of this.activeAnalysis?.marks ?? []) dot(ctx, vp, m.x, m.y, 3.5, theme.label, theme.bg);
+    if (!activeRow?.c.set) for (const m of this.activeAnalysis?.marks ?? []) dot(ctx, vp, m.x, m.y, STROKE.end, theme.label, theme.bg);
     // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
-    for (const e of ends) dot(ctx, vp, e.x, e.y, 4, e.closed ? e.color : theme.bg, e.color);
+    for (const e of ends) { const c = ink(e.color); dot(ctx, vp, e.x, e.y, STROKE.end, e.closed ? c : theme.bg, c); }
     this.drawHover();
     this.onDrawn();
   }
@@ -135,8 +143,8 @@ export class Scene {
     if (!hit) { tip.hidden = true; return; }
     const vp = this.vp, hx = vp.px(hit.x), hy = vp.py(hit.y);
     if (hit.dot) {
-      h.beginPath(); h.arc(hx, hy, 5, 0, Math.PI * 2);
-      h.fillStyle = hit.color; h.fill();
+      h.beginPath(); h.arc(hx, hy, STROKE.hover, 0, Math.PI * 2);
+      h.fillStyle = ink(hit.color); h.fill();
       h.lineWidth = 2; h.strokeStyle = this.theme.bg; h.stroke();
     }
     tip.hidden = false;

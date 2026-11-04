@@ -10,11 +10,31 @@ export interface Theme { bg: string; gridMinor: string; gridMajor: string; axis:
 export let LABEL = '500 11px "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif';
 export let SERIF = 'italic 15px "Cambria Math", "STIX Two Math", serif';
 
+/**
+ * One look for every plot (Wykresy, Zespolone, the calculator's cards): curves 2.5px with round ends, helper and
+ * dashed curves thinner, the ends of pieces 4px, notable points 5px, the point read under the cursor 5px with a
+ * ring in the background colour, the active graph lifted by a soft halo of its own colour instead of a thicker line.
+ */
+export const STROKE = { curve: 2.5, helper: 1.5, dashed: 2, end: 4, point: 5, hover: 5, halo: 6, haloAlpha: 0.14 } as const;
+
+/** How far curve colours are lifted towards white (0 light, ~0.2 dark: `--curve-mix`), so they keep their contrast on a dark canvas. */
+let LIFT = 0;
+/** A curve's colour as drawn in the current theme: the palette's hex lifted in dark mode, the same mix as `color-mix(in srgb, c var(--curve-mix), white)` in CSS. */
+export function ink(c: string): string {
+  if (!LIFT) return c;
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+  if (!m) return c;
+  const h = m[1].length === 3 ? [...m[1]].map(d => d + d).join('') : m[1];
+  return `#${[0, 2, 4].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * (1 - LIFT) + 255 * LIFT).toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** The canvas colours and fonts from the CSS tokens (styles/tokens.css); read again when the theme changes. */
 export function readTheme(): Theme {
   const s = getComputedStyle(document.documentElement), v = (k: string) => s.getPropertyValue(`--${k}`).trim();
   if (v('b-font')) LABEL = `500 11px ${v('b-font')}`;
   if (v('b-math')) SERIF = `italic 15px ${v('b-math')}`;
+  const mix = parseFloat(v('curve-mix'));
+  LIFT = mix >= 0 && mix <= 100 ? 1 - mix / 100 : 0;
   return { bg: v('plot-bg'), gridMinor: v('grid-minor'), gridMajor: v('grid-major'), axis: v('axis'), label: v('plot-label') };
 }
 

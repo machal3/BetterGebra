@@ -9,7 +9,7 @@ import type { Handoff, Mark, PanelMode, Plot, Series } from '../../cas/engine';
 import { format, piLabel } from '../../format';
 import { compile, type RealFunction } from '../../math';
 import { compileRow, type ConditionSet } from '../../model';
-import { LABEL, dot, drawAxes, drawGrid, readTheme, traceCurve, type AxesOptions, type Theme } from '../../render/plot2d';
+import { LABEL, STROKE, dot, drawAxes, drawGrid, ink, readTheme, traceCurve, type AxesOptions, type Theme } from '../../render/plot2d';
 import { paintCondition } from '../../render/sets';
 import { Viewport, axisSteps, panned, zoomed } from '../../render/viewport';
 import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../../state';
@@ -24,12 +24,14 @@ export function redrawCalcPlots(): void {
 }
 
 export const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
+/** The colour as drawn on the canvas (lifted in dark mode); the legend and the tooltip lift `color` in CSS. */
+const paint = (i: number) => ink(color(i));
 // Only the major grid lines: a card is small, and the minor ones turned it grey.
 const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: false, halo: false });
 /** Where each mode of the graph panel lives, for the button and the toast. */
 export const PANEL: Record<PanelMode, { to: string; name: string }> = { graph: { to: 'Wykresach', name: 'Wykresy' }, complex: { to: 'Zespolonych', name: 'Zespolone' } };
 /** A function row as the graph panel keeps it, for compiling a region the way Wykresy does. */
-const row = (expression: string, c: string): FnState => ({ id: -1, expression, color: c, visible: true, from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2, dash: '' });
+const row = (expression: string, c: string): FnState => ({ id: -1, expression, color: c, visible: true, from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: STROKE.curve, dash: '' });
 
 /** What goes to the graph panel: the plot's own hand-off, or else its curves y = f(x) to Wykresy. */
 export function handoff(p: Plot): Handoff {
@@ -123,15 +125,15 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     // inequality solutions and one standard deviation: shaded across the whole height
     for (const [a, b] of p.bands) {
       const X0 = Math.max(-10, v.px(a)), X1 = Math.min(W + 10, v.px(b));
-      if (X1 > X0) { ctx.globalAlpha = 0.08; ctx.fillStyle = color(0); ctx.fillRect(X0, 0, X1 - X0, H); ctx.globalAlpha = 1; }
+      if (X1 > X0) { ctx.globalAlpha = 0.08; ctx.fillStyle = paint(0); ctx.fillRect(X0, 0, X1 - X0, H); ctx.globalAlpha = 1; }
     }
     drawGrid(ctx, v, theme, OPTIONS(!!p.plane, xUnit));
     for (const r of regions) { ctx.save(); paintCondition(ctx, v, theme, r.f, r.set, undefined, dragging); ctx.restore(); }
     for (const b of p.bars) {
       const X0 = v.px(b.x0) + 1.5, X1 = v.px(b.x1) - 1.5, Y = v.py(b.h), Y0 = v.py(0);
       ctx.beginPath(); ctx.roundRect(X0, Y, X1 - X0, Y0 - Y, [4, 4, 0, 0]);
-      ctx.globalAlpha = 0.3; ctx.fillStyle = color(0); ctx.fill();
-      ctx.globalAlpha = 1; ctx.strokeStyle = color(0); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.globalAlpha = 0.3; ctx.fillStyle = paint(0); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = paint(0); ctx.lineWidth = 1.5; ctx.stroke();
     }
     for (const f of p.fills) fillArea(v, f.series, f.a, f.b, f.to);
     drawAxes(ctx, v, theme, OPTIONS(!!p.plane, xUnit));
@@ -155,23 +157,23 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
       ctx.beginPath();
       for (let i = 0; i < s.pts.length; i += 2) { const X = v.px(s.pts[i]), Y = v.py(s.pts[i + 1]); if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }
       if (!s.open) ctx.closePath();
-      const c = color(s.color ?? 0);
+      const c = paint(s.color ?? 0);
       if (s.fill) { ctx.globalAlpha = 0.14; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.setLineDash(s.dash ? [6, 5] : []); ctx.lineWidth = s.open ? 1.5 : 2; ctx.strokeStyle = c; ctx.stroke(); ctx.setLineDash([]);
     }
 
     p.series.forEach((s, i) => { if (!hidden.has(i)) drawSeries(v, s, i, theme); });
 
-    for (const a of p.vectors) arrow(v, a.x1, a.y1, a.x2, a.y2, color(a.color ?? 0), a.label, a.dash);
+    for (const a of p.vectors) arrow(v, a.x1, a.y1, a.x2, a.y2, paint(a.color ?? 0), a.label, a.dash);
 
     // notable points; short labels stay on the plot while there are few
     const shown = p.marks.filter(m => Number.isFinite(m.y) && !(m.series !== undefined && hidden.has(m.series)) && inView(v, m.x, m.y));
     const near = hoverMark(v), lit = near ?? focus;
     for (const m of shown) {
-      const c = color(m.color ?? 0), X = v.px(m.x), Y = v.py(m.y);
+      const c = paint(m.color ?? 0), X = v.px(m.x), Y = v.py(m.y);
       if (m === lit) { ctx.beginPath(); ctx.arc(X, Y, 12, 0, 2 * Math.PI); ctx.globalAlpha = 0.18; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; }
-      if (m.kind === 'hole') dot(ctx, v, m.x, m.y, 5, theme.bg, c);
-      else dot(ctx, v, m.x, m.y, m === lit ? 6 : 5, c, theme.bg);
+      if (m.kind === 'hole') dot(ctx, v, m.x, m.y, STROKE.point, theme.bg, c);
+      else dot(ctx, v, m.x, m.y, m === lit ? STROKE.point + 1 : STROKE.point, c, theme.bg);
     }
     if (shown.length <= 8) for (const m of shown) {
       if (!m.label || m === lit) continue;
@@ -179,25 +181,25 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
       place(text, v.px(m.x), v.py(m.y), [[9, -9, 'left'], [9, 19, 'left'], [-9, -9, 'right'], [-9, 19, 'right'], [0, -15, 'center'], [0, 25, 'center']], { fill: theme.label });
     }
     // the point picked in the list says everything about itself
-    if (lit && focus === lit && !near) place(lit.label, v.px(lit.x), v.py(lit.y), [[12, -12, 'left'], [-12, -12, 'right'], [12, 22, 'left'], [-12, 22, 'right']], { fill: color(lit.color ?? 0), strong: true, pill: true }, true);
+    if (lit && focus === lit && !near) place(lit.label, v.px(lit.x), v.py(lit.y), [[12, -12, 'left'], [-12, -12, 'right'], [12, 22, 'left'], [-12, 22, 'right']], { fill: paint(lit.color ?? 0), strong: true, pill: true }, true);
     hover(v, theme, near);
   }
   const inView = (v: Viewport, x: number, y: number) => { const X = v.px(x), Y = v.py(y); return X > -8 && X < W + 8 && Y > -8 && Y < H + 8; };
 
   function drawSeries(v: Viewport, s: Series, i: number, theme: Theme): void {
-    const c = color(s.color ?? i);
+    const c = paint(s.color ?? i);
     ctx.strokeStyle = c; ctx.fillStyle = c;
     ctx.globalAlpha = s.faint ? 0.55 : 1;
     if (s.style === 'dots' || s.style === 'stems') {
       for (const seg of s.segs) for (let k = 0; k < seg.length; k += 2) {
         const X = v.px(seg[k]), Y = v.py(seg[k + 1]);
-        if (s.style === 'stems') { ctx.beginPath(); ctx.moveTo(X, v.py(0)); ctx.lineTo(X, Y); ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (s.style === 'stems') { ctx.beginPath(); ctx.moveTo(X, v.py(0)); ctx.lineTo(X, Y); ctx.lineWidth = STROKE.helper; ctx.stroke(); }
         ctx.beginPath(); ctx.arc(X, Y, 3.5, 0, 2 * Math.PI); ctx.fill();
       }
       ctx.globalAlpha = 1;
       return;
     }
-    ctx.lineWidth = s.faint ? 1.75 : 2.5;
+    ctx.lineWidth = s.faint ? STROKE.helper : s.dash ? STROKE.dashed : STROKE.curve;
     ctx.lineJoin = ctx.lineCap = 'round';
     ctx.setLineDash(s.dash ? [8, 6] : []);
     ctx.beginPath();
@@ -207,7 +209,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     ctx.stroke();
     ctx.setLineDash([]);
     // where a traced piece ends: filled when the point belongs to the graph, hollow when it doesn't
-    if (!s.dash) for (const d of ends) dot(ctx, v, d.x, d.y, 3.5, d.closed ? c : theme.bg, c);
+    if (!s.dash) for (const d of ends) dot(ctx, v, d.x, d.y, STROKE.end, d.closed ? c : theme.bg, c);
     ctx.globalAlpha = 1;
   }
 
@@ -237,7 +239,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     }
     flush();
     const Y0 = clampY(v.py(0));
-    for (const [clipY, clipH, c] of to === undefined ? [[0, Y0, color(0)], [Y0, H - Y0, color(1)]] as const : [[0, H, color(0)]] as const) {
+    for (const [clipY, clipH, c] of to === undefined ? [[0, Y0, paint(0)], [Y0, H - Y0, paint(1)]] as const : [[0, H, paint(0)]] as const) {
       ctx.save();
       ctx.beginPath(); ctx.rect(0, clipY, W, clipH); ctx.clip();
       ctx.globalAlpha = 0.2; ctx.fillStyle = c; ctx.fill(path);
@@ -249,7 +251,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     const X1 = v.px(x1), Y1 = v.py(y1), X2 = v.px(x2), Y2 = v.py(y2), a = Math.atan2(Y2 - Y1, X2 - X1), k = 11;
     if (Math.hypot(X2 - X1, Y2 - Y1) < 1) return;
     ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 6 * Math.cos(a), Y2 - 6 * Math.sin(a));
-    ctx.setLineDash(dash ? [6, 4] : []); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = c; ctx.stroke(); ctx.setLineDash([]);
+    ctx.setLineDash(dash ? [6, 4] : []); ctx.lineWidth = STROKE.curve; ctx.lineCap = 'round'; ctx.strokeStyle = c; ctx.stroke(); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(X2, Y2);
     ctx.lineTo(X2 - k * Math.cos(a - 0.4), Y2 - k * Math.sin(a - 0.4)); ctx.lineTo(X2 - k * Math.cos(a + 0.4), Y2 - k * Math.sin(a + 0.4));
     ctx.closePath(); ctx.fillStyle = c; ctx.fill();
@@ -331,7 +333,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
           lines.push(`x = ${at && xUnit === 'pi' && at.y === undefined ? piLabel(values[0].x) : num(values[0].x)}`); colors.push(null);
           if (at?.y !== undefined) snapRing(v, sx, at.y, theme);
           for (const { i, s, x: X, y: Y } of values) {
-            dot(ctx, v, X, Y, 4.5, color(s.color ?? i), theme.bg);
+            dot(ctx, v, X, Y, STROKE.hover, paint(s.color ?? i), theme.bg);
             lines.push(`${values.length > 1 ? `${short(s.label)}: ` : 'y = '}${num(Y)}`); colors.push(color(s.color ?? i));
           }
         } else {
@@ -508,7 +510,7 @@ function openInGraphs(p: Plot, out: Handoff, hidden: Set<number>, v: Viewport): 
   state.functions.splice(0);
   for (const r of rows) {
     addFunction(r.expr, {
-      color: color(r.color ?? r.series ?? 0), dash: r.dash ? '8 6' : '', width: r.faint ? 1.5 : 2,
+      color: color(r.color ?? r.series ?? 0), dash: r.dash ? '8 6' : '', width: r.faint ? STROKE.helper : r.dash ? STROKE.dashed : STROKE.curve,
       visible: r.series === undefined || !hidden.has(r.series), from: r.from, to: r.to,
     });
   }

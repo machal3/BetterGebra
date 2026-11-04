@@ -105,7 +105,7 @@ export function addFunction(expression = '', settings: Partial<Omit<FnState, 'id
   const color = PALETTE.find(c => !state.functions.some(g => g.color === c)) ?? PALETTE[state.functions.length % PALETTE.length];
   const f: FnState = {
     id: nextId++, expression, color, visible: true,
-    from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2, dash: '',
+    from: -Infinity, to: Infinity, fromOpen: false, toOpen: false, width: 2.5, dash: '',
     ...Object.fromEntries(Object.entries(settings).filter(([, v]) => v !== undefined)),
   };
   if (!(f.from < f.to)) { f.from = -Infinity; f.to = Infinity; }

@@ -155,10 +155,12 @@
 
   /* Mathematics on the canvas (read by the renderers through getComputedStyle) */
   --plot-bg: #ffffff;
-  --grid-minor: #f3f3f3;
-  --grid-major: #e6e6e6;
+  --grid-minor: #f4f4f4;
+  --grid-major: #e8e8e8;
   --axis: #8a8a8a;
   --plot-label: #737373;
+  /* how much of a curve's own colour is kept (the rest is white): the palette is tuned for white, a dark canvas lifts it */
+  --curve-mix: 100%;
   --geo-free: #3e63dd;
   --geo-polygon: #e5631c;
   --geo-angle: #30a46c;
@@ -214,6 +216,7 @@
   --grid-major: #2a2a2e;
   --axis: #77777d;
   --plot-label: #8e8e94;
+  --curve-mix: 80%;
   --geo-free: #6e8ff0;
   --geo-polygon: #f0844a;
   --geo-angle: #3fbf82;

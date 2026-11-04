@@ -114,7 +114,7 @@ export function Analysis() {
     <section id="analysis" className="b-analysis" aria-label="Badanie funkcji" aria-live="polite">
       <header className="b-analysis-head">
         <h2>Badanie</h2>
-        <div className="b-analysis-target" style={{ '--c': view.color || 'transparent' } as React.CSSProperties}>
+        <div className="b-analysis-target" style={(view.color ? { '--c': view.color } as React.CSSProperties : { '--c': 'transparent', '--curve-mix': '100%' } as React.CSSProperties)}>
           {view.math ? <span dangerouslySetInnerHTML={{ __html: view.math }} /> : <span className="b-muted">brak funkcji</span>}
         </div>
         <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij badanie" title="Zamknij  B" onClick={close} />

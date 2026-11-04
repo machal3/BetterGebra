@@ -2,7 +2,7 @@
 import type { Complex } from '../math';
 import type { ConditionSet, ParametricSet } from '../model';
 import type { FnState } from '../state';
-import { dashPattern, dot, type Theme } from './plot2d';
+import { STROKE, dashPattern, dot, ink, type Theme } from './plot2d';
 import type { Viewport } from './viewport';
 
 /** What a condition's drawing found, for the analysis text. */
@@ -128,7 +128,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
   // Fill, one pixel per node, centred on it.
   const off = document.createElement('canvas');
   off.width = w; off.height = h;
-  const c = off.getContext('2d')!, img = c.createImageData(w, h), d = img.data, [r, g, b] = rgb(f.color);
+  const c = off.getContext('2d')!, img = c.createImageData(w, h), d = img.data, [r, g, b] = rgb(ink(f.color));
   let inside = 0, valid = 0;
   for (let k = 0; k < n; k++) {
     const yes = all ? Number.isFinite(eqRe[k]) && rest[k] <= restTol && margin[k] > 0 : !equation && margin[k] > 0;
@@ -144,7 +144,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
   const stroke = (lines: [number, number][][], strict: (line: [number, number][]) => boolean) => {
     for (const line of lines) {
       const dashed = strict(line);
-      ctx.lineWidth = f.width; ctx.strokeStyle = f.color;
+      ctx.lineWidth = f.width; ctx.strokeStyle = ink(f.color);
       ctx.setLineDash(dashed ? STRICT_DASH(f.width) : dashPattern(f.dash, f.width));
       ctx.lineCap = dashed ? 'butt' : 'round';
       ctx.beginPath(); ctx.moveTo(...line[0]);
@@ -166,7 +166,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
     }
     if (!hit.length) return null;
     if (hit.length > 12) {
-      ctx.fillStyle = f.color; ctx.globalAlpha = strict ? 0.45 : 1;
+      ctx.fillStyle = ink(f.color); ctx.globalAlpha = strict ? 0.45 : 1;
       ctx.beginPath();
       for (const [x, y] of hit) { ctx.moveTo(x + f.width / 2, y); ctx.arc(x, y, f.width / 2, 0, 2 * Math.PI); }
       ctx.fill(); ctx.globalAlpha = 1;
@@ -180,7 +180,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
       const c = [1, 2, 3, 4, 6, 8, 12, 100].map(d => Math.round(v * d) / d).find(c => Math.abs(c - v) <= cell && size(at2(c)) <= size(z));
       if (c !== undefined) z = at2(c);
     }
-    dot(ctx, vp, z[0], z[1], 4.5, strict ? theme.bg : f.color, strict ? f.color : theme.bg);
+    dot(ctx, vp, z[0], z[1], STROKE.point, strict ? theme.bg : ink(f.color), strict ? ink(f.color) : theme.bg);
     return { z, sure: size(z) === 0 };
   };
 
@@ -192,7 +192,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
     else lines = [...bothZero(contour(eqRe, w, h, s, at(0)), at(1), 1e-6 * im), ...bothZero(contour(eqIm, w, h, s, at(1)), at(0), 1e-6 * re)];
     if (chained) lines = bothZero(lines, (x, y) => holds(judge(x, y)) ? 0 : 1, 0.5);
     const solutions = (part < 0 ? points?.solutions ?? [] : []).filter(({ z }) => !chained || holds(judgeZ(z)));
-    for (const { z } of solutions) dot(ctx, vp, z[0], z[1], 4.5, f.color, theme.bg);
+    for (const { z } of solutions) dot(ctx, vp, z[0], z[1], STROKE.point, ink(f.color), theme.bg);
     if (!lines.length && !solutions.length) {
       const size = Float64Array.from(eqRe, (v, k) => margin[k] === Infinity || margin[k] >= -1e-9 ? Math.hypot(v, eqIm[k], rest[k]) : NaN);
       single = touching(size, false, z => { const r = judgeZ(z); return [Math.hypot(...r.eq!), r.rest]; });
@@ -208,7 +208,7 @@ export function paintCondition(ctx: CanvasRenderingContext2D, vp: Viewport, them
       if (strict ? inside > 0 : inside === 0) { const p = touching(edge, strict, z => [judgeZ(z).c, 0]); if (!strict) single = p; }
     }
     // z ≠ 0, z ≠ 1 + i: the excluded single points, as hollow dots.
-    for (const z of points?.excluded ?? []) dot(ctx, vp, z[0], z[1], 4.5, theme.bg, f.color);
+    for (const z of points?.excluded ?? []) dot(ctx, vp, z[0], z[1], STROKE.point, theme.bg, ink(f.color));
   }
   ctx.restore();
   return { all, inside, valid, lines: lines.length + (thickCurve ? 1 : 0), single };
@@ -231,10 +231,10 @@ export function drawParametric(ctx: CanvasRenderingContext2D, vp: Viewport, them
   const P = (z: Complex): [number, number] => [vp.px(z[0]), vp.py(z[1])];
   const ok = (p: [number, number]) => Math.abs(p[0]) < L && Math.abs(p[1]) < L;
   ctx.save();
-  ctx.strokeStyle = ctx.fillStyle = f.color; ctx.lineWidth = f.width; ctx.lineJoin = ctx.lineCap = 'round';
+  ctx.strokeStyle = ctx.fillStyle = ink(f.color); ctx.lineWidth = f.width; ctx.lineJoin = ctx.lineCap = 'round';
   if (!unknowns.length) {
     const z = at();
-    dot(ctx, vp, z[0], z[1], 5, f.color, theme.bg);
+    dot(ctx, vp, z[0], z[1], STROKE.point, ink(f.color), theme.bg);
   } else if (unknowns.length === 1) {
     ctx.setLineDash(dashPattern(f.dash, f.width));
     ctx.beginPath();
@@ -263,7 +263,7 @@ export function drawParametric(ctx: CanvasRenderingContext2D, vp: Viewport, them
     ctx.setLineDash([]);
     // Ends of a finite interval, like a graph's domain: filled when the end belongs, hollow when open.
     for (const [end, open] of [[f.from, f.fromOpen], [f.to, f.toOpen]] as const) {
-      if (Number.isFinite(end)) { const z = at(end); dot(ctx, vp, z[0], z[1], 4, open ? theme.bg : f.color, f.color); }
+      if (Number.isFinite(end)) { const z = at(end); dot(ctx, vp, z[0], z[1], STROKE.end, open ? theme.bg : ink(f.color), ink(f.color)); }
     }
   } else {
     // Two unknowns: fill the image of every cell of a 160 × 160 grid, all with the same orientation, so where the

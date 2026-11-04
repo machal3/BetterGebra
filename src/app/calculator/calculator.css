@@ -207,20 +207,20 @@ kbd {
   font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
 }
 .b-cplot-tip .row { display: flex; align-items: center; gap: 6px; }
-.b-cplot-tip .row:not(.head)::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.b-cplot-tip .row:not(.head)::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
 .b-cplot-tip .head { color: var(--b-text); }
 .b-cplot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
 .b-cplot-legend { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
 /* a series that can be hidden is a chip; a fill or shape is only named */
 span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-ink); }
 .b-chip.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.35; }
-.b-sw { flex: none; width: 16px; height: 3px; border-radius: 2px; background: var(--c); }
-.b-sw.is-dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); }
+.b-sw { flex: none; width: 16px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
+.b-sw.is-dash { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--c) var(--curve-mix), white) 0 5px, transparent 5px 8px); }
 .b-sw.is-dot { width: 8px; height: 8px; border-radius: 50%; }
-.b-sw.is-area { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: inset 0 0 0 1.5px var(--c); }
+.b-sw.is-area { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, color-mix(in srgb, var(--c) var(--curve-mix), white) 35%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) var(--curve-mix), white); }
 .b-cplot-points { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
 
-.b-pt { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.b-pt { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
 
 /* ---------- Side panel: history and examples ---------- */
 .b-history { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 0; padding: 0; list-style: none; }
