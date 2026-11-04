@@ -12,7 +12,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { IconArrowRight, IconBook, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconSearch, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row, Step } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
@@ -201,7 +201,7 @@ const Placeholder = () => (
 );
 
 const PALETTE_KEY = 'bettergebra.calc.palette';
-const readOpen = () => { try { return localStorage.getItem(PALETTE_KEY) !== '0'; } catch { return true; } };
+const readOpen = () => { try { return localStorage.getItem(PALETTE_KEY) === '1'; } catch { return false; } };
 
 /** A template (or plain text) at the field's caret, the selection in its first □; the next □ is selected, to be typed over. */
 function place(el: HTMLTextAreaElement, template: string, setValue: (v: string) => void) {
@@ -311,6 +311,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
   return (
     <form className="b-composer" role="search" aria-label="Obliczenie" onSubmit={e => { e.preventDefault(); submit(); }}>
       <div className="b-composer-field">
+        <span className="b-composer-icon" aria-hidden="true"><IconSearch size={18} /></span>
         <textarea
           ref={input}
           id="calc-input"
@@ -346,7 +347,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
               options={PALETTE.map(p => ({ value: p.id, label: p.name, controls: 'calc-palette' }))}
             />
           )
-          : <Hint />}
+          : null}
         <div className="b-composer-tools">
           <div className="b-digits">
             <span id="calc-digits-label">Cyfry</span>
@@ -414,14 +415,10 @@ function Suggestions({ run }: { run: (q: string) => void }) {
   // another topic: its tiles arrive one by one
   useLayoutEffect(() => cascade(grid.current), [topic]);
   return (
-    <section className="b-calc-suggest" aria-labelledby="calc-suggest-title">
-      <header className="b-calc-suggest-head">
-        <h2 id="calc-suggest-title">Przykłady</h2>
-        <span className="b-calc-suggest-hint">Kliknij, aby obliczyć</span>
-      </header>
+    <section className="b-calc-suggest" aria-label="Przykłady">
       {/* all the topics in view, wrapped: sixteen tabs in one row would run off the card */}
       <div className="b-calc-topics" role="tablist" aria-label="Rodzaj przykładów">
-        {EXAMPLES.map(([t, items]) => (
+        {EXAMPLES.map(([t]) => (
           <button key={t} type="button" role="tab" className="b-chip b-calc-topic" data-topic={t} aria-selected={t === topic} aria-controls="calc-examples"
             tabIndex={t === topic ? 0 : -1} onClick={() => setTopic(t)} onKeyDown={e => {
               // ← → walk the topics, as tabs do
@@ -432,15 +429,16 @@ function Suggestions({ run }: { run: (q: string) => void }) {
               setTopic(next);
               (e.currentTarget.parentElement?.querySelector(`[data-topic="${next}"]`) as HTMLElement | null)?.focus();
             }}>
-            {t}<span className="b-calc-topic-count">{items.length}</span>
+            {t}
           </button>
         ))}
       </div>
       <div ref={grid} id="calc-examples" className="b-calc-tiles" role="tabpanel" aria-label={topic}>
         {items.map(([q, label]) => (
           <button key={q} type="button" className="b-row b-calc-tile" onClick={() => run(q)}>
-            <span className="b-calc-tile-label">{label}</span>
+            <span className="b-calc-tile-icon" aria-hidden="true"><IconSearch size={14} /></span>
             <span className="b-calc-tile-query">{q}</span>
+            <span className="b-calc-tile-label">{label}</span>
             <span className="b-calc-tile-go" aria-hidden="true"><IconArrowRight size={14} /></span>
           </button>
         ))}
