@@ -9,13 +9,13 @@
  *     is stamped and a gleam crosses it; the notes settle last;
  *  4. the cards that explain it follow, quieter.
  *
- * Beyond the card, on the page's grid, inkwave.ts plays the same moment large: the line runs to the screen's
- * edges, snaps into ink dust and sends a wave across the grid.
+ * Before it, on the page's grid, inkwave.ts lets a drop of ink fall where the card will be: it lands as that very
+ * line, runs out to the screen's edges, and sends a wave across the grid.
  *
  * The values are never animated — each symbol is shown as it is, only uncovered. With reduced motion nothing moves.
  */
 import { reduced } from '../motion';
-import { inkWave } from './inkwave';
+import { FALL, inkWave } from './inkwave';
 
 const OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const SPRING = 'linear(0, 0.18 6%, 0.62 16%, 0.92 26%, 1.03 36%, 1.04 44%, 1.01 58%, 0.995 72%, 1)';
@@ -104,8 +104,8 @@ function openAnswer(card: HTMLElement, t0: number): void {
   // the card: shut on the line, opened between the edges in step with them, then its shadow given back
   const pad = 40, shut = `inset(${mid - 0.5}px ${-pad}px ${mid - 0.5}px ${-pad}px)`;
   play(card, [
-    { clipPath: shut, transform: 'scale(0.994)', offset: 0 },
-    { clipPath: shut, transform: 'scale(0.994)', offset: at(DRAW), easing: 'cubic-bezier(0.7, 0, 0.2, 1)' },
+    { clipPath: shut, transform: 'scale(0.994)', opacity: 0, offset: 0 },
+    { clipPath: shut, transform: 'scale(0.994)', opacity: 1, offset: at(DRAW), easing: 'cubic-bezier(0.7, 0, 0.2, 1)' },
     { clipPath: `inset(0px ${-pad}px 0px ${-pad}px)`, transform: 'none', offset: at(DRAW + SPLIT) },
     { clipPath: `inset(${-pad}px)`, transform: 'none', offset: 1 },
   ], { duration: ALL, delay: t0, easing: 'linear' });
@@ -152,14 +152,16 @@ export function revealAnswer(results: HTMLElement | null): void {
   const calc = results.closest('.b-calc') ?? document;
   dropQuestion(calc, results);
   const primary = results.querySelector<HTMLElement>(':scope > .b-pod.is-primary');
-  if (primary) openAnswer(primary, 120);
+  // a drop falls onto the grid first (inkwave.ts); the card's line starts as it lands
+  const impact = document.querySelector('.b-calc-backdrop') ? 80 + FALL : 120;
+  if (primary) openAnswer(primary, impact);
   // what explains it follows, quieter and after the answer has opened
   let i = 0;
   for (const child of Array.from(results.children)) {
     if (child === primary || child.matches('.b-calc-query, .b-pod-seam')) continue;
     // (no blur: these are large, a plot among them, and a filter over them would be repainted every frame)
     play(child, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }],
-      { duration: 560, delay: (primary ? 440 : 80) + Math.min(i++, 6) * 60, easing: OUT });
+      { duration: 560, delay: (primary ? impact + 320 : 80) + Math.min(i++, 6) * 60, easing: OUT });
   }
   for (const el of results.querySelectorAll('.b-calc-query-label, .b-calc-query-note, .b-calc-query .ui-mac')) {
     play(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 200, easing: 'ease' });

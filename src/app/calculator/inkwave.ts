@@ -2,16 +2,18 @@
  * The answer's moment across the whole page, drawn under the cards on one canvas laid over the calculator's
  * drifting grid (Backdrop): in ink only, as the chrome is monochrome.
  *
- *  1. the hairline the card opens out of shoots from the card's middle to both edges of the screen;
- *  2. as the card opens it snaps: the stretch beyond the card falls apart into ink dust, a spray off its ends;
- *  3. a wave runs from the card across the page, lighting up the grid's lines as it passes and its crossings
+ *  1. a drop of ink falls onto the lattice where the answer will be, stretching as it speeds up;
+ *  2. it lands: it flattens into the hairline the card opens out of, which runs out to both edges of the screen
+ *     and then withdraws to the card, and a few small ripples ring the point of impact;
+ *  3. a wave runs from there across the page, lighting up the grid's lines as it passes and its crossings
  *     flaring like points of a lattice; an echo follows, fainter.
  *
- * About 1.3 s in all, one requestAnimationFrame loop, then the canvas is gone. Returns a cancel.
+ * About 1.5 s in all, one requestAnimationFrame loop, then the canvas is gone. `impact` is when the drop lands
+ * (ms from now), the moment the card's own line starts; returns a cancel.
  */
-const LINE = 260, WAVE = 1150, ECHO = 200, DUST = 1000;
-
-interface Mote { x: number; y: number; vx: number; vy: number; r: number; born: number; life: number }
+/** The drop's fall, the line's run to the edges, the wave and its echo; the splash's ripples. */
+export const FALL = 230;
+const LINE = 260, WAVE = 1150, ECHO = 200, SPLASH = 460;
 
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const easeOutQuint = (t: number) => 1 - (1 - t) ** 5;
@@ -25,7 +27,7 @@ function inkOf(el: Element): [number, number, number, number] {
   return h ? [parseInt(h[1].slice(0, 2), 16), parseInt(h[1].slice(2, 4), 16), parseInt(h[1].slice(4, 6), 16), 1] : [0, 0, 0, 0.88];
 }
 
-export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number): () => void {
+export function inkWave(backdrop: HTMLElement, card: HTMLElement, impact: number): () => void {
   const box = backdrop.getBoundingClientRect();
   if (!box.width || !box.height) return () => {};
   // At 1× even on a dense screen: a glow of faint lines and dust under the cards loses nothing to the eye, and a
@@ -53,29 +55,10 @@ export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number)
     return at0 ? [mod(at0.left - box.left - shift), mod(at0.top - box.top + shift)] : [0, 0];
   };
 
-  const t0 = performance.now() + delay, snap = t0 + LINE;
-  let motes: Mote[] | null = null, frame = 0;
-
-  const burst = (now: number) => {
-    const out: Mote[] = [];
-    // the line beyond the card falls apart where it lies
-    for (let x = 0; x < W; x += 3.5) {
-      if (x > left - 2 && x < right + 2) continue;
-      const side = x < left ? -1 : 1, near = 1 - Math.min(1, Math.abs(x - (side < 0 ? left : right)) / (W / 2));
-      if (Math.random() > 0.45 + 0.5 * near) continue;
-      // it crumbles from the card outwards: the farther, the later it lets go
-      const lag = (1 - near) * 140;
-      out.push({ x, y: cy + (Math.random() - 0.5), vx: side * (0.01 + Math.random() * 0.1), vy: (Math.random() - 0.5) * (0.2 + 0.5 * near), r: 0.7 + Math.random() * 1.2, born: now + lag, life: DUST * (0.55 + Math.random() * 0.45) });
-    }
-    // a spray off the card's two ends
-    for (const [x, side] of [[left, -1], [right, 1]] as const) {
-      for (let i = 0; i < 26; i++) {
-        const a = (Math.random() - 0.5) * 1.5, v = 0.25 + Math.random() * 0.85;
-        out.push({ x, y: cy, vx: side * Math.cos(a) * v, vy: Math.sin(a) * v, r: 0.7 + Math.random() * 1.4, born: now, life: 500 + Math.random() * 450 });
-      }
-    }
-    return out;
-  };
+  const t0 = performance.now() + impact, snap = t0 + LINE, wave0 = t0 + 40, end = wave0 + ECHO + WAVE;
+  // from a little under the field, or as far up as there is room
+  const height = Math.max(60, Math.min(260, cy - 24));
+  let frame = 0;
 
   /** Paths by brightness: a few fills a frame instead of one per dot. */
   const LEVELS = 7;
@@ -146,40 +129,48 @@ export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number)
   const step = (now: number) => {
     frame = 0;
     ctx.clearRect(0, 0, W, H);
+    // 1. the drop, falling faster and faster (t²), drawn out along its fall with a short fading trail
+    if (now >= t0 - FALL && now < t0) {
+      const p = (now - (t0 - FALL)) / FALL, y = cy - height * (1 - p * p), stretch = 1 + 1.6 * p;
+      const trail = ctx.createLinearGradient(0, y - 34 * p - 4, 0, y);
+      trail.addColorStop(0, ink(0)); trail.addColorStop(1, ink(0.35));
+      ctx.fillStyle = trail;
+      ctx.fillRect(cx - 1, y - 34 * p - 4, 2, 34 * p + 4);
+      ctx.fillStyle = ink(0.9);
+      ctx.beginPath(); ctx.ellipse(cx, y, 3.4 / Math.sqrt(stretch), 3.4 * stretch, 0, 0, Math.PI * 2); ctx.fill();
+    }
     if (now < t0) { frame = requestAnimationFrame(step); return; }
-    // 1. the line, out from the card's middle to both edges
-    if (now < snap + 160) {
-      const p = Math.min(1, (now - t0) / LINE), reach = easeOutQuint(p) * Math.max(cx, W - cx);
-      // after the snap the line is gone from the card's ends outwards, where the dust takes over
-      const gone = now < snap ? 0 : easeOut((now - snap) / 160) * reach;
+    // 2. it lands: flattened into the line, which runs out to the edges and then withdraws to the card
+    const since = now - t0;
+    if (since < 90) {
+      const k = since / 90;
+      ctx.fillStyle = ink(0.9 * (1 - k));
+      ctx.beginPath(); ctx.ellipse(cx, cy, 3.4 + 22 * easeOut(k), Math.max(0.5, 3.4 * (1 - k)), 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (now < snap + 200) {
+      const p = Math.min(1, since / LINE), reach = easeOutQuint(p) * Math.max(cx, W - cx);
+      const gone = now < snap ? 0 : easeOut((now - snap) / 200) * reach;
       const grad = ctx.createLinearGradient(cx - reach, 0, cx + reach, 0);
-      grad.addColorStop(0, ink(0)); grad.addColorStop(0.15, ink(0.75)); grad.addColorStop(0.85, ink(0.75)); grad.addColorStop(1, ink(0));
+      grad.addColorStop(0, ink(0)); grad.addColorStop(0.15, ink(0.7)); grad.addColorStop(0.85, ink(0.7)); grad.addColorStop(1, ink(0));
       ctx.fillStyle = grad;
       const a = Math.max(cx - reach, left - gone), z = Math.min(cx + reach, right + gone);
       if (now < snap) ctx.fillRect(cx - reach, cy - 0.5, reach * 2, 1);
       else { ctx.fillRect(cx - reach, cy - 0.5, Math.max(0, a - (cx - reach)), 1); ctx.fillRect(z, cy - 0.5, Math.max(0, cx + reach - z), 1); }
     }
-    // 2–3. the snap: dust, and the waves
-    if (now >= snap) {
-      motes ??= burst(now);
-      const p = (now - snap) / WAVE, q = (now - snap - ECHO) / WAVE;
+    // the splash: three small rings round the point of impact, one after another
+    for (let i = 0; i < 3; i++) {
+      const k = (since - i * 70) / SPLASH;
+      if (k <= 0 || k >= 1) continue;
+      ctx.strokeStyle = ink(0.55 * (1 - k) ** 1.5 * (1 - i * 0.25)); ctx.lineWidth = 1.4 - 0.8 * k;
+      ctx.beginPath(); ctx.ellipse(cx, cy, (22 + i * 18) * easeOut(k), (22 + i * 18) * easeOut(k) * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    // 3. the wave and its echo
+    if (now >= wave0) {
+      const p = (now - wave0) / WAVE, q = (now - wave0 - ECHO) / WAVE;
       if (p < 1) ring(easeOut(p) * far, (1 - p) ** 1.4, now);
       if (q > 0 && q < 1) ring(easeOut(q) * far * 0.92, 0.45 * (1 - q) ** 1.6, now);
-      // the dust, sorted into a few paths by how faded it is
-      buckets.forEach((_, i) => { buckets[i] = new Path2D(); });
-      let any = false;
-      for (const m of motes) {
-        const age = now - m.born;
-        if (age < 0 || age > m.life) continue;
-        const k = age / m.life, drag = Math.exp(-age / 380), size = 2 * m.r * (1 - 0.4 * k);
-        const x = m.x + m.vx * 380 * (1 - drag), y = m.y + m.vy * 380 * (1 - drag) + 0.00002 * age * age;
-        const dot = buckets[Math.min(LEVELS - 1, Math.floor((1 - k) ** 1.5 * LEVELS))];
-        dot.moveTo(x + size / 2, y); dot.arc(x, y, size / 2, 0, Math.PI * 2);
-        any = true;
-      }
-      if (any) flush(buckets, 0.8);
     }
-    if (now < snap + ECHO + WAVE) frame = requestAnimationFrame(step);
+    if (now < end) frame = requestAnimationFrame(step);
     else canvas.remove();
   };
   frame = requestAnimationFrame(step);
