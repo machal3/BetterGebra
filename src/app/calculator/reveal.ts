@@ -1,21 +1,19 @@
 /**
- * How an answer arrives, about a second from end to end. Its motif is the line — a fraction bar, the rule of a
- * ledger — in ink only, as the chrome is monochrome:
+ * How an answer arrives: as a drop of ink falling onto the page's lattice, and the one round wave it sets off.
+ * About a second until all is in place, the wave's last light a little after.
  *
  *  1. the question as typed peels off the field and drops into the heading, blurring into its typeset form;
- *  2. a hairline is drawn across where the answer will be, then splits into the card's top and bottom edges,
- *     opening the card between them (the card is clipped, so it all runs on the compositor);
- *  3. the formula assembles symbol by symbol out of a blur, the "=" drawn out from its middle; the "Wynik" badge
- *     is stamped and a gleam crosses it; the notes settle last;
- *  4. the cards that explain it follow, quieter.
+ *  2. a drop falls onto the grid where the answer will be (inkwave.ts);
+ *  3. where it lands the card is uncovered by a circle that grows with the wave (`radiusAt`, the same radius the
+ *     wave has on the grid at that moment), its crest and a faint swell crossing the card's surface;
+ *  4. what is on the card settles in as the wave reaches it — the symbols of the formula, the "Wynik" badge
+ *     stamped with a gleam, the title, the notes — and so do the cards below, the farther the later.
  *
- * Before it, on the page's grid, inkwave.ts lets a drop of ink fall where the card will be: it lands as that very
- * line, runs out to the screen's edges, and sends a wave across the grid.
- *
- * The values are never animated — each symbol is shown as it is, only uncovered. With reduced motion nothing moves.
+ * Ink only, as the chrome is monochrome. The values are never animated: each symbol is shown as it is, only
+ * uncovered. With reduced motion nothing moves.
  */
 import { reduced } from '../motion';
-import { FALL, inkWave } from './inkwave';
+import { FALL, inkWave, radiusAt, reachAt, rippleOf, type Ripple } from './inkwave';
 
 const OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const SPRING = 'linear(0, 0.18 6%, 0.62 16%, 0.92 26%, 1.03 36%, 1.04 44%, 1.01 58%, 0.995 72%, 1)';
@@ -75,73 +73,76 @@ function dropQuestion(calc: ParentNode, results: HTMLElement): void {
   play(target, [{ opacity: 0, filter: 'blur(6px)', transform: 'translateY(-3px)' }, { opacity: 1, filter: 'blur(0)', transform: 'none' }], { duration: 420, delay: 260, easing: OUT });
 }
 
-/** 2–3. The answer's card opens out of a line and its formula assembles. */
-function openAnswer(card: HTMLElement, t0: number): void {
-  const mid = card.offsetHeight / 2, host = card.parentElement!;
-  // 240 ms: the hairline is drawn out from its middle; 360 ms: it splits into two that ride the opening edges to the
-  // card's top and bottom; then they fade as the card's shadow comes back. (The lines lie beside the card, not in
-  // it, so its clip doesn't cut them.)
-  const DRAW = 240, SPLIT = 360, FADE = 160, ALL = DRAW + SPLIT + FADE;
-  const at = (ms: number) => ms / ALL;
-  const seam = (dir: -1 | 1) => {
-    const line = document.createElement('div');
-    line.className = 'b-pod-seam';
-    Object.assign(line.style, { top: `${card.offsetTop + mid}px`, left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px` });
-    host.append(line);
-    leftovers.push(line);
-    const a = play(line, [
-      { transform: 'translateY(0) scaleX(0)', opacity: 0.75, offset: 0, easing: OUT },
-      { transform: 'translateY(0) scaleX(1)', opacity: 0.75, offset: at(DRAW), easing: 'cubic-bezier(0.7, 0, 0.2, 1)' },
-      { transform: `translateY(${dir * mid}px) scaleX(1)`, opacity: 0.55, offset: at(DRAW + SPLIT), easing: 'ease-out' },
-      { transform: `translateY(${dir * mid}px) scaleX(1)`, opacity: 0, offset: 1 },
-    ], { duration: ALL, delay: t0, easing: 'linear', fill: 'both' });
-    a.onfinish = () => line.remove();
-  };
-  seam(-1); seam(1);
-  // the same line across the whole page, and what it sets off there (inkwave.ts)
-  const backdrop = document.querySelector<HTMLElement>('.b-calc-backdrop');
-  if (backdrop) pendingWave = () => inkWave(backdrop, card, t0);
-  // the card: shut on the line, opened between the edges in step with them, then its shadow given back
-  const pad = 40, shut = `inset(${mid - 0.5}px ${-pad}px ${mid - 0.5}px ${-pad}px)`;
-  play(card, [
-    { clipPath: shut, transform: 'scale(0.994)', opacity: 0, offset: 0 },
-    { clipPath: shut, transform: 'scale(0.994)', opacity: 1, offset: at(DRAW), easing: 'cubic-bezier(0.7, 0, 0.2, 1)' },
-    { clipPath: `inset(0px ${-pad}px 0px ${-pad}px)`, transform: 'none', offset: at(DRAW + SPLIT) },
-    { clipPath: `inset(${-pad}px)`, transform: 'none', offset: 1 },
-  ], { duration: ALL, delay: t0, easing: 'linear' });
+/** How far `el` is from where the drop lands (to its middle, or to its nearest edge). */
+function distance(el: Element, ripple: Ripple, nearest = false): number {
+  const b = el.getBoundingClientRect();
+  if (!nearest) return Math.hypot(b.left + b.width / 2 - ripple.x, b.top + b.height / 2 - ripple.y);
+  const dx = Math.max(b.left - ripple.x, 0, ripple.x - b.right), dy = Math.max(b.top - ripple.y, 0, ripple.y - b.bottom);
+  return Math.hypot(dx, dy);
+}
 
-  const open = t0 + DRAW;
-  // the head: the badge stamped, a gleam across it; the title out of a blur beside it
+/** 3–4. The answer's card, uncovered by the wave from where the drop lands; what is on it settles in as it passes. */
+function openAnswer(card: HTMLElement, ripple: Ripple, impact: number): void {
+  const b = card.getBoundingClientRect(), lx = ripple.x - b.left, ly = ripple.y - b.top;
+  // the circle keeps to the wave's radius: sampled, so the clip and the wave on the grid never part
+  const cover = Math.hypot(Math.max(lx, b.width - lx), Math.max(ly, b.height - ly)) + 48, T = reachAt(cover, ripple.far), N = 14;
+  const frames: Keyframe[] = Array.from({ length: N + 1 }, (_, i) => {
+    const r = radiusAt((T * i) / N, ripple.far);
+    return { clipPath: `circle(${i ? r.toFixed(1) : 0}px at ${lx}px ${ly}px)`, transform: `scale(${0.985 + 0.015 * (i / N)})`, offset: i / N };
+  });
+  play(card, frames, { duration: T, delay: impact, easing: 'linear' });
+
+  // On the card, over its content: the crest and a faint swell just inside it, keeping to the same radius, and the
+  // splash where the drop landed — elements moved by transform and opacity only, so none of it repaints the card.
+  const surface = document.createElement('div');
+  surface.className = 'b-pod-ripple';
+  const piece = (cls: string, size: number) => {
+    const el = document.createElement('div');
+    el.className = cls;
+    Object.assign(el.style, { left: `${lx - size}px`, top: `${ly - size}px`, width: `${2 * size}px`, height: `${2 * size}px` });
+    surface.append(el);
+    return el;
+  };
+  const crest = piece('b-pod-crest', cover);
+  card.append(surface);
+  leftovers.push(surface);
+  play(crest, frames.map((f, i) => ({ transform: `scale(${(radiusAt((T * i) / N, ripple.far) / cover).toFixed(4)})`, opacity: i === N ? 0 : 1, offset: f.offset })),
+    { duration: T, delay: impact, easing: 'linear', fill: 'both' });
+  play(piece('b-pod-drop', 4), [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(0.2)', opacity: 0 }], { duration: 160, delay: impact, easing: 'ease-out', fill: 'both' });
+  [26, 46].forEach((size, i) => play(piece('b-pod-splash', size), [{ transform: 'scale(0)', opacity: 0.9 - i * 0.3 }, { transform: 'scale(1)', opacity: 0 }],
+    { duration: 600, delay: impact + i * 90, easing: OUT, fill: 'both' }));
+  setTimeout(() => surface.remove(), 2000 + impact);
+
+  const when = (el: Element) => impact + reachAt(distance(el, ripple), ripple.far);
+  // the head: the badge stamped and a gleam across it, the title and the copy button out of a soft blur
   const badge = card.querySelector('.b-pod-badge');
   if (badge) {
+    const t = when(badge) + 30;
     play(badge, [{ transform: 'scale(1.5)', opacity: 0, filter: 'blur(3px)' }, { transform: 'scale(0.94)', opacity: 1, filter: 'blur(0)', offset: 0.55 }, { transform: 'none', opacity: 1, filter: 'blur(0)' }],
-      { duration: 460, delay: open + 60, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' });
-    play(badge, [{ transform: 'translateX(-120%)' }, { transform: 'translateX(120%)' }], { duration: 700, delay: open + 420, easing: OUT, pseudoElement: '::after', fill: 'both' });
+      { duration: 460, delay: t, easing: 'cubic-bezier(0.3, 0, 0.2, 1)' });
+    play(badge, [{ transform: 'translateX(-120%)' }, { transform: 'translateX(120%)' }], { duration: 700, delay: t + 300, easing: OUT, pseudoElement: '::after', fill: 'both' });
   }
   for (const el of card.querySelectorAll('.b-pod-head h3, .b-pod-head .ui-mac')) {
-    play(el, [{ opacity: 0, transform: 'translateX(-6px)', filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: 420, delay: open + 120, easing: OUT });
+    play(el, [{ opacity: 0, transform: 'scale(0.96)', filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: 440, delay: when(el) + 30, easing: OUT });
   }
-  // the formulas, symbol by symbol; "=" drawn out from its middle; the rest of a row (≈ 0,333…) last
-  let k = 0;
+  // the formulas, each symbol as the wave reaches it ("=" drawn out from its middle), then a row's note
   card.querySelectorAll('.b-pod-row').forEach(row => {
     const math = row.querySelector('.b-pod-math math');
     const pieces = math ? atoms(math) : Array.from(row.querySelectorAll('.b-pod-math, .b-pod-long, .b-grid'));
-    const step = Math.max(12, Math.min(26, 300 / Math.max(1, pieces.length)));
-    pieces.forEach(p => {
-      const delay = open + 60 + k++ * step;
+    for (const p of pieces) {
+      const delay = when(p) + 20;
       if (p.localName === 'mo' && /^[=≈≡⇔→]$/.test(p.textContent?.trim() ?? '')) {
-        play(p, [{ opacity: 0, transform: 'scaleX(0)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay, easing: SPRING });
+        play(p, [{ opacity: 0, transform: 'scaleX(0)' }, { opacity: 1, transform: 'none' }], { duration: 440, delay, easing: SPRING });
       } else {
-        play(p, [{ opacity: 0, transform: 'translateY(0.45em) scale(0.88)' }, { opacity: 1, transform: 'none' }], { duration: 480, delay, easing: SPRING });
+        play(p, [{ opacity: 0, transform: 'scale(0.82)' }, { opacity: 1, transform: 'none' }], { duration: 520, delay, easing: SPRING });
       }
-    });
+    }
     for (const n of row.querySelectorAll('.b-pod-row-note')) {
-      play(n, [{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: open + 80 + k * step + 60, easing: OUT });
+      play(n, [{ opacity: 0, transform: 'scale(0.94)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: when(n) + 60, easing: OUT });
     }
   });
-  // the footer (Sprawdzone różniczkowaniem) rises in last
   for (const el of card.querySelectorAll(':scope > .b-pod-note, :scope > .b-pod-more, :scope > .b-cplot')) {
-    play(el, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 460, delay: open + 260, easing: OUT });
+    play(el, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 460, delay: when(el) + 60, easing: OUT });
   }
 }
 
@@ -152,16 +153,21 @@ export function revealAnswer(results: HTMLElement | null): void {
   const calc = results.closest('.b-calc') ?? document;
   dropQuestion(calc, results);
   const primary = results.querySelector<HTMLElement>(':scope > .b-pod.is-primary');
-  // a drop falls onto the grid first (inkwave.ts); the card's line starts as it lands
-  const impact = document.querySelector('.b-calc-backdrop') ? 80 + FALL : 120;
-  if (primary) openAnswer(primary, impact);
-  // what explains it follows, quieter and after the answer has opened
-  let i = 0;
+  const backdrop = document.querySelector<HTMLElement>('.b-calc-backdrop');
+  // without the lattice (no room for it) there is no drop to wait for
+  const impact = backdrop ? 90 + FALL : 120;
+  // the wave starts at the answer's card; without one, at the first card
+  const first = primary ?? results.querySelector<HTMLElement>(':scope > .b-pod');
+  const ripple = first ? rippleOf(first) : null;
+  if (primary && ripple) {
+    openAnswer(primary, ripple, impact);
+    if (backdrop) pendingWave = () => inkWave(backdrop, ripple, impact);
+  }
+  // the cards below follow as the wave reaches them, the farther the later
   for (const child of Array.from(results.children)) {
-    if (child === primary || child.matches('.b-calc-query, .b-pod-seam')) continue;
-    // (no blur: these are large, a plot among them, and a filter over them would be repainted every frame)
-    play(child, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }],
-      { duration: 560, delay: (primary ? impact + 320 : 80) + Math.min(i++, 6) * 60, easing: OUT });
+    if (child === primary || child.matches('.b-calc-query')) continue;
+    const delay = ripple ? impact + reachAt(distance(child, ripple, true), ripple.far) : 80;
+    play(child, [{ opacity: 0, transform: 'translateY(12px) scale(0.99)' }, { opacity: 1, transform: 'none' }], { duration: 560, delay, easing: OUT });
   }
   for (const el of results.querySelectorAll('.b-calc-query-label, .b-calc-query-note, .b-calc-query .ui-mac')) {
     play(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 200, easing: 'ease' });

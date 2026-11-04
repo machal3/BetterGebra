@@ -106,12 +106,16 @@
   animation: b-compute 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate, b-fade 300ms ease backwards;
 }
 @keyframes b-compute { from { background-position: -50% 0; } to { background-position: 150% 0; } }
-/* the answer's card opens out of a hairline (reveal.ts): the line, and the two that ride its edges apart */
-.b-pod-seam {
-  position: absolute; z-index: 3; height: 1px; margin-top: -0.5px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--b-ink) 12%, var(--b-ink) 88%, transparent); transform-origin: center;
+/* the wave crossing the answer's card (reveal.ts): its crest, a faint swell inside it, the drop's mark and splash */
+.b-pod-ripple { position: absolute; inset: 0; z-index: 4; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.b-pod-ripple > div { position: absolute; border-radius: 50%; will-change: transform, opacity; }
+.b-pod-crest {
+  box-shadow: inset 0 0 0 1px var(--b-faint);
+  background: radial-gradient(circle closest-side, transparent 70%, var(--b-wash) 93%, var(--b-fill) 99%, transparent 100%);
 }
-/* the answer's moment on the page's grid (inkwave.ts): one canvas over the drifting lines, under the cards */
+.b-pod-drop { background: var(--b-ink); }
+.b-pod-splash { box-shadow: inset 0 0 0 1px var(--b-faint); }
+/* the drop and its wave on the page's grid (inkwave.ts): one canvas over the drifting lines, under the cards */
 .b-inkwave { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
 /* the question as typed, on its way from the field to the heading */
 .b-calc-ghost {
