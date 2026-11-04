@@ -1,4 +1,4 @@
-/** The calculator's examples by topic (query, what it shows) and its symbol keys (label, inserted text, name). */
+/** The calculator's examples by topic (query, what it shows) and the palette of templates under its field. */
 
 export const EXAMPLES: [string, [string, string][]][] = [
   ['Liczby', [['2^200', 'potęga'], ['100!', 'silnia'], ['1/7 + 2/3', 'ułamki'], ['sqrt(72)', 'pierwiastek'], ['N(pi, 100)', '100 cyfr π'], ['(1+2i)/(3-i)', 'zespolone'], ['e^(i pi/4)', 'postać wykładnicza']]],
@@ -19,10 +19,86 @@ export const EXAMPLES: [string, [string, string][]][] = [
   ['Statystyka', [['{2, 4, 4, 4, 5, 5, 7, 9}', 'statystyki'], ['prctile([2 4 4 4 5 5 7 9], [25 50 75])', 'kwartyle'], ['fitlm([1 2 3 4 5], [2.1 3.9 6.2 7.8 10.1])', 'regresja liniowa'], ['corrcoef([1 2 3 4 5], [2 4 5 4 5])', 'korelacja'], ['normcdf(1.96)', 'rozkład normalny'], ['tinv(0.975, 10)', 'kwantyl t-Studenta'], ['binopdf(0:4, 4, 1/2)', 'rozkład dwumianowy']]],
 ];
 
-/** Symbol keys in groups; a divider goes between groups. */
-export const KEYS: [string, string, string][][] = [
-  [['√', 'sqrt()', 'pierwiastek'], ['^', '^', 'potęga'], ['|x|', '||', 'wartość bezwzględna'], ['n!', '!', 'silnia']],
-  [['π', 'π', 'pi'], ['e', 'e', 'liczba e'], ['i', 'i', 'jednostka urojona'], ['∞', '∞', 'nieskończoność']],
-  [['≤', '<=', 'mniejsze lub równe'], ['≥', '>=', 'większe lub równe'], ['→', '->', 'dąży do (granica)']],
-  [['d/dx', 'pochodna ', 'pochodna'], ['∫', 'całka ', 'całka'], ['lim', 'granica ', 'granica'], ['Σ', 'sum(, k, 1, n)', 'suma'], ['[ ]', '[[, ], [, ]]', 'macierz']],
+/** A key of the palette: how it looks (MathML, or a word), what it inserts (□ is a place to fill) and its name. */
+export interface Key { label: string; text: string; name: string; word?: boolean; wide?: boolean }
+
+/**
+ * An empty place: a box the size of a letter. The empty <mi> beside it matters: a lone <mspace> is space-like,
+ * and = between two of them would be read as a prefix and lose its spacing.
+ */
+export const BOX = '<mrow><mspace class="b-slot" width="0.6em" height="0.7em" depth="0.05em"/><mi></mi></mrow>';
+const B = BOX;
+const m = (s: string) => `<math displaystyle="true">${s}</math>`;
+const key = (label: string, text: string, name: string, wide = false): Key => ({ label: m(label), text, name, wide });
+/** sin □: the name, a thin space, the place for the argument; a long name takes two columns. */
+const fn = (f: string, name = f, text = `${f}(□)`): Key => key(`<mi mathvariant="normal">${f}</mi><mspace width="0.17em"/>${B}`, text, name, f.length > 4);
+const word = (label: string, text: string, name: string): Key => ({ label, text, name, word: true });
+const mat = (rows: number, cols: number) => `<mrow><mo>[</mo><mtable columnspacing="0.3em" rowspacing="0.25em">${`<mtr>${`<mtd>${B}</mtd>`.repeat(cols)}</mtr>`.repeat(rows)}</mtable><mo>]</mo></mrow>`;
+const cases = (n: number) => `<mrow><mo>{</mo><mtable columnalign="left" rowspacing="0.15em">${`<mtr><mtd style="text-align: left">${B}<mo>=</mo>${B}</mtd></mtr>`.repeat(n)}</mtable></mrow>`;
+
+/** The palette under the field, by tab. Each template's text is what the parser reads; □ marks where to type. */
+export const PALETTE: { id: string; name: string; keys: Key[] }[] = [
+  { id: 'basic', name: 'Podstawowe', keys: [
+    key(`<mfrac>${B}${B}</mfrac>`, '(□)/(□)', 'ułamek'),
+    key(`<msup>${B}<mn>2</mn></msup>`, '□^2', 'kwadrat'),
+    key(`<msup>${B}<mi>n</mi></msup>`, '□^(□)', 'potęga'),
+    key(`<msqrt>${B}</msqrt>`, '√(□)', 'pierwiastek kwadratowy'),
+    key(`<mroot>${B}<mi>n</mi></mroot>`, 'root(□, □)', 'pierwiastek stopnia n: najpierw stopień, potem liczba'),
+    key(`<mrow><mo>|</mo>${B}<mo>|</mo></mrow>`, '|□|', 'wartość bezwzględna'),
+    key(`<mrow><mo>(</mo>${B}<mo>)</mo></mrow>`, '(□)', 'nawias'),
+    key(`<mrow>${B}<mo>!</mo></mrow>`, '□!', 'silnia'),
+    key('<mi>π</mi>', 'π', 'liczba pi'),
+    key('<mi>e</mi>', 'e', 'liczba e'),
+    key('<mi>i</mi>', 'i', 'jednostka urojona'),
+    key('<mi>∞</mi>', '∞', 'nieskończoność'),
+    key('<mo>·</mo>', '·', 'mnożenie'),
+    key('<mo>=</mo>', ' = ', 'równa się'),
+    key('<mo>≤</mo>', ' ≤ ', 'mniejsze lub równe'),
+    key('<mo>≥</mo>', ' ≥ ', 'większe lub równe'),
+    key('<mo>≠</mo>', ' ≠ ', 'różne'),
+    key(`<mrow>${B}<mo>°</mo></mrow>`, '□°', 'stopnie'),
+  ] },
+  { id: 'fn', name: 'Funkcje', keys: [
+    ...['sin', 'cos', 'tg', 'ctg', 'arcsin', 'arccos', 'arctg'].map(f => fn(f)),
+    fn('ln', 'logarytm naturalny'),
+    key(`<msub><mi mathvariant="normal">log</mi><mi>b</mi></msub><mspace width="0.17em"/>${B}`, 'log_(□)(□)', 'logarytm: najpierw podstawa, potem liczba'),
+    key('<msup><mi>e</mi><mi>x</mi></msup>', 'e^(□)', 'funkcja wykładnicza'),
+    key('<msup><mn>10</mn><mi>x</mi></msup>', '10^(□)', 'potęga dziesiątki'),
+    ...['sinh', 'cosh'].map(f => fn(f)),
+    key(`<mrow><mo>⌊</mo>${B}<mo>⌋</mo></mrow>`, 'floor(□)', 'część całkowita'),
+    key('<mrow><mo>(</mo><mfrac linethickness="0"><mi>n</mi><mi>k</mi></mfrac><mo>)</mo></mrow>', 'binom(□, □)', 'symbol Newtona'),
+    word('NWD', 'nwd(□, □)', 'największy wspólny dzielnik'),
+    word('NWW', 'nww(□, □)', 'najmniejsza wspólna wielokrotność'),
+    word('mod', 'mod(□, □)', 'reszta z dzielenia'),
+  ] },
+  { id: 'calc', name: 'Analiza', keys: [
+    key(`<mfrac><mi>d</mi><mrow><mi>d</mi><mi>x</mi></mrow></mfrac>${B}`, 'pochodna □', 'pochodna'),
+    key(`<mfrac><msup><mi>d</mi><mn>2</mn></msup><mrow><mi>d</mi><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac>${B}`, 'pochodna rzędu 2 □', 'druga pochodna'),
+    key(`<mo>∫</mo>${B}<mi>d</mi><mi>x</mi>`, 'całka □ dx', 'całka nieoznaczona'),
+    key(`<msubsup><mo>∫</mo><mi>a</mi><mi>b</mi></msubsup>${B}<mi>d</mi><mi>x</mi>`, 'całka □ dx od □ do □', 'całka oznaczona: funkcja, dolna i górna granica', true),
+    key(`<munder><mi mathvariant="normal">lim</mi><mrow><mi>x</mi><mo>→</mo><mi>a</mi></mrow></munder>${B}`, 'granica □ przy x → □', 'granica: funkcja, potem punkt', true),
+    // limits beside the sign, as in a line of text: above and below it they would not fit the key
+    key(`<mstyle displaystyle="false"><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover></mstyle>${B}`, 'sum(□, k, □, □)', 'suma: wyraz, od, do', true),
+    key(`<mstyle displaystyle="false"><munderover><mo>∏</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover></mstyle>${B}`, 'product(□, k, □, □)', 'iloczyn: wyraz, od, do', true),
+    word('rozwiąż', 'rozwiąż □', 'rozwiąż równanie, nierówność lub układ'),
+    word('uprość', 'uprość □', 'uprość wyrażenie'),
+    word('rozłóż', 'rozłóż □', 'rozłóż na czynniki'),
+    word('Taylor', 'szereg □', 'szereg Taylora'),
+    word('badanie', 'badanie funkcji □', 'badanie przebiegu funkcji'),
+    word('wykres', 'wykres □', 'wykres'),
+  ] },
+  { id: 'lin', name: 'Macierze i układy', keys: [
+    key(cases(2), '□ = □\n□ = □', 'układ dwóch równań', true),
+    key(cases(3), '□ = □\n□ = □\n□ = □', 'układ trzech równań', true),
+    key(mat(2, 2), '[□ □; □ □]', 'macierz 2 × 2', true),
+    key(mat(3, 3), '[□ □ □; □ □ □; □ □ □]', 'macierz 3 × 3', true),
+    key(mat(2, 1), '[□; □]', 'wektor kolumnowy'),
+    key(mat(1, 3), '[□ □ □]', 'wektor wierszowy', true),
+    fn('det', 'wyznacznik'),
+    key(`<msup>${B}<mrow><mo>−</mo><mn>1</mn></mrow></msup>`, 'inverse(□)', 'macierz odwrotna'),
+    key(`<msup>${B}<mi mathvariant="normal">T</mi></msup>`, 'transpose(□)', 'transpozycja'),
+    word('rząd', 'rank(□)', 'rząd macierzy'),
+    word('wart. własne', 'eigenvalues(□)', 'wartości własne'),
+  ] },
+  { id: 'greek', name: 'Greckie', keys: ['α', 'β', 'γ', 'δ', 'ε', 'θ', 'λ', 'μ', 'ρ', 'σ', 'ω'].map(g => key(`<mi>${g}</mi>`, g, `litera ${g}`)) },
 ];

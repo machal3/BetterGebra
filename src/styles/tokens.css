@@ -34,12 +34,23 @@
   font-display: swap;
   src: local("STIX Two Math"), local("STIXTwoMath-Regular"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
 }
+/*
+ * Typed formulas (the calculator's field) are Inter with the mathematical symbols drawn by the math font: Inter's
+ * files leave out ≤ ≥ ≠ → ∞ √ ⌊ □, and the system's fallbacks for them differ in size and baseline from line to line.
+ */
+@font-face {
+  font-family: "Bettergebra Symbols";
+  font-display: swap;
+  src: local("Cambria Math"), local("STIX Two Math"), local("STIXTwoMath-Regular"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+2190-21FF, U+2200-22FF, U+2300-23FF, U+25A0-25FF;
+}
 
 :root {
   color-scheme: light;
   --b-font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --b-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --b-math: "Cambria Math", "Bettergebra Math", serif;
+  --b-formula: "Bettergebra Symbols", var(--b-font);
 
   /* Surfaces */
   --b-page: #f5f5f5;

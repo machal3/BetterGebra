@@ -12,7 +12,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { IconArrowRight, IconBook, IconCalculator, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
@@ -22,7 +22,8 @@ import { PaneBar, setPane, useShown } from '../Dock';
 import { usePanel } from '../navigation';
 import { CalcPlot } from './CalcPlot';
 import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, useCalc } from './calc-store';
-import { EXAMPLES, KEYS } from './content';
+import { BOX, EXAMPLES, PALETTE } from './content';
+import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, withSlots, type Replacement } from './composer-text';
 import { Backdrop } from '../Backdrop';
 import { cascade } from '../motion';
 import './calculator.css';
@@ -35,9 +36,14 @@ const subscribeHash = (notify: () => void) => { addEventListener('hashchange', n
 
 /** The preview of what was typed, or why it can't be read; the variables' names read as names. */
 function preview(value: string, names: Record<string, VarKind>, display: Record<string, string>): { ml: string; error: string } {
-  const v = value.trim();
+  const slots = value.includes(SLOT), v = oneLine(withSlots(value));
   if (!v) return { ml: '', error: '' };
-  try { return { ml: nodeML(parse(sugar(v), { names }), spelling(v, n => display[n])), error: '' }; } catch (e) { return { ml: '', error: (e as Error).message }; }
+  try {
+    // an empty □ is read as a name and drawn as a box; while one is left, name = □ is an equation being written
+    const node = parse(sugar(v), slots ? { names: { ...names, [SLOT_NAME]: 'scalar' }, assign: false } : { names });
+    const ml = nodeML(node, spelling(v, n => display[n]));
+    return { ml: slots ? ml.replaceAll(`<mi mathvariant="normal">${SLOT_NAME}</mi>`, BOX) : ml, error: '' };
+  } catch (e) { return { ml: '', error: (e as Error).message }; }
 }
 
 /** A matrix too large to typeset: its entries in a table, numbered like a spreadsheet. */
@@ -155,39 +161,123 @@ const Placeholder = () => (
   </div>
 );
 
-function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLInputElement | null> }) {
+const PALETTE_KEY = 'bettergebra.calc.palette';
+const readOpen = () => { try { return localStorage.getItem(PALETTE_KEY) !== '0'; } catch { return true; } };
+
+/** A template (or plain text) at the field's caret, the selection in its first □; the next □ is selected, to be typed over. */
+function place(el: HTMLTextAreaElement, template: string, setValue: (v: string) => void) {
+  const a = el.selectionStart, b = el.selectionEnd;
+  const { text, select } = fillTemplate(template, el.value.slice(a, b), el.value.slice(0, a));
+  el.focus();
+  el.setRangeText(text, a, b, 'end');
+  el.setSelectionRange(a + select[0], a + select[1]);
+  setValue(el.value);
+}
+
+/** The field as tall as its lines. */
+function fit(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+const Hint = () => (
+  <p className="b-composer-hint">
+    <span><kbd>Enter</kbd> oblicza</span>
+    <span><kbd>Shift</kbd> + <kbd>Enter</kbd> nowa linia: układ, wiersz macierzy</span>
+    <span><kbd>Tab</kbd> następne pole <span className="b-slot-chip" role="img" aria-label="□" /></span>
+  </p>
+);
+
+function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLTextAreaElement | null> }) {
   const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
+  // the last automatic replacement (<= → ≤): Backspace right after it gives the typed text back
+  const undo = useRef<Replacement | null>(null);
+  const [open, setOpen] = useState(readOpen);
+  const [tab, setTab] = useState(PALETTE[0].id);
+  // Enter with a □ still empty: it is selected, and said why nothing was computed
+  const [missing, setMissing] = useState(false);
   const names = Object.fromEntries(Object.entries(vars).filter(([n]) => !n.startsWith('#')).map(([n, s]) => [n, s.kind]));
   const display = Object.fromEntries(Object.entries(vars).flatMap(([n, s]) => (s.display ? [[n, s.display]] : [])));
   const shown = preview(useDeferredValue(value), names, display);
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !history.length) return;
+
+  // the field grows with its lines
+  useLayoutEffect(() => fit(input.current), [value, input]);
+  // and with its width: lines wrap differently once the page has its size
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    let width = el.clientWidth;
+    const watch = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(el); } });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [input]);
+
+  const toggle = () => {
+    try { localStorage.setItem(PALETTE_KEY, open ? '0' : '1'); } catch { /* not remembered */ }
+    setOpen(!open);
+  };
+  const submit = () => {
+    at.current = -1;
+    undo.current = null;
+    const k = value.indexOf(SLOT), el = input.current;
+    if (k >= 0 && el) { el.focus(); el.setSelectionRange(k, k + 1); setMissing(true); return; }
+    run(oneLine(value));
+  };
+
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const el = e.target;
+    const typed = el.value.length - value.length === 1 && el.selectionStart === el.selectionEnd && !(e.nativeEvent as InputEvent).isComposing;
+    at.current = -1;
+    undo.current = null;
+    setMissing(false);
+    const r = typed ? prettify(el.value, el.selectionStart) : null;
+    if (r) {
+      el.setRangeText(r.undo.to, r.undo.at, r.undo.at + r.undo.from.length);
+      el.setSelectionRange(r.caret, r.caret);
+      undo.current = r.undo;
+    }
+    setValue(el.value);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget;
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return; }
+    if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      const k = nextSlot(el.value, el.selectionStart, el.selectionEnd, e.shiftKey);
+      if (k !== null) { e.preventDefault(); el.setSelectionRange(k, k + 1); }
+      return;
+    }
+    const u = undo.current;
+    if (e.key === 'Backspace' && u && el.selectionStart === el.selectionEnd && el.selectionStart === u.at + u.to.length) {
+      e.preventDefault();
+      undo.current = null;
+      el.setRangeText(u.from, u.at, u.at + u.to.length, 'end');
+      setValue(el.value);
+      return;
+    }
+    if (e.key !== 'Shift') undo.current = null;
+    // a field of several lines moves between them; one line walks through the history
+    if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !history.length || value.includes('\n')) return;
     e.preventDefault();
     if (at.current === -1) draft.current = value;
     at.current = Math.max(-1, Math.min(history.length - 1, at.current + (e.key === 'ArrowUp' ? 1 : -1)));
     setValue(at.current === -1 ? draft.current : history[at.current]);
   };
-  const insert = (text: string) => {
-    const el = input.current!, a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a, selected = el.value.slice(a, b);
-    // "sqrt()" and friends wrap the selection, or leave the caret between the parentheses
-    const hole = text.indexOf('()') >= 0 ? text.indexOf('()') + 1 : text === '||' ? 1 : text.indexOf(',') >= 0 && text.startsWith('sum(') ? 4 : text.startsWith('[[') ? 2 : -1;
-    const piece = hole >= 0 ? text.slice(0, hole) + selected + text.slice(hole) : text;
-    el.setRangeText(piece, a, b, 'end');
-    if (hole >= 0) { const c = a + hole + selected.length; el.setSelectionRange(c, c); }
-    setValue(el.value);
-    el.focus();
-  };
+
+  const page = PALETTE.find(p => p.id === tab) ?? PALETTE[0];
   return (
-    <form className="b-composer" role="search" aria-label="Obliczenie" onSubmit={e => { e.preventDefault(); at.current = -1; run(value); }}>
+    <form className="b-composer" role="search" aria-label="Obliczenie" onSubmit={e => { e.preventDefault(); submit(); }}>
       <div className="b-composer-field">
-        <input
+        <textarea
           ref={input}
           id="calc-input"
-          type="text"
+          rows={1}
           value={value}
-          onChange={e => { at.current = -1; setValue(e.target.value); }}
+          onChange={onChange}
           onKeyDown={onKeyDown}
           spellCheck={false}
           autoComplete="off"
@@ -202,28 +292,67 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
       <div id="calc-preview" className={cx('b-composer-preview', !!shown.error && 'is-invalid')} aria-live="off">
         {shown.ml ? <span dangerouslySetInnerHTML={{ __html: shown.ml }} /> : shown.error}
       </div>
+      {missing && <p className="b-composer-missing" role="alert">Uzupełnij puste pola <span className="b-slot-chip" role="img" aria-label="□" /> — <kbd>Tab</kbd> przechodzi do następnego.</p>}
       <div className="b-composer-bar">
-        <div className="b-keys" role="toolbar" aria-label="Wstaw symbol">
-          {KEYS.map((group, g) => (
-            <div className="b-keys-group" key={g}>
-              {group.map(([label, text, name]) => (
-                <button key={label} type="button" className="b-key" title={name} aria-label={name} onClick={() => insert(text)}>{label}</button>
-              ))}
-            </div>
-          ))}
-        </div>
-        <div className="b-digits">
-          <span id="calc-digits-label">Cyfry</span>
-          <SegmentedControl
+        {open
+          ? (
+            <SegmentedControl
+              kind="tabs"
+              variant="underline"
+              size="sm"
+              className="b-palette-tabs"
+              aria-label="Rodzaj symboli"
+              value={tab}
+              onChange={setTab}
+              options={PALETTE.map(p => ({ value: p.id, label: p.name, controls: 'calc-palette' }))}
+            />
+          )
+          : <Hint />}
+        <div className="b-composer-tools">
+          <div className="b-digits">
+            <span id="calc-digits-label">Cyfry</span>
+            <SegmentedControl
+              size="sm"
+              variant="tray"
+              aria-labelledby="calc-digits-label"
+              value={String(digits)}
+              onChange={v => setDigits(Number(v))}
+              options={DIGITS.map(d => ({ value: String(d), label: String(d), ariaLabel: `${d} cyfr` }))}
+            />
+          </div>
+          <Button
+            variant="ghost"
             size="sm"
-            variant="tray"
-            aria-labelledby="calc-digits-label"
-            value={String(digits)}
-            onChange={v => setDigits(Number(v))}
-            options={DIGITS.map(d => ({ value: String(d), label: String(d), ariaLabel: `${d} cyfr` }))}
-          />
+            className={cx('b-palette-toggle', open && 'is-open')}
+            iconRight={<IconChevronDown />}
+            aria-expanded={open}
+            aria-controls="calc-palette"
+            onClick={toggle}
+          >
+            Symbole
+          </Button>
         </div>
       </div>
+      {open && (
+        <div id="calc-palette" className="b-palette" role="tabpanel" aria-label={page.name}>
+          <div className="b-palette-keys" key={page.id}>
+            {page.keys.map(k => (
+              <button
+                key={k.name}
+                type="button"
+                className={cx('b-key', k.word && 'is-word', k.wide && 'is-wide')}
+                title={k.name}
+                aria-label={k.name}
+                // the field keeps the focus and its selection
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => input.current && place(input.current, k.text, setValue)}
+                {...(k.word ? { children: k.label } : { dangerouslySetInnerHTML: { __html: k.label } })}
+              />
+            ))}
+          </div>
+          <Hint />
+        </div>
+      )}
     </form>
   );
 }
@@ -406,19 +535,13 @@ export function CalculatorPanel() {
   const main = document.getElementById('calc'), side = document.getElementById('calc-side');
   const { run: current, history, vars } = useCalc();
   const [value, setValue] = useState('');
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   const panel = usePanel();
   const hash = useSyncExternalStore(subscribeHash, () => location.hash);
-  const run = (q: string) => { setValue(q); void compute(q); };
+  // the field keeps its lines when they are what was asked
+  const run = (q: string) => { if (q !== oneLine(input.current?.value ?? '')) setValue(q); void compute(q); };
   /** A variable's name at the caret of the field. */
-  const insert = (text: string) => {
-    const el = input.current;
-    if (!el) return;
-    const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
-    el.setRangeText(text, a, b, 'end');
-    setValue(el.value);
-    el.focus();
-  };
+  const insert = (text: string) => { if (input.current) place(input.current, text, setValue); };
 
   // #kalkulator?q=… runs that question (a link to a result); otherwise the field takes the focus on wide screens
   useEffect(() => {
@@ -426,7 +549,7 @@ export function CalculatorPanel() {
     const m = hash.match(/^#kalkulator\?q=(.*)$/);
     let q: string | null = null;
     if (m) { try { q = decodeURIComponent(m[1]); } catch { q = null; } }
-    if (q && q !== input.current?.value) { setValue(q); void compute(q); return; }
+    if (q && q !== oneLine(input.current?.value ?? '')) { setValue(q); void compute(q); return; }
     // not while the mode switch is walked with the arrow keys: focus stays on its tabs
     const walking = document.activeElement?.matches('[role="tab"]:focus-visible');
     if (matchMedia('(min-width: 768px)').matches && !walking) input.current?.focus();

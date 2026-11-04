@@ -69,6 +69,10 @@ function ml(n: Node): string {
         const rows = n.items.map(r => `<mtr>${(r as { items: Node[] }).items.map(c => `<mtd>${ml(c)}</mtd>`).join('')}</mtr>`).join('');
         return fence('[', ']', `<mtable>${rows}</mtable>`);
       }
+      // a system: its equations one under another, behind a brace
+      if (n.bracket === '{' && n.items.length > 1 && n.items.every(i => i.t === 'rel')) {
+        return row(mo('{'), `<mtable columnalign="left">${n.items.map(i => `<mtr><mtd style="text-align: left">${ml(i)}</mtd></mtr>`).join('')}</mtable>`);
+      }
       const inner = n.items.map(ml).join(mo(';'));
       return n.bracket === '{' ? fence('{', '}', inner) : fence('[', ']', inner);
     }
