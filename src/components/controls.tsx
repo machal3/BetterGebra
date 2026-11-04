@@ -135,7 +135,7 @@ export function initSheetDrag(): void {
   document.addEventListener('touchstart', e => {
     const pop = (e.target as Element).closest?.<HTMLElement>('.b-popover:popover-open'), y = e.touches[0]?.clientY;
     if (!pop || e.touches.length > 1 || !matchMedia('(max-width: 767px)').matches || (e.target as Element).closest('button, input, [role="slider"]')) return;
-    if (y - pop.getBoundingClientRect().top > 52) return;
+    if (y - pop.getBoundingClientRect().top > 60) return;
     drag = { pop, y, dy: 0, t: e.timeStamp, v: 0 };
   }, { passive: true });
   document.addEventListener('touchmove', e => {

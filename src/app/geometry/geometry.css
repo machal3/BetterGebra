@@ -154,6 +154,8 @@
   .b-gview { width: auto; }
   /* the buttons first, as in the Widok of Wykresy */
   .b-gview-actions { order: -1; padding: 4px 8px 8px; }
+  /* the button as high as the field beside it */
+  .b-gobjs-form .ui-buttonc { --h: 38px; }
   /* the tabs are the pane bar's buttons */
   .b-gtabs { display: none; }
   .b-ginspect { left: 8px; right: 60px; bottom: calc(var(--b-inset-bottom) + 8px); width: auto; max-height: calc(100% - var(--b-inset-bottom) - 72px); }
