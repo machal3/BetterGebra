@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { SmartRecommendation, type Recommendation } from '@/components/ui/smart-recommendation-clean';
-import { ColorPicker, ErrorText, Field, Menu, Slider, Switch } from '@/components/controls';
+import { ColorPicker, ErrorText, Field, Menu, PopoverHead, Slider, Switch } from '@/components/controls';
 import { IconAxes, IconClose, IconDownload, IconGrid, IconRedo, IconReset, IconSliders, IconTrash, IconUndo, IconZoomIn, IconZoomOut } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { definition } from '../../geometry/commands';
@@ -61,7 +61,7 @@ export function ViewPanel({ onOpenChange }: { onOpenChange: (open: boolean) => v
   const close = () => pop.current?.hidePopover();
   return (
     <div ref={pop} id="geo-view" className="b-popover b-settings b-gview" popover="auto" role="dialog" aria-labelledby="geo-view-title">
-      <h3 id="geo-view-title" className="b-popover-title">Widok</h3>
+      <PopoverHead id="geo-view-title" popover="geo-view">Widok</PopoverHead>
       <div className="b-gview-body">
         <Switch checked={geo.grid} onChange={toggleGrid}>Kratka</Switch>
         <Switch checked={geo.axes} onChange={toggleAxes}>Układ współrzędnych</Switch>

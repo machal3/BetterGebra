@@ -125,9 +125,10 @@ body:is([data-panel="geometry"], [data-panel="calculator"]) :is(#graphs-body, #s
     transform: translateY(16px) scale(0.96); opacity: 0; pointer-events: none;
     transition: transform var(--b-sheet-out) var(--b-ease-away), opacity var(--b-leave) ease;
   }
-  .b-panebar .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; padding-inline: 12px 14px; color: var(--b-ink); }
+  /* its buttons are the sheet's tabs, and read like them: words without icons (so four fit a 360px screen) */
+  .b-panebar .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; padding-inline: 14px; color: var(--b-ink); }
+  .b-panebar .ui-buttonc__icon { display: none; }
   .b-panebar .b-count { margin-left: 2px; }
-  .b-panebar .b-tool-text { font-size: var(--b-fs-math-sm); }
 }
 @keyframes b-sheet-content { from { opacity: 0; transform: translateY(10px); } }
 @media (prefers-reduced-motion: reduce) {

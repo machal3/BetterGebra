@@ -158,17 +158,29 @@
 @starting-style { .b-popover:popover-open { opacity: 0; transform: translateY(4px) scale(0.98); filter: blur(2px); } }
 @keyframes b-pop-in { from { opacity: 0; transform: translateY(4px) scale(0.98); filter: blur(2px); } }
 .b-popover-title { margin: 0; padding: 12px 16px 6px; font-size: var(--b-fs-title); font-weight: 500; line-height: 24px; color: var(--b-strong); }
+/* its head (PopoverHead): the close button and a title kept for the sheet are only for phones */
+.b-popover-head { display: flex; align-items: center; }
+.b-popover-head .b-popover-title { flex: 1; min-width: 0; }
+.b-popover-close, .b-popover-head--phone { display: none; }
 /* Phones: a sheet from the bottom edge, with a grip */
 @media (max-width: 767px) {
   /* above the on-screen keyboard (--b-kb, Dock.tsx) */
+  /* Every sheet looks the same as the panel's sheet (layout.css): it rests on the mode bar, never over it, with the
+     grip on top and a 56px head of the title and a round close button */
   .b-popover {
-    left: 0 !important; right: 0; bottom: var(--b-kb, 0px); top: auto !important; width: auto !important;
-    max-height: min(80dvh, calc(100dvh - var(--b-kb, 0px) - 16px));
-    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-bottom: env(safe-area-inset-bottom);
+    --b-sheet-bottom: max(var(--b-kb, 0px), var(--b-bottombar-h, 0px));
+    left: 0 !important; right: 0; bottom: var(--b-sheet-bottom); top: auto !important; width: auto !important;
+    max-height: min(80dvh, calc(100dvh - var(--b-topbar-h, 0px) - var(--b-sheet-bottom) - 8px));
+    border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-top: 18px;
   }
   .b-popover::before {
-    content: ""; display: block; width: 36px; height: 4px; margin: 7px auto 0; border-radius: 2px; background: var(--b-faint);
+    content: ""; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--b-faint);
   }
+  .b-popover:has(> .b-popover-head) { padding-top: 0; }
+  .b-popover-head, .b-popover-head--phone { display: flex; gap: var(--b-s2); height: 56px; padding: 14px 8px 2px 16px; }
+  .b-popover-head .b-popover-title { padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .b-popover-close { display: inline-flex; }
+  .b-popover-head .ui-buttonc { --h: 40px; --radius: var(--b-r-full); flex: none; }
   /* it rises from the edge like the panel's sheet, and drops back the same way */
   .b-popover {
     opacity: 1; transform: translateY(100%); box-shadow: var(--b-shadow-sheet);
@@ -187,7 +199,11 @@
   @starting-style { .b-popover:popover-open::backdrop { background: transparent; } }
   /* settings whose effect shows on the canvas: no dimming, and the upper part of the canvas stays in sight */
   .b-popover.b-settings:popover-open::backdrop { background: transparent; }
-  .b-popover.b-settings { max-height: min(62dvh, calc(100dvh - var(--b-kb, 0px) - 16px)); }
+  .b-popover.b-settings { max-height: min(62dvh, calc(100dvh - var(--b-topbar-h, 0px) - var(--b-sheet-bottom) - 8px)); }
+  /* the colour picker as a sheet: its field and hue as wide as the screen */
+  .b-colorpop { padding: 0 0 16px; }
+  .b-colorpop > :not(.b-popover-head) { margin-inline: 16px; }
+  .b-colorpop-area { height: 168px; }
 }
 
 /* ---------- Menu (the option menu of Smart Recommendation) ---------- */
@@ -212,6 +228,8 @@
 @media (hover: hover) { .b-menu-option:hover { background: var(--b-wash); } }
 .b-menu-option[aria-selected="true"] { background: var(--b-fill); }
 .b-menu-option svg { flex: none; color: var(--b-strong); }
+/* phones: a sheet, the list under its grip */
+@media (max-width: 767px) { .b-menu { padding: 18px 8px 8px; } }
 
 /* ---------- Colour: swatches and the custom colour popover ---------- */
 .b-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

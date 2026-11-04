@@ -6,7 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
-import { ColorPicker, ErrorText, Field, Slider, placePopover } from '@/components/controls';
+import { ColorPicker, ErrorText, Field, PopoverHead, Slider, placePopover } from '@/components/controls';
 import { IconCopy, IconSearch, IconTrash } from '@/components/icons';
 import { useStore } from '@/hooks/use-store';
 import { calculatorQuery } from '../../calculator-query';
@@ -181,6 +181,7 @@ export function RowSettings({ f, n, mode, onOpenChange }: { f: FnState; n: numbe
   // Its own colour, so the heading of the sheet says which row it belongs to
   return (
     <div ref={pop} id={`fn-settings-${f.id}`} className="b-popover b-settings b-rowset-pop" popover="auto" role="dialog" aria-label={`Ustawienia funkcji ${n}`} style={{ '--c': f.color } as React.CSSProperties} data-mode={mode}>
+      <PopoverHead popover={`fn-settings-${f.id}`} phone>Ustawienia funkcji</PopoverHead>
       {open && <Settings f={f} close={() => pop.current?.hidePopover()} />}
     </div>
   );

@@ -4,7 +4,8 @@
  * Actions, the option menu and groups of Smart Recommendation) on the same tokens.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from 'react';
-import { IconAlert, IconCheck, IconChevronDown, IconPlus } from './icons';
+import { Button } from './ui/button-clean';
+import { IconAlert, IconCheck, IconChevronDown, IconClose, IconPlus } from './icons';
 import './controls.css';
 
 export const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(' ');
@@ -109,6 +110,20 @@ export function placePopover(pop: HTMLElement, anchor: HTMLElement, side: 'left'
   }
   pop.style.left = `${left}px`;
   pop.style.top = `${Math.max(gap, Math.min(top, innerHeight - h - gap))}px`;
+}
+
+/**
+ * The head of a popover: its title and, on phones, where the popover is a sheet, a close button, laid out like the
+ * header of the panel's sheet (Dock.tsx), so every sheet on a phone reads the same. `phone`: a popover without a
+ * title on wider screens gets one only as a sheet.
+ */
+export function PopoverHead({ id, popover, phone, children }: { id?: string; popover: string; phone?: boolean; children: ReactNode }) {
+  return (
+    <div className={cx('b-popover-head', phone && 'b-popover-head--phone')}>
+      <h3 id={id} className="b-popover-title">{children}</h3>
+      <Button variant="ghost" className="b-popover-close" icon={<IconClose />} aria-label="Zamknij" title="Zamknij" popoverTarget={popover} popoverTargetAction="hide" />
+    </div>
+  );
 }
 
 /**
@@ -296,6 +311,7 @@ export function ColorPicker({ value, swatches, auto, label, onPick, onDrag = onP
         {!custom && <IconPlus size={14} />}
       </button>
       <div ref={pop} id={id} popover="auto" className="b-popover b-colorpop" role="dialog" aria-label="Własny kolor">
+        <PopoverHead popover={id} phone>Własny kolor</PopoverHead>
         <div
           className="b-colorpop-area"
           role="slider"
