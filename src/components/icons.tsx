@@ -90,6 +90,10 @@ export const IconHistory = make('History', <><path d="M4.5 12a7.5 7.5 0 1 0 2.2-
 export const IconOpen = make('Open', <path d="M10 5H7a2.5 2.5 0 0 0-2.5 2.5v9.5A2.5 2.5 0 0 0 7 19.5h9.5A2.5 2.5 0 0 0 19 17v-3M14 4.5h5.5V10M19.5 4.5l-8 8" />);
 /** Snapping the readout to the grid: a grid with a point on a node. */
 export const IconSnap = make('Snap', <><path d="M4 9h16M4 15h16M9 4v16M15 4v16" strokeWidth={1.1} /><circle cx="15" cy="9" r="2.6" fill="currentColor" stroke="none" /></>);
+/** Full screen: four corners pointing out. */
+export const IconExpand = make('Expand', <path d="M4 9V6.5A2.5 2.5 0 0 1 6.5 4H9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15" />);
+/** Leaving full screen: four corners pointing in. */
+export const IconShrink = make('Shrink', <path d="M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4M20 9h-3.5A1.5 1.5 0 0 1 15 7.5V4M15 20v-3.5a1.5 1.5 0 0 1 1.5-1.5H20M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20" />);
 export const IconStop = make('Stop', <rect x="7" y="7" width="10" height="10" rx="2" />);
 export const IconUndo = make('Undo', <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />);
 export const IconRedo = make('Redo', <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />);

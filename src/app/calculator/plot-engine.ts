@@ -14,6 +14,7 @@ import { paintCondition } from '../../render/sets';
 import { Viewport, axisSteps, panned, zoomed } from '../../render/viewport';
 import { MAX_FUNCTIONS, PALETTE, addFunction, commit, state, type AxisUnit, type FnState, type Mode, type View } from '../../state';
 import { toast } from '../toast';
+import { prettyText } from './composer-text';
 import { redraw3dPlots } from './plot3d';
 
 /** Every plot on the page redraws when the theme changes; plots no longer in the page drop out. */
@@ -26,8 +27,8 @@ export function redrawCalcPlots(): void {
 export const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
 /** The colour as drawn on the canvas (lifted in dark mode); the legend and the tooltip lift `color` in CSS. */
 const paint = (i: number) => ink(color(i));
-// Only the major grid lines: a card is small, and the minor ones turned it grey.
-const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: false, halo: false });
+// The grid of Wykresy, minor lines too: with the light grid tokens the card reads as graph paper, not grey.
+const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: true, halo: false });
 /** Where each mode of the graph panel lives, for the button and the toast. */
 export const PANEL: Record<PanelMode, { to: string; name: string }> = { graph: { to: 'Wykresach', name: 'Wykresy' }, complex: { to: 'Zespolonych', name: 'Zespolone' } };
 /** A function row as the graph panel keeps it, for compiling a region the way Wykresy does. */
@@ -37,8 +38,11 @@ const row = (expression: string, c: string): FnState => ({ id: -1, expression, c
 export function handoff(p: Plot): Handoff {
   return p.open ?? { mode: 'graph', rows: p.series.flatMap((s, i) => (s.expr ? [{ expr: s.expr, series: i, color: s.color ?? i, dash: s.dash, faint: s.faint }] : [])) };
 }
-/** Points a curve's analysis found: on the plot they show only their coordinates, the list below names them. */
-const ANALYSED = new Set(['zero', 'max', 'min', 'inflection', 'cross']);
+/** A point's label split into its name and its coordinates: "minimum (3,732; 7,464)" → ["minimum", "(3,732; 7,464)"]. */
+export function splitLabel(label: string): [string, string] {
+  const m = /^(.*?)\s*(\([^()]*;[^()]*\))$/.exec(label);
+  return m && m[1] ? [m[1], m[2]] : [label, ''];
+}
 const num = (v: number) => format(v, 4).replace(/^-/, '−');
 
 /** Snapping the readout to the grid: one switch for every plot on the page, remembered. */
@@ -119,9 +123,9 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     ctx.globalAlpha = 1;
     ctx.fillStyle = theme.bg;
     ctx.fillRect(0, 0, W, H);
-    // the zoom buttons and the axis letters (x at the right end of the x axis, y at the top of the y axis)
+    // the axis letters (x at the right end of the x axis, y at the top of the y axis)
     const axisY = Math.max(14, Math.min(H - 40, v.py(0)));
-    taken = [[W - 116, 0, 116, 46], [v.px(0) - 4, 0, 26, 26], [W - 28, axisY - 24, 28, 22]];
+    taken = [[v.px(0) - 4, 0, 26, 26], [W - 28, axisY - 24, 28, 22]];
     // inequality solutions and one standard deviation: shaded across the whole height
     for (const [a, b] of p.bands) {
       const X0 = Math.max(-10, v.px(a)), X1 = Math.min(W + 10, v.px(b));
@@ -166,7 +170,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
 
     for (const a of p.vectors) arrow(v, a.x1, a.y1, a.x2, a.y2, paint(a.color ?? 0), a.label, a.dash);
 
-    // notable points; short labels stay on the plot while there are few
+    // notable points: named in the list under the plot, a point pointed at (here or there) lights up with a halo
     const shown = p.marks.filter(m => Number.isFinite(m.y) && !(m.series !== undefined && hidden.has(m.series)) && inView(v, m.x, m.y));
     const near = hoverMark(v), lit = near ?? focus;
     for (const m of shown) {
@@ -174,11 +178,6 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
       if (m === lit) { ctx.beginPath(); ctx.arc(X, Y, 12, 0, 2 * Math.PI); ctx.globalAlpha = 0.18; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; }
       if (m.kind === 'hole') dot(ctx, v, m.x, m.y, STROKE.point, theme.bg, c);
       else dot(ctx, v, m.x, m.y, m === lit ? STROKE.point + 1 : STROKE.point, c, theme.bg);
-    }
-    if (shown.length <= 8) for (const m of shown) {
-      if (!m.label || m === lit) continue;
-      const text = ANALYSED.has(m.kind) ? `(${num(m.x)}; ${num(m.y)})` : m.label;
-      place(text, v.px(m.x), v.py(m.y), [[9, -9, 'left'], [9, 19, 'left'], [-9, -9, 'right'], [-9, 19, 'right'], [0, -15, 'center'], [0, 25, 'center']], { fill: theme.label });
     }
     // the point picked in the list says everything about itself
     if (lit && focus === lit && !near) place(lit.label, v.px(lit.x), v.py(lit.y), [[12, -12, 'left'], [-12, -12, 'right'], [12, 22, 'left'], [-12, 22, 'right']], { fill: paint(lit.color ?? 0), strong: true, pill: true }, true);
@@ -303,15 +302,15 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
   }
   function hover(v: Viewport, theme: Theme, mark: Mark | null): void {
     if (!pointer || dragging) { tip.hidden = true; return; }
-    const lines: string[] = [], colors: (string | null)[] = [];
-    let accent = '';
-    if (mark) { lines.push(mark.label); colors.push(color(mark.color ?? 0)); accent = color(mark.color ?? 0); }
+    // rows of the readout: a head (x, a bar, a point of the plane) and named values, each with its colour dot
+    const rows: { name: string; value: string; c?: string }[] = [];
+    if (mark) { const [name, at] = splitLabel(mark.label); rows.push({ name: prettyText(name), value: at, c: color(mark.color ?? 0) }); }
     else {
       const x = v.fromX(pointer.x), y = v.fromY(pointer.y);
       const bar = p.bars.find(b => x >= b.x0 && x <= b.x1 && y >= 0 && y <= b.h);
       const vec = p.vectors.find(a => Math.hypot(v.px(a.x2) - pointer!.x, v.py(a.y2) - pointer!.y) < 12);
-      if (bar) lines.push(bar.label);
-      else if (vec) lines.push(`${vec.label ? `${vec.label} = ` : ''}(${format(vec.x2 - vec.x1)}; ${format(vec.y2 - vec.y1)})`);
+      if (bar) rows.push({ name: bar.label, value: '', c: color(0) });
+      else if (vec) rows.push({ name: vec.label || 'wektor', value: `(${num(vec.x2 - vec.x1)}; ${num(vec.y2 - vec.y1)})`, c: color(vec.color ?? 0) });
       else {
         const at = snapOn ? snapX(v, x) : null;
         const sx = at?.x ?? x;
@@ -327,31 +326,33 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
           return f && Number.isFinite(fy) ? [{ i, s, x: sx, y: fy! }] : [];
         });
         if (values.length) {
-          const X = at ? v.px(sx) : pointer.x;
-          ctx.beginPath(); ctx.moveTo(Math.round(X) + 0.5, 0); ctx.lineTo(Math.round(X) + 0.5, H);
-          ctx.lineWidth = 1; ctx.strokeStyle = theme.axis; ctx.globalAlpha = 0.45; ctx.stroke(); ctx.globalAlpha = 1;
-          lines.push(`x = ${at && xUnit === 'pi' && at.y === undefined ? piLabel(values[0].x) : num(values[0].x)}`); colors.push(null);
+          // a dashed guide at the x being read
+          const X = Math.round(at ? v.px(sx) : pointer.x) + 0.5;
+          ctx.beginPath(); ctx.moveTo(X, 0); ctx.lineTo(X, H); ctx.setLineDash([3, 4]);
+          ctx.lineWidth = 1; ctx.strokeStyle = theme.axis; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+          rows.push({ name: 'x', value: at && xUnit === 'pi' && at.y === undefined ? piLabel(values[0].x) : num(values[0].x) });
           if (at?.y !== undefined) snapRing(v, sx, at.y, theme);
-          for (const { i, s, x: X, y: Y } of values) {
-            dot(ctx, v, X, Y, STROKE.hover, paint(s.color ?? i), theme.bg);
-            lines.push(`${values.length > 1 ? `${short(s.label)}: ` : 'y = '}${num(Y)}`); colors.push(color(s.color ?? i));
+          for (const { i, s, x: px, y: py } of values) {
+            dot(ctx, v, px, py, STROKE.hover, paint(s.color ?? i), theme.bg);
+            rows.push({ name: values.length > 1 ? prettyText(short(s.label)) : 'y', value: num(py), c: color(s.color ?? i) });
           }
         } else {
           // no curve to follow: the point under the cursor, on a grid node when one is near
           const node = snapOn ? snapNode(v, x, y) : null, px = node?.x ?? x, py = node?.y ?? y;
           if (node) snapRing(v, px, py, theme);
-          lines.push(p.plane ? `${num(px)} ${py < 0 ? '−' : '+'} ${num(Math.abs(py))}i` : `(${num(px)}; ${num(py)})`);
+          rows.push(p.plane ? { name: 'z', value: `${num(px)} ${py < 0 ? '−' : '+'} ${num(Math.abs(py))}i` } : { name: 'punkt', value: `(${num(px)}; ${num(py)})` });
         }
       }
     }
-    tip.replaceChildren(...lines.map((t, k) => {
-      const el = document.createElement('div');
-      el.className = colors[k] ? 'row' : 'row head';
-      if (colors[k]) el.style.setProperty('--c', colors[k]);
-      el.textContent = t;
+    tip.replaceChildren(...rows.map(r => {
+      const el = document.createElement('div'), k = document.createElement('span'), val = document.createElement('span');
+      el.className = r.c ? 'row' : 'row head';
+      if (r.c) el.style.setProperty('--c', r.c);
+      k.className = 'k'; k.textContent = r.name;
+      val.className = 'v'; val.textContent = r.value;
+      el.append(k, val);
       return el;
     }));
-    tip.style.borderLeftColor = accent || '';
     tip.hidden = false;
     // beside the cursor, flipped at the right and bottom edges
     const tw = tip.offsetWidth, th = tip.offsetHeight;

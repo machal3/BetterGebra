@@ -183,44 +183,89 @@ kbd {
 }
 
 /* ---------- Plots in results ---------- */
-.b-cplot { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 6px; }
-.b-cplot-stage {
-  position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 240px; max-height: 440px; overflow: hidden;
-  border-radius: var(--b-r-lg); background: var(--plot-bg); box-shadow: inset 0 0 0 1px var(--b-line-hover);
+/* head (legend + toolbar), the canvas, the points as a list, a foot (gestures + hand-off) */
+.b-cplot { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding-top: 4px; }
+.b-cplot-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+.b-cplot-legend { flex: 1 1 240px; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px; margin-left: -8px; }
+.b-cplot-key {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 28px; max-width: 100%; margin: 0; padding: 0 8px; border: 0;
+  border-radius: var(--b-r-sm); background: none; font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-ink); text-align: start;
 }
-.b-cplot-stage--3d { aspect-ratio: 4 / 3; }
-.b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
-.b-cplot-canvas.grabbing { cursor: grabbing; }
-.b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-solid); }
-.b-cplot-tools {
-  position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 2px; padding: 3px;
-  border-radius: var(--b-r-md); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
-  opacity: 0; translate: 0 -4px; transition: opacity var(--b-normal) ease, translate var(--b-normal) var(--b-ease);
-}
-.b-cplot-stage:hover .b-cplot-tools, .b-cplot-stage:focus-within .b-cplot-tools { opacity: 1; translate: 0 0; }
-@media (hover: none) { .b-cplot-tools { opacity: 1; translate: 0 0; } }
-.b-cplot-tools .ui-buttonc { --h: 28px; }
-.b-cplot-sep { width: 0.5px; height: 18px; margin: 0 3px; background: var(--b-line-hover); }
-.b-cplot-tip {
-  position: absolute; z-index: 1; display: grid; gap: 2px; max-width: min(320px, 70%); padding: 6px 10px; pointer-events: none;
-  border-radius: var(--b-r-sm); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
-  font: 400 var(--b-fs-sm)/16px var(--b-font); font-variant-numeric: tabular-nums; color: var(--b-ink);
-}
-.b-cplot-tip .row { display: flex; align-items: center; gap: 6px; }
-.b-cplot-tip .row:not(.head)::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
-.b-cplot-tip .head { color: var(--b-text); }
-.b-cplot-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
-.b-cplot-legend { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
-/* a series that can be hidden is a chip; a fill or shape is only named */
-span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px; font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-ink); }
-.b-chip.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.35; }
-.b-sw { flex: none; width: 16px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
+.b-cplot-key-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.b-cplot-key { cursor: pointer; transition: background-color var(--b-fast) ease, color var(--b-fast) ease; }
+@media (hover: hover) { button.b-cplot-key:hover { background: var(--b-wash); } }
+button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-cplot-key[aria-pressed="false"] { color: var(--b-muted); }
+.b-cplot-key[aria-pressed="false"] .b-sw { opacity: 0.3; }
+.b-sw { flex: none; width: 18px; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--c) var(--curve-mix), white); transition: opacity var(--b-fast) ease; }
+.b-sw.is-faint { height: 2px; opacity: 0.6; }
 .b-sw.is-dash { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--c) var(--curve-mix), white) 0 5px, transparent 5px 8px); }
-.b-sw.is-dot { width: 8px; height: 8px; border-radius: 50%; }
-.b-sw.is-area { width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, color-mix(in srgb, var(--c) var(--curve-mix), white) 35%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) var(--curve-mix), white); }
-.b-cplot-points { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.b-sw.is-dot { width: 8px; height: 8px; margin-inline: 5px; border-radius: 50%; }
+.b-sw.is-area { width: 12px; height: 12px; margin-inline: 3px; border-radius: 3px; background: color-mix(in srgb, color-mix(in srgb, var(--c) var(--curve-mix), white) 30%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) var(--curve-mix), white); }
 
-.b-pt { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
+/* the toolbar: a tray of ghost buttons, always there */
+.b-cplot-tools {
+  flex: none; display: flex; align-items: center; gap: 2px; padding: 2px;
+  border-radius: var(--b-r-md); background: var(--b-card); box-shadow: inset 0 0 0 0.5px var(--b-line-hover);
+}
+.b-cplot-tools .ui-buttonc { --h: 28px; }
+.b-cplot-sep { width: 0.5px; height: 16px; margin: 0 3px; background: var(--b-line-hover); }
+
+.b-cplot-stage {
+  position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 260px; max-height: 460px; overflow: hidden;
+  border-radius: var(--b-r-lg); background: var(--plot-bg);
+}
+/* the hairline lies over the canvas, which would cover an inset shadow of the stage */
+.b-cplot-stage::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--b-line-hover); pointer-events: none; }
+.b-cplot-stage--3d { aspect-ratio: 4 / 3; }
+.b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: inherit; touch-action: none; cursor: crosshair; outline: none; }
+.b-cplot-canvas.grabbing { cursor: grabbing; }
+.b-cplot-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--b-focus); }
+.b-cplot-stage--3d .b-cplot-canvas { cursor: grab; }
+.b-cplot-stage--3d .b-cplot-tools { position: absolute; top: 8px; right: 8px; box-shadow: var(--b-shadow-pop); background: var(--b-raised); }
+
+/* the readout: a small table, name on the left, value on the right, a dot in the curve's colour */
+.b-cplot-tip {
+  position: absolute; z-index: 1; display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 4px 8px;
+  max-width: min(340px, 75%); padding: 7px 10px; pointer-events: none;
+  border-radius: var(--b-r-sm); background: var(--b-raised); box-shadow: var(--b-shadow-pop);
+  font: 400 var(--b-fs-sm)/16px var(--b-formula); font-variant-numeric: tabular-nums; color: var(--b-ink);
+}
+.b-cplot-tip .row { display: contents; }
+.b-cplot-tip .row::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
+.b-cplot-tip .row.head::before { background: none; }
+.b-cplot-tip .k { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--b-text); }
+.b-cplot-tip .head .k { font-style: italic; }
+.b-cplot-tip .v { justify-self: end; white-space: nowrap; color: var(--b-strong); }
+
+/* notable points: rows of name and coordinates; pointing at one lights it on the plot, a click centres it */
+.b-cplot-points { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 2px 12px; margin: 0 -8px; padding: 0; list-style: none; }
+.b-cplot-point {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; margin: 0; padding: 4px 8px; border: 0;
+  border-radius: var(--b-r-sm); background: none; cursor: pointer; text-align: start;
+  font: 400 var(--b-fs-sm)/16px var(--b-font); color: var(--b-ink); transition: background-color var(--b-fast) ease;
+}
+@media (hover: hover) { .b-cplot-point:hover { background: var(--b-wash); } }
+.b-cplot-point:active { background: var(--b-fill); }
+.b-cplot-point:focus-visible { outline: 2px solid var(--b-focus); outline-offset: -2px; }
+.b-cplot-point-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--b-text); }
+.b-cplot-point-name::first-letter { text-transform: uppercase; }
+.b-cplot-point-at { flex: none; font-family: var(--b-formula); font-variant-numeric: tabular-nums; color: var(--b-strong); }
+.b-pt { flex: none; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c) var(--curve-mix), white); }
+.b-pt.is-hole { background: var(--b-card); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) var(--curve-mix), white); }
+
+.b-cplot-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 28px; }
+.b-cplot-hint { font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-muted); }
+@media (hover: none) { .b-cplot-hint { visibility: hidden; } }
+
+/* full screen: the card fills the screen, the canvas takes what is left */
+.b-cplot.is-full {
+  height: 100dvh; padding: 16px 20px; overflow: auto; background: var(--b-card);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+.b-cplot.is-full .b-cplot-stage { aspect-ratio: auto; height: 100%; max-height: none; min-height: 240px; }
+.b-cplot.is-full .b-cplot-points { max-height: 24vh; overflow: auto; }
+.b-cplot::backdrop { background: var(--b-card); }
 
 /* ---------- Side panel: history and examples ---------- */
 .b-history { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 0; padding: 0; list-style: none; }
@@ -297,7 +342,8 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 }
 @media (pointer: coarse) {
   .b-key { height: 44px; min-width: 44px; }
-  .b-cplot-tools .ui-buttonc { --h: 40px; }
+  .b-cplot-tools .ui-buttonc { --h: 36px; }
+  .b-cplot-point, button.b-cplot-key { min-height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .b-composer, .b-calc-results, .b-cplot-tools, .b-history-go, .b-calc-tile, .b-calc-tile-go, .b-key { transition: none; }
