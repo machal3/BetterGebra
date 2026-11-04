@@ -28,7 +28,9 @@ function inkOf(el: Element): [number, number, number, number] {
 export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number): () => void {
   const box = backdrop.getBoundingClientRect();
   if (!box.width || !box.height) return () => {};
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  // At 1× even on a dense screen: a glow of faint lines and dust under the cards loses nothing to the eye, and a
+  // quarter of the pixels is what keeps every frame of it on time (the canvas is filled and handed on each frame).
+  const dpr = 1;
   const canvas = document.createElement('canvas');
   canvas.className = 'b-inkwave';
   canvas.width = Math.round(box.width * dpr); canvas.height = Math.round(box.height * dpr);
@@ -41,9 +43,15 @@ export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number)
   const cx = c.left + c.width / 2 - box.left, cy = c.top + c.height / 2 - box.top;
   const left = c.left - box.left, right = c.right - box.left, W = box.width, H = box.height;
   const far = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)) + 60;
-  // the backdrop's lines, to light up the very lines that are there (they drift: read where they are each frame)
-  const lines = backdrop.querySelector('.ui-gb-lines');
-  const cell = parseFloat(getComputedStyle(backdrop.querySelector('.ui-gb') ?? backdrop).getPropertyValue('--ui-gb-size')) || 48;
+  // the backdrop's lines, to light up the very lines that are there: read once where they are, then follow their
+  // drift by the clock (one cell per --ui-gb-speed, diagonally down to the left), so no frame asks for layout
+  const lines = backdrop.querySelector('.ui-gb-lines'), gb = getComputedStyle(backdrop.querySelector('.ui-gb') ?? backdrop);
+  const cell = parseFloat(gb.getPropertyValue('--ui-gb-size')) || 48, period = (parseFloat(gb.getPropertyValue('--ui-gb-speed')) || 0) * 1000;
+  const at0 = lines?.getBoundingClientRect(), read = performance.now();
+  const grid = (now: number): [number, number] => {
+    const shift = period ? ((now - read) / period) * cell : 0, mod = (v: number) => ((v % cell) + cell) % cell;
+    return at0 ? [mod(at0.left - box.left - shift), mod(at0.top - box.top + shift)] : [0, 0];
+  };
 
   const t0 = performance.now() + delay, snap = t0 + LINE;
   let motes: Mote[] | null = null, frame = 0;
@@ -69,33 +77,67 @@ export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number)
     return out;
   };
 
-  /** One ring: the grid's lines lit where the ring is, their crossings flaring. */
-  const ring = (radius: number, strength: number) => {
+  /** Paths by brightness: a few fills a frame instead of one per dot. */
+  const LEVELS = 7;
+  const buckets = Array.from({ length: LEVELS }, () => new Path2D());
+  const flush = (paths: Path2D[], top: number) => {
+    paths.forEach((path, i) => { ctx.fillStyle = ink(top * (i + 0.5) / LEVELS); ctx.fill(path); });
+  };
+
+  /** One ring: the grid's lines lit where the ring is (only there), their crossings flaring. */
+  const ring = (radius: number, strength: number, now: number) => {
     if (strength <= 0.01) return;
     const band = 150, inner = Math.max(0, radius - band), outer = radius + band * 0.35;
-    const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
-    grad.addColorStop(0, ink(0));
-    grad.addColorStop(0.72, ink(0.4 * strength));
-    grad.addColorStop(0.8, ink(0.62 * strength));
-    grad.addColorStop(1, ink(0));
-    const at = lines?.getBoundingClientRect();
-    const ox = at ? ((at.left - box.left) % cell + cell) % cell : 0, oy = at ? ((at.top - box.top) % cell + cell) % cell : 0;
+    // how bright a line is at distance ρ from the centre: rising through the ring to its crest, falling past it
+    const span = outer - inner, light = (rho: number) => {
+      const u = (rho - inner) / span;
+      return u <= 0 || u >= 1 ? 0 : u < 0.72 ? 0.4 * (u / 0.72) : u < 0.8 ? 0.4 + 0.22 * ((u - 0.72) / 0.08) : 0.62 * (1 - u) / 0.2;
+    };
+    const [ox, oy] = grid(now);
     const x0 = Math.max(0, cx - outer), x1 = Math.min(W, cx + outer), y0 = Math.max(0, cy - outer), y1 = Math.min(H, cy + outer);
-    ctx.strokeStyle = grad; ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = ox + Math.ceil((x0 - ox) / cell) * cell; x <= x1; x += cell) { ctx.moveTo(x + 0.5, y0); ctx.lineTo(x + 0.5, y1); }
-    for (let y = oy + Math.ceil((y0 - oy) / cell) * cell; y <= y1; y += cell) { ctx.moveTo(x0, y + 0.5); ctx.lineTo(x1, y + 0.5); }
-    ctx.stroke();
-    // the crossings in the brightest part of the ring flare as points
-    for (let x = ox + Math.ceil((x0 - ox) / cell) * cell; x <= x1; x += cell) {
-      for (let y = oy + Math.ceil((y0 - oy) / cell) * cell; y <= y1; y += cell) {
-        const d = Math.hypot(x - cx, y - cy) - (radius - band * 0.12);
-        if (Math.abs(d) > 46) continue;
-        const k = 1 - Math.abs(d) / 46;
-        ctx.fillStyle = ink(0.75 * k * strength);
-        ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.8 + 1.6 * k, 0, Math.PI * 2); ctx.fill();
+    // each line only across the ring: one or two short pieces where it cuts the annulus
+    const pieces = (d: number, along: number, lo: number, hi: number, put: (a: number, b: number) => void) => {
+      const o = Math.sqrt(Math.max(0, outer * outer - d * d));
+      if (!o) return;
+      const i = Math.abs(d) < inner ? Math.sqrt(inner * inner - d * d) : 0;
+      const seg = (a: number, b: number) => { a = Math.max(lo, a); b = Math.min(hi, b); if (b > a) put(a, b); };
+      if (i) { seg(along - o, along - i); seg(along + i, along + o); } else seg(along - o, along + o);
+    };
+    // Each piece in short steps, each step stroked in one of a few solid shades by its brightness: a solid stroke
+    // rasterises far cheaper than one with a gradient, and six strokes a frame are all it takes.
+    const shades = Array.from({ length: LEVELS }, () => new Path2D()), STEP = 8;
+    const steps = (vertical: boolean, at: number, a: number, b: number) => {
+      for (let p = a; p < b; p += STEP) {
+        const q = Math.min(b, p + STEP), m = (p + q) / 2;
+        const k = light(vertical ? Math.hypot(at - cx, m - cy) : Math.hypot(m - cx, at - cy)) / 0.62;
+        if (k < 0.04) continue;
+        const path = shades[Math.min(LEVELS - 1, Math.floor(k * LEVELS))];
+        if (vertical) { path.moveTo(at + 0.5, p); path.lineTo(at + 0.5, q); } else { path.moveTo(p, at + 0.5); path.lineTo(q, at + 0.5); }
+      }
+    };
+    for (let x = ox + Math.ceil((x0 - ox) / cell) * cell; x <= x1; x += cell) pieces(x - cx, cy, 0, H, (a, b) => steps(true, x, a, b));
+    for (let y = oy + Math.ceil((y0 - oy) / cell) * cell; y <= y1; y += cell) pieces(y - cy, cx, 0, W, (a, b) => steps(false, y, a, b));
+    ctx.lineWidth = 1; ctx.lineCap = 'butt';
+    shades.forEach((path, i) => { ctx.strokeStyle = ink(0.62 * strength * (i + 0.5) / LEVELS); ctx.stroke(path); });
+    // the crossings in the brightest part of the ring flare as points (only those near it are looked at)
+    const crest = radius - band * 0.12, reach = 46;
+    buckets.forEach((_, i) => { buckets[i] = new Path2D(); });
+    let any = false;
+    for (let x = ox + Math.ceil((Math.max(0, cx - crest - reach) - ox) / cell) * cell; x <= Math.min(W, cx + crest + reach); x += cell) {
+      const dx = x - cx, ro = crest + reach, ri = crest - reach;
+      const yo = Math.sqrt(Math.max(0, ro * ro - dx * dx)), yi = Math.abs(dx) < ri ? Math.sqrt(ri * ri - dx * dx) : 0;
+      for (const [lo, hi] of yi ? [[cy - yo, cy - yi], [cy + yi, cy + yo]] : [[cy - yo, cy + yo]]) {
+        for (let y = oy + Math.ceil((Math.max(0, lo) - oy) / cell) * cell; y <= Math.min(H, hi); y += cell) {
+          const d = Math.abs(Math.hypot(dx, y - cy) - crest);
+          if (d > reach) continue;
+          const k = 1 - d / reach, rr = 0.8 + 1.6 * k, level = Math.min(LEVELS - 1, Math.floor(k * LEVELS));
+          buckets[level].moveTo(x + 0.5 + rr, y + 0.5);
+          buckets[level].arc(x + 0.5, y + 0.5, rr, 0, Math.PI * 2);
+          any = true;
+        }
       }
     }
+    if (any) flush(buckets, 0.75 * strength);
     // a hairline on the ring's front edge, the wave's crest
     ctx.strokeStyle = ink(0.2 * strength); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
@@ -121,16 +163,21 @@ export function inkWave(backdrop: HTMLElement, card: HTMLElement, delay: number)
     if (now >= snap) {
       motes ??= burst(now);
       const p = (now - snap) / WAVE, q = (now - snap - ECHO) / WAVE;
-      if (p < 1) ring(easeOut(p) * far, (1 - p) ** 1.4);
-      if (q > 0 && q < 1) ring(easeOut(q) * far * 0.92, 0.45 * (1 - q) ** 1.6);
+      if (p < 1) ring(easeOut(p) * far, (1 - p) ** 1.4, now);
+      if (q > 0 && q < 1) ring(easeOut(q) * far * 0.92, 0.45 * (1 - q) ** 1.6, now);
+      // the dust, sorted into a few paths by how faded it is
+      buckets.forEach((_, i) => { buckets[i] = new Path2D(); });
+      let any = false;
       for (const m of motes) {
         const age = now - m.born;
         if (age < 0 || age > m.life) continue;
-        const k = age / m.life, drag = Math.exp(-age / 380);
+        const k = age / m.life, drag = Math.exp(-age / 380), size = 2 * m.r * (1 - 0.4 * k);
         const x = m.x + m.vx * 380 * (1 - drag), y = m.y + m.vy * 380 * (1 - drag) + 0.00002 * age * age;
-        ctx.fillStyle = ink(0.8 * (1 - k) ** 1.5);
-        ctx.beginPath(); ctx.arc(x, y, m.r * (1 - 0.4 * k), 0, Math.PI * 2); ctx.fill();
+        const dot = buckets[Math.min(LEVELS - 1, Math.floor((1 - k) ** 1.5 * LEVELS))];
+        dot.moveTo(x + size / 2, y); dot.arc(x, y, size / 2, 0, Math.PI * 2);
+        any = true;
       }
+      if (any) flush(buckets, 0.8);
     }
     if (now < snap + ECHO + WAVE) frame = requestAnimationFrame(step);
     else canvas.remove();

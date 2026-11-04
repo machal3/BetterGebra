@@ -95,9 +95,9 @@
 .b-composer:focus-within { box-shadow: 0 0 0 0.5px var(--b-line-hover), 0 18px 40px -16px var(--b-backdrop), 0 1px 2px 0 var(--b-line); }
 .b-composer-go svg { transition: transform 360ms var(--b-spring); }
 @media (hover: hover) { .ui-buttonc.b-composer-go:hover svg { transform: translateX(2px); } }
-/* while it computes the old answer steps back into a soft blur (and is replaced at once: the new one has its own entrance) */
+/* while it computes the old answer steps back (no blur: over a plot it would repaint every frame) (and is replaced at once: the new one has its own entrance) */
 .b-calc-results { position: relative; transition: none; }
-.b-calc-results[aria-busy="true"] { opacity: 0.4; filter: blur(2px); transform: scale(0.995); transition: opacity var(--b-normal) ease, filter var(--b-slow) ease, transform var(--b-slow) var(--b-ease); }
+.b-calc-results[aria-busy="true"] { opacity: 0.4; transform: scale(0.995); transition: opacity var(--b-normal) ease, transform var(--b-slow) var(--b-ease); }
 /* computing: a stretch of ink runs along the rule under the field — the line the answer will open out of */
 .b-composer-bar { position: relative; }
 .b-calc:has(.b-calc-status) .b-composer-bar::before {

@@ -22,8 +22,12 @@ const SPRING = 'linear(0, 0.18 6%, 0.62 16%, 0.92 26%, 1.03 36%, 1.04 44%, 1.01 
 let running: Animation[] = [];
 let leftovers: Element[] = [];
 let wave: (() => void) | null = null;
+let starting = 0;
+/** Starts the wave when everything starts (see revealAnswer). */
+let pendingWave: (() => () => void) | null = null;
 
 function stop(): void {
+  cancelAnimationFrame(starting); starting = 0; pendingWave = null;
   wave?.(); wave = null;
   running.forEach(a => a.cancel());
   leftovers.forEach(e => e.remove());
@@ -96,7 +100,7 @@ function openAnswer(card: HTMLElement, t0: number): void {
   seam(-1); seam(1);
   // the same line across the whole page, and what it sets off there (inkwave.ts)
   const backdrop = document.querySelector<HTMLElement>('.b-calc-backdrop');
-  if (backdrop) wave = inkWave(backdrop, card, t0);
+  if (backdrop) pendingWave = () => inkWave(backdrop, card, t0);
   // the card: shut on the line, opened between the edges in step with them, then its shadow given back
   const pad = 40, shut = `inset(${mid - 0.5}px ${-pad}px ${mid - 0.5}px ${-pad}px)`;
   play(card, [
@@ -128,11 +132,11 @@ function openAnswer(card: HTMLElement, t0: number): void {
       if (p.localName === 'mo' && /^[=≈≡⇔→]$/.test(p.textContent?.trim() ?? '')) {
         play(p, [{ opacity: 0, transform: 'scaleX(0)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay, easing: SPRING });
       } else {
-        play(p, [{ opacity: 0, transform: 'translateY(0.4em) scale(0.9)', filter: 'blur(5px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: 480, delay, easing: SPRING });
+        play(p, [{ opacity: 0, transform: 'translateY(0.45em) scale(0.88)' }, { opacity: 1, transform: 'none' }], { duration: 480, delay, easing: SPRING });
       }
     });
     for (const n of row.querySelectorAll('.b-pod-row-note')) {
-      play(n, [{ opacity: 0, transform: 'translateX(-8px)', filter: 'blur(3px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }], { duration: 420, delay: open + 80 + k * step + 60, easing: OUT });
+      play(n, [{ opacity: 0, transform: 'translateX(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: open + 80 + k * step + 60, easing: OUT });
     }
   });
   // the footer (Sprawdzone różniczkowaniem) rises in last
@@ -153,12 +157,24 @@ export function revealAnswer(results: HTMLElement | null): void {
   let i = 0;
   for (const child of Array.from(results.children)) {
     if (child === primary || child.matches('.b-calc-query, .b-pod-seam')) continue;
-    play(child, [{ opacity: 0, transform: 'translateY(14px)', filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
+    // (no blur: these are large, a plot among them, and a filter over them would be repainted every frame)
+    play(child, [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }],
       { duration: 560, delay: (primary ? 440 : 80) + Math.min(i++, 6) * 60, easing: OUT });
   }
   for (const el of results.querySelectorAll('.b-calc-query-label, .b-calc-query-note, .b-calc-query .ui-mac')) {
     play(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 200, easing: 'ease' });
   }
+  // Everything holds its first frame until the answer has been painted once: the frame that lays out the new
+  // cards (MathML, a plot) is the slow one, and what started in it would lose its first steps and seem to jump.
+  const held = running.slice();
+  held.forEach(a => a.pause());
+  starting = requestAnimationFrame(() => {
+    starting = requestAnimationFrame(() => {
+      starting = 0;
+      held.forEach(a => a.play());
+      if (pendingWave) { wave = pendingWave(); pendingWave = null; }
+    });
+  });
 }
 
 /** The field moves from the middle of the empty page to the top as the first answer is asked for (FLIP). */
