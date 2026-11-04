@@ -271,6 +271,36 @@ export const LINALG: Record<string, Command> = {
     const Ev = numMatrix(E);
     return { cards: [{ title: 'Eksponenta macierzy', rows: [['e^A', Ev]], note: `${note} Metoda: aproksymacja Padé stopnia 13 ze skalowaniem i potęgowaniem.` }], outputs: [Ev] };
   },
+  sqrtm: ([v]) => {
+    const M = numeric(v, 'sqrtm');
+    square(M, 'sqrtm');
+    const X = D.sqrtm(M);
+    if (!X || !(D.relErr(M, D.mul(X, X)) <= 1e-8)) fail('sqrtm: macierz ma wartość własną ujemną albo zero, więc rzeczywisty pierwiastek główny nie istnieje (MATLAB podałby zespolony).');
+    const A = exactMatrix(v), half = num(1, 2);
+    // (λ^(1/2))⁽ʲ⁾ = (1/2)(1/2 − 1)…(1/2 − j + 1)·λ^(1/2 − j)
+    const exact = A && isRational(A) && A.length <= 4 ? (() => { try { return exactFunm(A, X!, (l, j) => { let c: Expr = ONE; for (let i = 0; i < j; i++) c = mul(c, sub(half, num(i))); return mul(c, pow(l, sub(half, num(j)))); }); } catch { return null; } })() : null;
+    if (exact) {
+      const Xv = asMatrix(exact);
+      return { cards: [{ title: 'Pierwiastek kwadratowy macierzy', rows: [['√A', Xv]], note: 'Dokładnie: pierwiastek główny, √A = p(A) z wielomianem interpolującym √z w wartościach własnych; (√A)² = A i zgodne z obliczeniem numerycznym.' }], outputs: [Xv] };
+    }
+    const Xv = numMatrix(X!);
+    return { cards: [{ title: 'Pierwiastek kwadratowy macierzy', rows: [['√A', Xv]], note: `${checked('‖X² − A‖/‖A‖', D.relErr(M, D.mul(X!, X!)), 1e-8)} Metoda: iteracja Denmana–Beaversa.` }], outputs: [Xv] };
+  },
+  logm: ([v]) => {
+    const M = numeric(v, 'logm');
+    square(M, 'logm');
+    const L = D.logm(M);
+    if (!L || !(D.relErr(M, D.expm(L)) <= 1e-8)) fail('logm: macierz ma wartość własną ujemną albo zero, więc rzeczywisty logarytm główny nie istnieje (MATLAB podałby zespolony).');
+    const A = exactMatrix(v);
+    // ln⁽ʲ⁾(λ) = (−1)^(j−1)·(j − 1)!·λ^(−j)
+    const exact = A && isRational(A) && A.length <= 4 ? (() => { try { return exactFunm(A, L!, (l, j) => { if (!j) return fn('ln', l); let c = j % 2 ? 1 : -1; for (let i = 2; i < j; i++) c *= i; return mul(num(c), pow(l, num(-j))); }); } catch { return null; } })() : null;
+    if (exact) {
+      const Lv = asMatrix(exact);
+      return { cards: [{ title: 'Logarytm macierzy', rows: [['ln A', Lv]], note: 'Dokładnie: logarytm główny, ln A = p(A) z wielomianem interpolującym ln z w wartościach własnych; zgodne z obliczeniem numerycznym.' }], outputs: [Lv] };
+    }
+    const Lv = numMatrix(L!);
+    return { cards: [{ title: 'Logarytm macierzy', rows: [['ln A', Lv]], note: `${checked('‖e^L − A‖/‖A‖', D.relErr(M, D.expm(L!)), 1e-8)} Metoda: odwrotne skalowanie i potęgowanie.` }], outputs: [Lv] };
+  },
   null: ([v]) => {
     const A = exactMatrix(v);
     if (A) {
@@ -378,19 +408,23 @@ function exactEigenvectors(A: Expr[][], lams: Expr[]): Expr[][] | null {
  * and j below its multiplicity, then e^A = p(A). null when an eigenvalue has no closed form, the result is not real,
  * or it disagrees with the numeric E.
  */
-function exactExpm(A: Expr[][], En: D.Mat): Expr[][] | null {
+const exactExpm = (A: Expr[][], En: D.Mat) => exactFunm(A, En, l => pow(E, l));
+/** f(A) = p(A) as for e^A, with f⁽ʲ⁾(λ) given by f(λ, j); sqrtm and logm use it too. */
+function exactFunm(A: Expr[][], En: D.Mat, f: (l: Expr, j: number) => Expr): Expr[][] | null {
   const n = A.length, lams = exactEigenvalues(A);
   if (!lams) return null;
   const distinct: [Expr, number][] = [];
   for (const l of lams) { const d = distinct.find(([x]) => !LA.nonzero(sub(x, l))); if (d) d[1]++; else distinct.push([l, 1]); }
   const fall = (k: number, j: number) => { let f = 1; for (let i = 0; i < j; i++) f *= k - i; return f; };
   const rows: Expr[][] = [], rhs: Expr[][] = [];
-  for (const [l, mult] of distinct) for (let j = 0; j < mult; j++) {
-    rows.push(Array.from({ length: n }, (_, k) => (k < j ? ZERO : k === j ? num(fall(k, j)) : mul(num(fall(k, j)), pow(l, num(k - j))))));
-    rhs.push([pow(E, l)]);
-  }
   let c: Expr[][];
-  try { c = LA.leftSolve(rows, rhs); } catch { return null; }
+  try {
+    for (const [l, mult] of distinct) for (let j = 0; j < mult; j++) {
+      rows.push(Array.from({ length: n }, (_, k) => (k < j ? ZERO : k === j ? num(fall(k, j)) : mul(num(fall(k, j)), pow(l, num(k - j))))));
+      rhs.push([f(l, j)]);
+    }
+    c = LA.leftSolve(rows, rhs);
+  } catch { return null; }
   let P: Expr[][] = A.map((_, i) => A.map((__, j) => (i === j ? ONE : ZERO)));
   let out: Expr[][] = P.map(r => r.map(() => ZERO));
   for (let k = 0; k < n; k++) {

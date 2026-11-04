@@ -315,11 +315,25 @@ export function simplify(e: Expr): Expr {
   if (hasLnOfNumber(inner)) { tryAdd(() => expand(lnPrimes(inner))); tryAdd(() => cancel(together(lnPrimes(inner)))); }
   // the cheapest form that still has the value of the input: a rewrite with a bug in it is dropped, never shown
   const ranked = cands.map((c, k) => ({ c, k, w: cost(c) })).sort((a, b) => a.w - b.w || a.k - b.k);
-  for (const { c } of ranked) if (c === inner || agrees(c, inner)) return c;
-  return inner;
+  // and the content of a sum under a root brought out (√(576 − 144y²) = 12·√(4 − y²): one node more, easier to read)
+  const out = ranked.find(({ c }) => c === inner || agrees(c, inner))?.c ?? inner;
+  try { const r = rootContent(out); return r === out || agrees(r, out) ? r : out; } catch { return out; }
 }
 
-const hasLnOfNumber = (e: Expr): boolean => (isFn(e, 'ln') && isNum(e.a[0])) || children(e).some(hasLnOfNumber);
+/** √(576 − 144y²) = 12·√(4 − y²): the q-th power in the integer content of a sum comes out of its q-th root. */
+function rootContent(e: Expr): Expr {
+  const m = mapChildren(e, rootContent);
+  if (m.k !== '^' || m.b.k !== '+' || !isNum(m.e) || m.e.v.n !== 1n || (m.e.v.d !== 2n && m.e.v.d !== 3n)) return m;
+  const coef = (t: Expr) => (isNum(t) ? t.v : t.k === '*' && isNum(t.t[0]) ? t.t[0].v : Q1);
+  const cs = m.b.t.map(coef);
+  if (cs.some(c => c.d !== 1n)) return m;
+  const g = cs.reduce((a, c) => gcd(a, c.n < 0n ? -c.n : c.n), 0n), k = Number(m.e.v.d);
+  let s = 1n, rest = g;
+  for (let p = 2n; p <= 1000n && p ** BigInt(k) <= rest; p++) while (rest % p ** BigInt(k) === 0n) { rest /= p ** BigInt(k); s *= p; }
+  return s === 1n ? m : mul(num(s), pow(expand(div(m.b, num(s ** BigInt(k)))), m.e));
+}
+
+const hasLnOfNumber =(e: Expr): boolean => (isFn(e, 'ln') && isNum(e.a[0])) || children(e).some(hasLnOfNumber);
 
 const SAMPLES = [0.7316, -0.4429, 1.6180, 2.3851];
 /**

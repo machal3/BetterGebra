@@ -17,11 +17,21 @@ export function sugar(raw: string): string {
     .replace(/->\s*([^,;)\s]+?)\s*(\^?(?:\(-\)|-)|⁻)\s*(?=$|[,;)\s])/g, '->$1, -1');
   // x->0+ / x->0- : one-sided limits as a third argument
   s = normSide(s);
+  // 20% is 20/100, "15% z 80" is 15% of 80; "12 mod 5" and "10 nad 3" (10 choose 3) as calls
+  const operand = String.raw`(\d+(?:\.\d+)?|[a-z]\w*(?:\([^()]*\))?|\([^()]*\))`;
+  // "100 + 20%" adds 20% of 100, as calculators do
+  s = s.replace(/^(.+?)\s*([+-])\s*(\d+(?:[.,]\d+)?)\s*%\s*$/, (_, a: string, op: string, p: string) => `(${a})*(1 ${op} ${p.replace(',', '.')}/100)`)
+    .replace(/(\d+(?:[.,]\d+)?)\s*%\s*(?:z|of)\s+(.+)$/i, (_, p: string, x: string) => `${p.replace(',', '.')}/100*(${x})`)
+    .replace(/(\d+(?:[.,]\d+)?)\s*%(?=\s*(?:$|[-+*/^)=<>,;]))/g, (_, p: string) => `(${p.replace(',', '.')}/100)`)
+    .replace(new RegExp(`${operand}\\s+mod\\s+${operand}`, 'gi'), 'mod($1, $2)')
+    .replace(new RegExp(`${operand}\\s+(?:choose|nad)\\s+${operand}`, 'gi'), 'binomial($1, $2)');
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [new RegExp(`^d\\^?(\\d)?\\s*/\\s*d${W}\\^?\\d?\\s*(.+)$`, 'i'), m => `diff(${m[3]}, ${m[2]}${m[1] ? `, ${m[1]}` : ''})`],
     [new RegExp(`^(?:pochodna|derivative|rozniczkuj|differentiate)\\s+(?:rzedu\\s+(\\d+)\\s+)?(?:z |of |funkcji )?(.+?)(?:\\s+(?:po|wzgledem|wrt|with respect to|by)\\s+${W})?$`, 'i'), m => `diff(${m[2]}${m[3] ? `, ${m[3]}` : ''}${m[1] ? `${m[3] ? '' : ', x'}, ${m[1]}` : ''})`],
     [/^(?:∫|integrate|integral|calka|calkuj)\s*_\s*\{?([^}^]+?)\}?\s*\^\s*\{?([^}\s]+?)\}?\s+(.+?)\s*d([a-z])\s*$/i, m => `integrate(${m[3]}, ${m[4]}, ${m[1]}, ${m[2]})`],
     [new RegExp(`^(?:calka|calkuj|integrate|integral|int|∫)\\s+(?:z |of )?(?:(?:oznaczona|nieoznaczona|definite|indefinite)\\s+)?(.+?)\\s*(?:d${W})?\\s+(?:od|from)\\s+(.+?)\\s+(?:do|to)\\s+(.+)$`, 'i'), m => `integrate(${m[1]}, ${m[2] ?? 'x'}, ${m[3]}, ${m[4]})`],
+    // "całka od 0 do 1 x^2 dx": the limits first
+    [new RegExp(`^(?:calka|calkuj|integrate|integral|int|∫)\\s+(?:oznaczona\\s+|definite\\s+)?(?:od|from)\\s+(\\S+)\\s+(?:do|to)\\s+(\\S+)\\s+(?:z\\s+|of\\s+)?(.+?)(?:\\s*d${W})?\\s*$`, 'i'), m => `integrate(${m[3]}, ${m[4] ?? 'x'}, ${m[1]}, ${m[2]})`],
     [new RegExp(`^(?:calka|calkuj|integrate|integral|int|∫)\\s+(?:z |of )?(?:nieoznaczona\\s+|indefinite\\s+)?(.+?)\\s*d${W}\\s*$`, 'i'), m => `integrate(${m[1]}, ${m[2]})`],
     [new RegExp(`^(?:lim|limit|granica)\\s+${W}\\s*->\\s*([^\\s]+?)(, ?-?1)?\\s+(.+)$`, 'i'), m => `limit(${m[4]}, ${m[1]}->${m[2]}${m[3] ?? ''})`],
     [new RegExp(`^(?:lim|limit|granica)\\s+(?:z |of )?(.+?)\\s*(?:,|przy|gdy|dla|as|when|for)\\s+${W}\\s*(?:->|dazy do|do|to)\\s*(.+)$`, 'i'), m => `limit(${m[1]}, ${m[2]}->${m[3]})`],

@@ -39,6 +39,8 @@ export function erf(x: number): number {
 /** n-th root; odd roots of negatives stay real. */
 export const nthRoot = (n: number, x: number) => x < 0 && Number.isInteger(n) && n % 2 ? -((-x) ** (1 / n)) : x ** (1 / n);
 export const mod = (a: number, b: number) => ((a % b) + b) % b;
+/** Half away from zero, as MATLAB and the calculator: round(−2,5) = −3. */
+export const roundHalfAway = (x: number) => Math.sign(x) * Math.round(Math.abs(x));
 
 const def = (f: RealFn['f'], show: string, min = 1, max = min): RealFn => ({ f, show, min, max });
 
@@ -52,7 +54,7 @@ export const FN: Record<string, RealFn> = {
   asinh: def(Math.asinh, 'arsinh'), acosh: def(Math.acosh, 'arcosh'), atanh: def(Math.atanh, 'artanh'),
   acoth: def(x => 0.5 * Math.log((x + 1) / (x - 1)), 'arcoth'),
   sqrt: def(Math.sqrt, 'sqrt'), cbrt: def(Math.cbrt, 'cbrt'), root: def(nthRoot, 'root', 2),
-  abs: def(Math.abs, 'abs'), sign: def(Math.sign, 'sgn'), floor: def(Math.floor, 'floor'), ceil: def(Math.ceil, 'ceil'), round: def(Math.round, 'round'),
+  abs: def(Math.abs, 'abs'), sign: def(Math.sign, 'sgn'), floor: def(Math.floor, 'floor'), ceil: def(Math.ceil, 'ceil'), round: def(roundHalfAway, 'round'),
   frac: def(x => x - Math.floor(x), 'frac'),
   ln: def(Math.log, 'ln'), log: def((a, b) => b === undefined ? Math.log10(a) : Math.log(b) / Math.log(a), 'log', 1, 2),
   log2: def(Math.log2, 'log₂'), log10: def(Math.log10, 'log₁₀'), exp: def(Math.exp, 'exp'),
@@ -60,6 +62,8 @@ export const FN: Record<string, RealFn> = {
   re: def(x => x, 'Re'), im: def(x => 0 * x, 'Im'), arg: def(x => x > 0 ? 0 : x < 0 ? Math.PI : NaN, 'arg'), conj: def(x => x, 'conj'),
   min: def(Math.min, 'min', 2, Infinity), max: def(Math.max, 'max', 2, Infinity), mod: def(mod, 'mod', 2),
   gamma: def(gamma, 'Γ'), factorial: def(factorial, 'silnia'), erf: def(erf, 'erf'), erfc: def(x => 1 - erf(x), 'erfc'),
+  // MATLAB's: fix rounds toward zero, rem keeps the sign of a, nthroot(x, n) is the real n-th root
+  fix: def(Math.trunc, 'fix'), rem: def((a, b) => a % b, 'rem', 2), nthroot: def((x, n) => nthRoot(n, x), 'nthroot', 2), hypot: def(Math.hypot, 'hypot', 2),
 };
 
 export const ALIAS: Record<string, string> = {

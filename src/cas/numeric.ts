@@ -311,7 +311,11 @@ function evFn(n: string, a: C[], p: number): C {
     case 'arg': return real(bfAtan2(z.im, z.re, p));
     case 'floor': return real(bfInt(bfFloor(needReal(z, 'Część całkowita'))));
     case 'ceil': return real(bfInt(-bfFloor(bfNeg(needReal(z, 'Sufit')))));
-    case 'round': return real(bfInt(bfFloor(bfAdd(needReal(z, 'Zaokrąglenie'), { m: 1n, e: -1 }, wp))));
+    case 'round': {
+      // half away from zero, as MATLAB
+      const r = needReal(z, 'Zaokrąglenie'), s = bfSign(r) < 0 ? -1n : 1n;
+      return real(bfInt(s * bfFloor(bfAdd(s < 0n ? bfNeg(r) : r, { m: 1n, e: -1 }, wp))));
+    }
     case 'frac': { const r = needReal(z, 'Część ułamkowa'); return real(bfSub(r, bfInt(bfFloor(r)), p)); }
     case 'mod': {
       const x = needReal(a[0], 'mod'), y = needReal(a[1], 'mod');

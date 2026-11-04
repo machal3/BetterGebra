@@ -19,6 +19,8 @@ function normalize(input: string): string {
     .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, s => `^(${[...s].map(c => SUPERSCRIPT[c]).join('')})`)
     .replace(/π/g, 'pi').replace(/τ/g, 'tau').replace(/[φϕ]/g, 'phi').replace(/√/g, 'sqrt').replace(/∛/g, 'cbrt')
     .replace(/[·⋅∙×]/g, '*').replace(/[÷:]/g, '/').replace(/[−–]/g, '-').replace(/\*\*/g, '^')
+    // MATLAB's element-wise .* ./ .^ are the plain operations on numbers
+    .replace(/\.(?=[*/^])/g, '')
     .trim();
 }
 

@@ -14,7 +14,7 @@ import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
 import { IconArrowRight, IconBook, IconCalculator, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
-import type { Pod, Result, Row } from '../../cas/engine';
+import type { Pod, Result, Row, Step } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
 import { parse, type Node, type VarKind } from '../../cas/parse';
 import { sugar } from '../../cas/sugar';
@@ -83,6 +83,44 @@ function PodCard({ pod, primary, run }: { pod: Pod; primary: boolean; run: (q: s
   );
 }
 
+/** A card that is one short value (Rząd 2, Wyznacznik −2, Ślad 5). */
+const isFact = (p: Pod) => !p.plot && !p.more && !p.note && p.rows.length === 1 && !p.rows[0].grid && p.rows[0].text.length <= 16
+  // a matrix or a formula with its own left side (A⁻¹ = …, det(λI − A) = …) needs the card's width
+  && !/<mtable|<mo>=<\/mo>/.test(p.rows[0].ml);
+/** The cards in order, short values next to each other gathered into one card of tiles. */
+function grouped(pods: Pod[]): (Pod | Pod[])[] {
+  const out: (Pod | Pod[])[] = [];
+  for (let i = 0; i < pods.length; i++) {
+    // the first card is the answer and stays on its own; two short values or more make a card of tiles
+    if (i > 0 && i + 1 < pods.length && isFact(pods[i]) && isFact(pods[i + 1])) {
+      const facts: Pod[] = [];
+      while (i < pods.length && isFact(pods[i])) facts.push(pods[i++]);
+      out.push(facts);
+      i--;
+    } else out.push(pods[i]);
+  }
+  return out;
+}
+
+/** Short values side by side: a title over each, one copy for all of them. */
+function FactsCard({ pods }: { pods: Pod[] }) {
+  const text = pods.map(p => `${p.title}: ${p.rows[0].text}`).join('\n');
+  return (
+    <section className="b-pod b-facts is-wide" data-ui-message aria-label={pods.map(p => p.title).join(', ')}>
+      <div className="b-facts-grid">
+        {pods.map(p => (
+          <div className="b-fact" key={p.title}>
+            <h3>{p.title}</h3>
+            <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: p.rows[0].ml }} />
+            {p.rows[0].note && <span className="b-fact-note">{p.rows[0].note}</span>}
+          </div>
+        ))}
+      </div>
+      <MessageActions actions={['copy']} text={text} label="Działania: wartości" />
+    </section>
+  );
+}
+
 function Results({ result, query, busy, run }: { result: Result; query: string; busy: boolean; run: (q: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   // each answer arrives card by card
@@ -102,8 +140,8 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
         </header>
       )}
       {result.error && <section className="b-pod is-error" role="alert"><p>{result.error}</p></section>}
-      {result.pods.map((p, i) => <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />)}
-      {!busy && <NextSteps ans={result.ans} query={query} run={run} />}
+      {grouped(result.pods).map((p, i) => (Array.isArray(p) ? <FactsCard key={i} pods={p} /> : <PodCard key={i} pod={p} primary={i === 0 && !result.error} run={run} />))}
+      {!busy && <NextSteps ans={result.ans} next={result.next} query={query} run={run} />}
     </div>
   );
 }
@@ -136,8 +174,9 @@ function nextSteps(ans: string | undefined, query: string): Recommendation[] {
 }
 
 /** "Co dalej z wynikiem": the answer's next questions, in the card of the Badanie panel's calculator offer. */
-function NextSteps({ ans, query, run }: { ans: string | undefined; query: string; run: (q: string) => void }) {
-  const options = nextSteps(ans, query);
+function NextSteps({ ans, next, query, run }: { ans: string | undefined; next: Step[] | undefined; query: string; run: (q: string) => void }) {
+  // a function of one variable's steps, then the engine's MATLAB ones for matrices and lists
+  const options = [...nextSteps(ans, query), ...(next ?? []).filter(s => s.query !== query.trim()).map((s): Recommendation => ({ id: s.query, label: s.label, reason: s.reason, signal: 3 }))];
   if (!options.length) return null;
   return (
     <SmartRecommendation
@@ -380,14 +419,23 @@ function Suggestions({ run }: { run: (q: string) => void }) {
         <h2 id="calc-suggest-title">Przykłady</h2>
         <span className="b-calc-suggest-hint">Kliknij, aby obliczyć</span>
       </header>
-      <SegmentedControl
-        kind="tabs"
-        variant="underline"
-        aria-label="Rodzaj przykładów"
-        value={topic}
-        onChange={setTopic}
-        options={EXAMPLES.map(([t]) => ({ value: t, label: t, controls: 'calc-examples' }))}
-      />
+      {/* all the topics in view, wrapped: sixteen tabs in one row would run off the card */}
+      <div className="b-calc-topics" role="tablist" aria-label="Rodzaj przykładów">
+        {EXAMPLES.map(([t, items]) => (
+          <button key={t} type="button" role="tab" className="b-chip b-calc-topic" data-topic={t} aria-selected={t === topic} aria-controls="calc-examples"
+            tabIndex={t === topic ? 0 : -1} onClick={() => setTopic(t)} onKeyDown={e => {
+              // ← → walk the topics, as tabs do
+              const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+              if (!step) return;
+              e.preventDefault();
+              const k = EXAMPLES.findIndex(([s]) => s === t), next = EXAMPLES[(k + step + EXAMPLES.length) % EXAMPLES.length][0];
+              setTopic(next);
+              (e.currentTarget.parentElement?.querySelector(`[data-topic="${next}"]`) as HTMLElement | null)?.focus();
+            }}>
+            {t}<span className="b-calc-topic-count">{items.length}</span>
+          </button>
+        ))}
+      </div>
       <div ref={grid} id="calc-examples" className="b-calc-tiles" role="tabpanel" aria-label={topic}>
         {items.map(([q, label]) => (
           <button key={q} type="button" className="b-row b-calc-tile" onClick={() => run(q)}>

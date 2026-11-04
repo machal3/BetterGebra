@@ -1,5 +1,5 @@
 import type { Complex, Node, Params } from './ast';
-import { CONST, FN, LANCZOS, factorial, mod, nthRoot } from './functions';
+import { CONST, FN, LANCZOS, factorial, mod, nthRoot, roundHalfAway } from './functions';
 import { parse } from './parser';
 
 export type ComplexFunction = (z: Complex) => Complex;
@@ -73,7 +73,7 @@ const CFN: Record<string, CFn> = {
   gamma,
   factorial: z => z[1] === 0 ? [factorial(z[0]), 0] : gamma(add(z, ONE)),
   // Gaussian rounding: Re and Im separately, floor(2,5 + 1,7i) = 2 + i; mod(a; b) = a − b·floor(a/b) with it.
-  floor: z => [Math.floor(z[0]), Math.floor(z[1])], ceil: z => [Math.ceil(z[0]), Math.ceil(z[1])], round: z => [Math.round(z[0]), Math.round(z[1])],
+  floor: z => [Math.floor(z[0]), Math.floor(z[1])], ceil: z => [Math.ceil(z[0]), Math.ceil(z[1])], round: z => [roundHalfAway(z[0]), roundHalfAway(z[1])],
   frac: z => [z[0] - Math.floor(z[0]), z[1] - Math.floor(z[1])],
   mod: (a, b) => b[1] === 0 && a[1] === 0 ? [mod(a[0], b[0]), 0] : sub(a, mul(b, CFN.floor(div(a, b)))),
   re: z => [z[0], 0], im: z => [z[1], 0], arg: z => [z[0] || z[1] ? Math.atan2(z[1], z[0]) : NaN, 0], conj: z => [z[0], 0 - z[1]],

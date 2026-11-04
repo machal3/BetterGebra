@@ -50,6 +50,8 @@ export const FUNCTIONS: Record<string, [number, number]> = {
   abs: [1, 1], sign: [1, 1], floor: [1, 1], ceil: [1, 1], round: [1, 1], frac: [1, 1],
   gamma: [1, 1], factorial: [1, 1], binomial: [2, 2], zeta: [1, 1], erf: [1, 1], erfc: [1, 1],
   re: [1, 1], im: [1, 1], conj: [1, 1], arg: [1, 1], atan2: [2, 2], max: [1, Infinity], min: [1, Infinity], mod: [2, 2],
+  // MATLAB's, written by the parser in the functions above
+  fix: [1, 1], rem: [2, 2], nthroot: [2, 2], hypot: [2, 2],
 };
 
 /** Commands: canonical name → [min args, max args]. Their arguments may be equations, lists, variable names. */
@@ -72,9 +74,9 @@ export const COMMANDS: Record<string, [number, number]> = {
   vander: [1, 1], toeplitz: [1, 2], repmat: [2, 3], reshape: [2, 3], kron: [2, 2], triu: [1, 2], tril: [1, 2], fliplr: [1, 1],
   flipud: [1, 1], circshift: [2, 3], size: [1, 2], numel: [1, 1], length: [1, 1], isempty: [1, 1], find: [1, 2], any: [1, 2],
   all: [1, 2], cumsum: [1, 2], cumprod: [1, 2],
-  lu: [1, 1], qr: [1, 1], chol: [1, 1], svd: [1, 1], eig: [1, 1], cond: [1, 2], pinv: [1, 1], expm: [1, 1], null: [1, 1], orth: [1, 1],
+  lu: [1, 1], qr: [1, 1], chol: [1, 1], svd: [1, 1], eig: [1, 1], cond: [1, 2], pinv: [1, 1], expm: [1, 1], sqrtm: [1, 1], logm: [1, 1], null: [1, 1], orth: [1, 1],
   double: [1, 1],
-  poly: [1, 1], polyval: [2, 2], polyder: [1, 2], polyint: [1, 2], conv: [2, 2], deconv: [2, 2], residue: [2, 2], polyfit: [3, 3],
+  poly: [1, 1], sym2poly: [1, 2], poly2sym: [1, 2], primes: [1, 1], polyval: [2, 2], polyder: [1, 2], polyint: [1, 2], conv: [2, 2], deconv: [2, 2], residue: [2, 2], polyfit: [3, 3],
   fit: [3, 3], interp1: [3, 5], spline: [2, 3], pchip: [2, 3], trapz: [1, 2], cumtrapz: [1, 2], scatter: [2, 2], stem: [1, 2],
   bar: [1, 2], histogram: [1, 2], errorbar: [3, 3], polarplot: [1, 2],
   fzero: [2, 2], fminbnd: [3, 3], fminsearch: [2, 2], fsolve: [2, 2], integral2: [5, 5], ode45: [3, 3], ode23: [3, 3], ode15s: [3, 3],
@@ -134,7 +136,7 @@ export const ALIAS: Record<string, string> = {
   rozkladlu: 'lu', rozkladqr: 'qr', cholesky: 'chol', rozkladsvd: 'svd', wartosciszczegolne: 'svd', uwarunkowanie: 'cond',
   pseudoodwrotna: 'pinv', przyblizona: 'double',
   hist: 'histogram', dopasuj: 'fit', interpoluj: 'interp1', splot: 'conv', trapezy: 'trapz', sklejana: 'spline', punktowy: 'scatter',
-  slupkowy: 'bar', biegunowy: 'polarplot', quadgk: 'integrate',
+  slupkowy: 'bar', biegunowy: 'polarplot', quadgk: 'integrate', quad: 'integrate', quadl: 'integrate', nchoosek: 'binomial',
   dominanta: 'mode', rozstep: 'range', percentyl: 'prctile', kwantyl: 'quantile', skosnosc: 'skewness', kurtoza: 'kurtosis',
   kowariancja: 'cov', korelacja: 'corrcoef', regresja: 'fitlm', var: 'variance', angle: 'arg', filtr: 'filter', widmo: 'fft',
   fsurf: 'surf', fmesh: 'mesh', fcontour: 'contour', fplot3: 'plot3', powierzchnia: 'surf', poziomice: 'contour',
@@ -181,7 +183,7 @@ export const isStr = (t: string | undefined) => t !== undefined && t[0] === '"';
 const endsOperand = (t: string | undefined) => t !== undefined && !isStr(t) && (/^\.?\d|^[a-zα-ω]/i.test(t) || [')', ']', '}', "'", ".'", '!', '°'].includes(t));
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** MATLAB's names with a digit in them, read whole (interp1 is not interp·1). */
-const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv|fplot3|plot3)(?![a-z0-9_])/y;
+const DIGIT_WORDS = /(?:interp1|integral2|integral3|ode45|ode23|ode15s|chi2pdf|chi2cdf|chi2inv|fplot3|plot3|sym2poly|poly2sym)(?![a-z0-9_])/y;
 
 /** Tokens, each with whether a space came before it (inside [ ] a space can separate elements). */
 function lex(source: string, names: readonly string[]): { toks: string[]; space: boolean[] } {
@@ -335,6 +337,13 @@ export function parse(input: string, opts: ParseOptions = {}): Node {
       const count = min === max ? `${min}` : max === Infinity ? `co najmniej ${min}` : `od ${min} do ${max}`;
       fail(`${word} przyjmuje ${count} ${min === 1 && max === 1 ? 'argument' : 'argumenty'}.`);
     }
+    const op = (o: '+' | '-' | '*' | '/' | '^', a: Node, b: Node): Node => ({ t: 'op', o, a, b });
+    const fix = (a: Node): Node => op('*', { t: 'call', n: 'sign', args: [a] }, { t: 'call', n: 'floor', args: [{ t: 'call', n: 'abs', args: [a] }] });
+    // MATLAB's: fix rounds toward zero, rem(a, b) = a − b·fix(a/b), nthroot(x, n) the real root, hypot(a, b) = √(a² + b²)
+    if (fname === 'fix') return fix(list[0]);
+    if (fname === 'rem') return op('-', list[0], op('*', list[1], fix(op('/', list[0], list[1]))));
+    if (fname === 'nthroot') return { t: 'call', n: 'root', args: [list[1], list[0]] };
+    if (fname === 'hypot') return { t: 'call', n: 'sqrt', args: [op('+', op('^', list[0], { t: 'num', v: '2' }), op('^', list[1], { t: 'num', v: '2' }))] };
     // atan2(y, x) is the argument of x + yi (variables are real)
     if (fname === 'atan2') return { t: 'call', n: 'arg', args: [{ t: 'op', o: '+', a: list[1], b: { t: 'op', o: '*', a: list[0], b: { t: 'id', n: 'i' } } }] };
     const node: Node = { t: 'call', n: fname, args: list };
