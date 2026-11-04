@@ -9,16 +9,22 @@
  *     is stamped and a gleam crosses it; the notes settle last;
  *  4. the cards that explain it follow, quieter.
  *
+ * Beyond the card, on the page's grid, inkwave.ts plays the same moment large: the line runs to the screen's
+ * edges, snaps into ink dust and sends a wave across the grid.
+ *
  * The values are never animated — each symbol is shown as it is, only uncovered. With reduced motion nothing moves.
  */
 import { reduced } from '../motion';
+import { inkWave } from './inkwave';
 
 const OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const SPRING = 'linear(0, 0.18 6%, 0.62 16%, 0.92 26%, 1.03 36%, 1.04 44%, 1.01 58%, 0.995 72%, 1)';
 let running: Animation[] = [];
 let leftovers: Element[] = [];
+let wave: (() => void) | null = null;
 
 function stop(): void {
+  wave?.(); wave = null;
   running.forEach(a => a.cancel());
   leftovers.forEach(e => e.remove());
   running = []; leftovers = [];
@@ -68,7 +74,7 @@ function dropQuestion(calc: ParentNode, results: HTMLElement): void {
 /** 2–3. The answer's card opens out of a line and its formula assembles. */
 function openAnswer(card: HTMLElement, t0: number): void {
   const mid = card.offsetHeight / 2, host = card.parentElement!;
-  // 240 ms: the hairline is drawn left to right; 360 ms: it splits into two that ride the opening edges to the
+  // 240 ms: the hairline is drawn out from its middle; 360 ms: it splits into two that ride the opening edges to the
   // card's top and bottom; then they fade as the card's shadow comes back. (The lines lie beside the card, not in
   // it, so its clip doesn't cut them.)
   const DRAW = 240, SPLIT = 360, FADE = 160, ALL = DRAW + SPLIT + FADE;
@@ -88,6 +94,9 @@ function openAnswer(card: HTMLElement, t0: number): void {
     a.onfinish = () => line.remove();
   };
   seam(-1); seam(1);
+  // the same line across the whole page, and what it sets off there (inkwave.ts)
+  const backdrop = document.querySelector<HTMLElement>('.b-calc-backdrop');
+  if (backdrop) wave = inkWave(backdrop, card, t0);
   // the card: shut on the line, opened between the edges in step with them, then its shadow given back
   const pad = 40, shut = `inset(${mid - 0.5}px ${-pad}px ${mid - 0.5}px ${-pad}px)`;
   play(card, [

@@ -109,8 +109,10 @@
 /* the answer's card opens out of a hairline (reveal.ts): the line, and the two that ride its edges apart */
 .b-pod-seam {
   position: absolute; z-index: 3; height: 1px; margin-top: -0.5px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--b-ink) 12%, var(--b-ink) 88%, transparent); transform-origin: left center;
+  background: linear-gradient(90deg, transparent, var(--b-ink) 12%, var(--b-ink) 88%, transparent); transform-origin: center;
 }
+/* the answer's moment on the page's grid (inkwave.ts): one canvas over the drifting lines, under the cards */
+.b-inkwave { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
 /* the question as typed, on its way from the field to the heading */
 .b-calc-ghost {
   position: fixed; z-index: 50; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none;
