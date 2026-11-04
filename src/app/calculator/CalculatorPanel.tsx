@@ -12,7 +12,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { IconArrowRight, IconBook, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row, Step } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
@@ -611,19 +611,7 @@ export function CalculatorPanel() {
       {main && createPortal(
         <>
         <Backdrop className="b-calc-backdrop" speed={7} />
-        <div className="b-calc">
-          {idle && (
-            <div className="b-calc-hero">
-              <span className="b-calc-hero-icon" aria-hidden="true"><IconCalculator size={22} /></span>
-              <h2>Kalkulator symboliczny</h2>
-              <p>Wpisz wyrażenie, równanie albo polecenie — po polsku lub angielsku.</p>
-              <ul className="b-calc-hero-facts" aria-label="Co daje kalkulator">
-                <li>wyniki dokładne: ułamki, pierwiastki, π</li>
-                <li>tylko pewne cyfry dziesiętne</li>
-                <li>sprawdzone numerycznie</li>
-              </ul>
-            </div>
-          )}
+        <div className={idle ? 'b-calc is-idle' : 'b-calc'}>
           <Composer value={value} setValue={setValue} run={run} input={input} />
           {busy && <Status />}
           {idle && <Suggestions run={run} />}

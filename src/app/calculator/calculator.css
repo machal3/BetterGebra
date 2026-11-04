@@ -13,20 +13,8 @@
 .b-calc > :nth-child(3) { animation-delay: calc(var(--b-stagger) * 3); }
 .b-calc > :nth-child(n + 4) { animation-delay: calc(var(--b-stagger) * 4.5); }
 
-/* ---------- Empty state: a quiet heading over the field ---------- */
-.b-calc-hero { display: grid; justify-items: center; gap: 6px; padding: 32px 0 8px; text-align: center; }
-.b-calc-hero-icon {
-  display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 6px; border-radius: var(--b-r-xl);
-  background: var(--b-card); color: var(--b-strong); box-shadow: var(--b-shadow-hover);
-}
-.b-calc-hero h2 { margin: 0; font-size: var(--b-fs-2xl); line-height: 36px; font-weight: 500; color: var(--b-strong); }
-.b-calc-hero p { max-width: 520px; margin: 0; font-size: var(--b-fs-title); line-height: 24px; color: var(--b-text); }
-/* three facts, a dot between them */
-.b-calc-hero-facts {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 0; margin: 6px 0 0; padding: 0; list-style: none;
-  font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-muted);
-}
-.b-calc-hero-facts li + li::before { content: "·"; margin: 0 8px; color: var(--b-faint); }
+/* ---------- Empty state: no heading, the field is the start of the page, a little lower ---------- */
+.b-calc.is-idle { padding-top: clamp(40px, 14vh, 128px); }
 
 /* ---------- Composer: the centre of the page ---------- */
 .b-composer {
@@ -291,12 +279,7 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
   .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
-  .b-calc-hero { padding-top: 4px; gap: 4px; }
-  .b-calc-hero-icon { display: none; }
-  .b-calc-hero h2 { font-size: var(--b-fs-xl); line-height: 28px; }
-  .b-calc-hero p { font-size: var(--b-fs-md); line-height: 20px; }
-  /* the field comes sooner; the facts would wrap with a dot at the start of a line */
-  .b-calc-hero-facts { display: none; }
+  .b-calc.is-idle { padding-top: 16px; }
   .b-composer-field { padding-left: 14px; }
   /* 16px: a phone doesn't zoom into the field */
   .b-composer-field textarea { font-size: 16px; }
