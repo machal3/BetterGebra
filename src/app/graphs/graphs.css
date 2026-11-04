@@ -96,9 +96,22 @@
 /* ---------- Parameters ---------- */
 .b-params { display: grid; gap: 6px; }
 .b-param {
-  display: grid; grid-template-columns: 44px 1fr 80px; gap: var(--b-s3); align-items: center;
-  padding: 6px 8px 6px 12px; border-radius: var(--b-r-lg); background: var(--b-card); box-shadow: var(--b-shadow);
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 44px 1fr 80px 28px; gap: var(--b-s2) var(--b-s3); align-items: center;
+  padding: 6px 6px 6px 12px; border-radius: var(--b-r-lg); background: var(--b-card); box-shadow: var(--b-shadow);
+  transition: box-shadow var(--b-normal) ease;
 }
+.ui-buttonc.b-param-play { --h: 28px; width: 28px; margin-left: calc(var(--b-s1) * -1); }
+.ui-buttonc.b-param-play[aria-pressed="true"] { background: var(--b-solid); color: var(--b-on-solid); }
+/* playing: the card lifts a step and a hairline of ink runs along its foot */
+.b-param.is-playing { box-shadow: 0 0 0 1px var(--b-line-hover), var(--b-shadow-hover); }
+.b-param.is-playing::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--b-solid), transparent); background-size: 40% 100%; background-repeat: no-repeat;
+  opacity: 0.22; animation: b-param-run 1.8s var(--b-ease-glide) infinite alternate;
+}
+@keyframes b-param-run { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
 .b-param-name { font: var(--b-fs-math-sm) var(--b-math); color: var(--b-ink); white-space: nowrap; }
 .b-param-error { grid-column: 1 / -1; padding-bottom: 2px; }
 

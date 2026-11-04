@@ -19,6 +19,7 @@ import { useShown } from '../Dock';
 import { toast } from '../toast';
 import { ExactInCalculator } from './Analysis';
 import { RowSettings } from './RowSettings';
+import { leave, pop } from '../motion';
 
 const PREFIX: Record<Mode, string> = { graph: 'y =', complex: 'f(z) =' };
 /** The second row on suggests what else Wykresy draws: sets in x and y, and on the complex plane. */
@@ -46,6 +47,14 @@ export function addAndFocus(after?: FnState): void {
 }
 
 export function removeRow(f: FnState): void {
+  const card = document.querySelector<HTMLElement>(`.b-fn[data-fn="${f.id}"]`);
+  // the row folds away first; the last row is replaced by an empty one at once
+  if (card && state.functions.length > 1) leave(card, () => drop(f), 6);
+  else drop(f);
+}
+
+function drop(f: FnState): void {
+  if (!state.functions.includes(f)) return;
   const index = state.functions.indexOf(f), wasFocused = inputs.get(f.id) === document.activeElement || !!document.activeElement?.closest(`[data-fn="${f.id}"]`);
   removeFunction(f.id);
   if (!wasFocused) return;
@@ -118,7 +127,7 @@ function FunctionRow({ f, index, mode, active }: { f: FnState; index: number; mo
           aria-pressed={f.visible}
           aria-label={f.visible ? `Ukryj wykres ${n}` : `Pokaż wykres ${n}`}
           title={f.visible ? 'Ukryj wykres' : 'Pokaż wykres'}
-          onClick={() => patchFunction(f.id, { visible: !f.visible })}
+          onClick={e => { pop(e.currentTarget, 0.22); patchFunction(f.id, { visible: !f.visible }); }}
         />
         <label className="b-fn-field">
           {prefix && <span className="b-fn-prefix" aria-hidden="true">{prefix}</span>}

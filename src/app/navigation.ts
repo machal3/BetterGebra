@@ -27,7 +27,11 @@ export function setMode(mode: Mode): void {
   // The complex plane needs equal axes.
   if (mode === 'complex') state.view = { ...state.view, ratio: 1 };
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    document.getElementById('plot')?.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+    // the plane turns over into the other mode: out of a blur, from a hair smaller (the graphs then draw themselves in)
+    document.getElementById('plot')?.animate(
+      [{ opacity: 0.15, transform: 'scale(0.985)', filter: 'blur(6px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
+      { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    );
   }
   commit('mode', 'view');
 }

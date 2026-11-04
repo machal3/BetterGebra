@@ -1,0 +1,127 @@
+/*
+ * Motion of the chrome, on top of the components' own: what lands springs a hair past its place and settles
+ * (--b-spring), a press spreads ink from the finger, toggles give under it. All of it monochrome — ink in its alpha
+ * steps, never a colour — and only transform, opacity, filter and clip-path move. With reduced motion base.css
+ * stops every animation and transition, so nothing here needs its own switch.
+ */
+
+/* ---------- Landing: one keyframe for what arrives, on the spring ---------- */
+@keyframes b-land { from { opacity: 0; transform: translateY(10px) scale(0.975); filter: blur(5px); } 55% { filter: blur(0); } }
+@keyframes b-land-right { from { opacity: 0; transform: translateX(10px) scale(0.92); filter: blur(4px); } 55% { filter: blur(0); } }
+
+.sidebar-body { animation: b-land var(--b-land) var(--b-spring) backwards; }
+.b-fn, .b-gobj { animation-name: b-land; animation-duration: var(--b-land); animation-timing-function: var(--b-spring); }
+.b-param { animation: b-land var(--b-land) var(--b-spring) backwards; }
+.b-param:nth-child(2) { animation-delay: 50ms; }
+.b-param:nth-child(n + 3) { animation-delay: 100ms; }
+
+/* the canvas tools: the column comes in, then its buttons one after another */
+.b-toolbar .ui-buttonc { animation: b-land-right 520ms var(--b-spring) backwards; }
+.b-tool-group:nth-child(1) .ui-buttonc:nth-child(1) { animation-delay: 200ms; }
+.b-tool-group:nth-child(1) .ui-buttonc:nth-child(2) { animation-delay: 240ms; }
+.b-tool-group:nth-child(2) .ui-buttonc:nth-child(1) { animation-delay: 280ms; }
+.b-tool-group:nth-child(2) .ui-buttonc:nth-child(2) { animation-delay: 320ms; }
+.b-tool-group:nth-child(2) .ui-buttonc:nth-child(3) { animation-delay: 360ms; }
+.b-tool-group:nth-child(n + 3) .ui-buttonc { animation-delay: 400ms; }
+
+/* popovers open on the spring, from a touch smaller (the leave stays the components' quick fade; phones keep their sheet) */
+@media (min-width: 768px) {
+  .b-popover:popover-open {
+    transition: opacity var(--b-pop) ease, transform 420ms var(--b-spring), filter var(--b-pop) ease,
+      overlay var(--b-pop) allow-discrete, display var(--b-pop) allow-discrete;
+  }
+  @starting-style { .b-popover:popover-open { opacity: 0; transform: translateY(6px) scale(0.96); filter: blur(2px); } }
+}
+
+/* ---------- Press: ink spreads from the finger (motion.ts installRipple) ---------- */
+:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-gpalette-tool, .b-calc-tile)[data-ripple] { position: relative; overflow: hidden; isolation: isolate; }
+:is(.b-row, .b-chip, .b-key, .b-switch, .b-disclosure-head, .b-menu-option, .b-cplot-key, .b-gpalette-tool, .b-calc-tile)[data-ripple]::after {
+  content: ""; position: absolute; z-index: -1; left: var(--rx); top: var(--ry); width: var(--rs); height: var(--rs);
+  margin: calc(var(--rs) / -2) 0 0 calc(var(--rs) / -2); border-radius: 50%; background: currentColor; pointer-events: none;
+  opacity: 0; transform: scale(0);
+}
+[data-ripple="a"]::after { animation: b-ripple-a var(--b-ripple) var(--b-ease) forwards; }
+[data-ripple="b"]::after { animation: b-ripple-b var(--b-ripple) var(--b-ease) forwards; }
+@keyframes b-ripple-a { 0% { opacity: 0.1; transform: scale(0); } 60% { opacity: 0.07; } 100% { opacity: 0; transform: scale(1); } }
+@keyframes b-ripple-b { 0% { opacity: 0.1; transform: scale(0); } 60% { opacity: 0.07; } 100% { opacity: 0; transform: scale(1); } }
+
+/* ---------- Switch: the thumb stretches under the finger toward where it will go, and lands on the spring ---------- */
+.b-switch-thumb { transform-origin: left center; transition: transform 380ms var(--b-spring), scale var(--b-press) var(--b-ease), background-color var(--b-normal) ease; }
+.b-switch[aria-checked="true"] .b-switch-thumb { transform-origin: right center; }
+.b-switch:active .b-switch-thumb { scale: 1.3 1; }
+.b-switch:active .b-switch-track { background-color: var(--b-faint); }
+.b-switch[aria-checked="true"]:active .b-switch-track { background-color: var(--b-solid-hover); }
+
+/* ---------- Slider: the thumb answers the pointer, a halo of ink while it is held ---------- */
+.b-slider::-webkit-slider-thumb { transition: transform 320ms var(--b-spring), box-shadow var(--b-normal) ease; }
+@media (hover: hover) { .b-slider:hover::-webkit-slider-thumb { transform: scale(1.08); } }
+.b-slider:active::-webkit-slider-thumb { transform: scale(1.22); box-shadow: 0 0 0 6px var(--b-fill), var(--b-shadow-thumb); }
+.b-slider::-moz-range-thumb { transition: transform 320ms var(--b-spring), box-shadow var(--b-normal) ease; }
+.b-slider:active::-moz-range-thumb { transform: scale(1.22); box-shadow: 0 0 0 6px var(--b-fill), var(--b-shadow-thumb); }
+
+/* ---------- Disclosure: the content slides down out of its head; chevrons turn on the spring ---------- */
+.b-disclosure-inner { transform: translateY(-6px); transition: opacity var(--b-normal) ease, transform var(--b-fold) var(--b-ease); }
+.b-disclosure[data-open] .b-disclosure-inner { transform: none; }
+.b-disclosure-chevron, .b-menu-chevron { transition: transform 460ms var(--b-spring); }
+
+/* ---------- Function rows ---------- */
+/* the analysed row's line grows out of its middle instead of fading */
+.b-fn::before { transform: scaleY(0.2); transition: opacity var(--b-normal) ease, transform 460ms var(--b-spring); }
+.b-fn.is-active::before { transform: none; }
+/* the dot fills and empties: shown, it lands full; hidden, the fill drains to a ring */
+.b-fn-swatch::after { transition: background-color var(--b-normal) ease, transform 360ms var(--b-spring); }
+.b-fn-swatch:active::after { transform: scale(0.8); }
+.b-fn.is-hidden .b-fn-swatch::after { transform: scale(0.86); }
+/* a finished formula settles in as it is typeset */
+.b-fn.is-typeset .b-fn-math { animation: b-fade-in-math 360ms var(--b-ease) backwards; }
+@keyframes b-fade-in-math { from { opacity: 0; transform: translateY(2px); filter: blur(2px); } }
+/* "Dodaj funkcję": the plus turns a quarter as if to be screwed in */
+.b-fn-add .ui-buttonc__icon:first-child svg { transition: transform 420ms var(--b-spring); }
+@media (hover: hover) { .ui-buttonc.b-fn-add:hover:not(:disabled) .ui-buttonc__icon:first-child svg { transform: rotate(90deg); } }
+.ui-buttonc.b-fn-add:active:not(:disabled) .ui-buttonc__icon:first-child svg { transform: rotate(90deg) scale(0.85); }
+/* the remove button: the bin tips as it is pointed at */
+.b-fn-remove svg { transition: transform 360ms var(--b-spring); transform-origin: 50% 80%; }
+@media (hover: hover) { .ui-buttonc.b-fn-remove:hover svg { transform: rotate(-10deg); } }
+
+/* ---------- Parameters: ▶ ---------- */
+.b-param-play svg { transition: transform 360ms var(--b-spring); }
+.b-param-play:active svg { transform: scale(0.82); }
+
+/* ---------- Geometria: a picked tool's glyph lands ---------- */
+.b-gpalette-tool[aria-pressed="true"] .b-gtool-icon { animation: b-tool-pick 520ms var(--b-spring); }
+@keyframes b-tool-pick { from { transform: scale(0.78) rotate(-6deg); } }
+.b-gpalette-tool:active .b-gtool-icon { transform: scale(0.9); transition: transform var(--b-press) var(--b-ease); }
+
+/* ---------- Kalkulator ---------- */
+/* the field lifts a step while it is written in; the arrow leans forward when pointed at */
+.b-composer:focus-within { box-shadow: 0 0 0 0.5px var(--b-line-hover), 0 18px 40px -16px var(--b-backdrop), 0 1px 2px 0 var(--b-line); }
+.b-composer-go svg { transition: transform 360ms var(--b-spring); }
+@media (hover: hover) { .ui-buttonc.b-composer-go:hover svg { transform: translateX(2px); } }
+/* while it computes the old answer steps back into a soft blur */
+.b-calc-results { transition: opacity var(--b-normal) ease, filter var(--b-slow) ease, transform var(--b-slow) var(--b-ease); }
+.b-calc-results[aria-busy="true"] { opacity: 0.45; filter: blur(1.5px); transform: scale(0.995); }
+/* "Wynik": a gleam crosses the badge once, as the answer lands */
+.b-pod-badge { position: relative; overflow: hidden; }
+.b-pod-badge::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, currentColor 50%, transparent 70%); opacity: 0.35;
+  transform: translateX(-120%); animation: b-gleam 900ms var(--b-ease) 520ms forwards;
+}
+@keyframes b-gleam { to { transform: translateX(120%); } }
+/* examples and history: the magnifier nudges toward the question */
+.b-calc-tile-icon { transition: transform 360ms var(--b-spring), color var(--b-fast) ease; }
+@media (hover: hover) { .b-row.b-calc-tile:hover .b-calc-tile-icon { transform: translateX(2px) scale(1.1); color: var(--b-icon); } }
+/* the palette's keys give under the finger and spring back */
+.b-key { transition: background-color var(--b-fast) ease, box-shadow var(--b-fast) ease, transform 320ms var(--b-spring); }
+.b-key:active { transition-duration: var(--b-fast), var(--b-fast), 80ms; }
+/* the empty state's drawing is sketched */
+.b-empty-art :is(path, rect, circle, line, polyline) { stroke-dasharray: 1; stroke-dashoffset: 0; animation: b-draw 1100ms var(--b-ease) 200ms backwards; }
+.b-empty-art :is(path, rect, circle, line, polyline):not([pathLength]) { stroke-dasharray: none; animation: b-fade 700ms ease 200ms backwards; }
+
+/* ---------- Chips: a toggled chip gives and lands ---------- */
+.b-chip { transition: background-color var(--b-fast) ease, color var(--b-fast) ease, transform 320ms var(--b-spring); }
+.b-chip:active { transition-duration: var(--b-fast), var(--b-fast), 80ms; }
+
+/* ---------- Toolbar toggles ---------- */
+.b-toolbar .ui-buttonc svg { transition: transform 320ms var(--b-spring); }
+.b-toolbar .ui-buttonc:active svg { transform: scale(0.86); }

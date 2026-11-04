@@ -13,7 +13,10 @@
  *  - Heights 24 / 28 / 32, 38–44 for a coarse pointer. Motion: hover 140ms ease, press scale .97 over 160ms,
  *    popover 180ms, folding 340ms, chevron 280ms, easing cubic-bezier(.22, 1, .36, 1). Entrances: a surface or a
  *    list arrives out of a 4px blur, rising 8px over 560ms, its parts 45ms apart; leaving is quicker (140ms) and
- *    only fades. Only transform, opacity, filter and clip-path move, so the compositor runs it.
+ *    only fades. Only transform, opacity, filter and clip-path move, so the compositor runs it. What lands (rows,
+ *    cards, popovers, tools) lands on --b-spring, a 3 % overshoot, never a bounce; a press spreads ink from the
+ *    finger in the ink's own alpha (motion.css). On the canvases a graph is drawn in by a pen in its colour,
+ *    morphs into its edited form, its points pop, and the view glides and coasts (render/anim.ts).
  *
  * Two deliberate steps away from the components: icons at .55 instead of .447 and field edges a little stronger
  * than the hairline, both for contrast (WCAG 1.4.11). Dark mode follows data-theme="dark" on <html>, which the
@@ -152,6 +155,10 @@
   --b-sheet-out: 240ms;
   --b-rise: 8px;
   --b-blur: 4px;
+  /* landing: a spring that overshoots by ~3 % and settles (motion.css); falls back to --b-ease where linear() is unknown */
+  --b-spring: linear(0, 0.18 6%, 0.62 16%, 0.92 26%, 1.03 36%, 1.04 44%, 1.01 58%, 0.995 72%, 1);
+  --b-land: 640ms;
+  --b-ripple: 560ms;
 
   /* Mathematics on the canvas (read by the renderers through getComputedStyle) */
   --plot-bg: #ffffff;

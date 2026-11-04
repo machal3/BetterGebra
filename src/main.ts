@@ -15,6 +15,9 @@ import { initTooltips } from './app/tooltips';
 import { initSheetDrag } from './components/controls';
 import { openHelp } from './app/Help';
 import { startMathTidy } from './app/math-tidy';
+import { enter, installRipple } from './app/motion';
+// last, so it layers over the panels' own styles
+import './styles/motion.css';
 
 if (!restore()) {
   addFunction('x^2');
@@ -37,10 +40,16 @@ function applyTheme(): void {
 systemDark.addEventListener('change', applyTheme);
 
 // --- Panels: home | graphs | geometry | calculator (the hash keeps the choice across reloads) ---
+const PANEL_MAIN: Record<string, string> = { graphs: 'stage', geometry: 'geometry', calculator: 'calc' };
 function syncPanel(): void {
-  const hash = location.hash;
+  const hash = location.hash, was = document.body.dataset.panel, now = panelFromHash(hash);
   // #kalkulator?q=… opens the calculator with that question (links to a result)
-  document.body.dataset.panel = panelFromHash(hash);
+  document.body.dataset.panel = now;
+  // another panel: its page comes into focus out of a soft blur, and on Wykresy the graphs are drawn in again
+  if (was && was !== now) {
+    enter(document.getElementById(PANEL_MAIN[now] ?? ''));
+    if (now === 'graphs') scene.replay();
+  }
   // a function's settings live in the top layer, outside the panel: they would stay over the next one
   if (document.body.dataset.panel !== 'graphs') document.querySelectorAll<HTMLElement>('[id^="fn-settings-"]:popover-open').forEach(p => p.hidePopover());
 }
@@ -74,6 +83,7 @@ initCanvasInput(scene);
 initGeometry();
 initTooltips();
 initSheetDrag();
+installRipple();
 syncPanel();
 document.body.dataset.mode = state.mode;
 applyTheme();

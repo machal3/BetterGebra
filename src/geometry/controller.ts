@@ -7,6 +7,7 @@
  */
 import { format } from '../format';
 import { constant } from '../math';
+import { easeInOutCubic, easeOutBack, easeOutCubic, now, progress } from '../render/anim';
 import { LABEL, SERIF, drawAxes, drawGrid, readTheme } from '../render/plot2d';
 import { NO_INSET, Viewport, minorOf, panned, tick, zoomed, type Inset } from '../render/viewport';
 import type { View } from '../state';
@@ -313,6 +314,10 @@ export const onFocusCoords = (fn: () => void) => { focusCoords = fn; };
  * Adds the drafts (a draft may refer to an earlier one of the batch as −1, −2…). A draft listed in `replace` takes
  * the place of that object instead, keeping its id, so everything built on it follows the new definition.
  */
+/** When each object of this session was made: it is drawn in (a point pops, a circle and a segment are drawn). */
+const born = new Map<number, number>();
+const BIRTH = 620;
+
 function add(drafts: Draft[], replace = new Map<number, GeoObject>()): number[] {
   const taken = new Set(objects.map(o => o.name)), ids: number[] = [];
   drafts.forEach(({ imageOf, name, ...d }, i) => {
@@ -321,7 +326,7 @@ function add(drafts: Draft[], replace = new Map<number, GeoObject>()): number[] 
     const o: GeoObject = { ...d, of: d.of.map(id => id < 0 ? ids[-id - 1] : id), id: old?.id ?? nextId++, name: fresh };
     if (old?.hidden) o.hidden = true;
     if (old?.style) o.style = old.style;
-    if (old) objects[objects.indexOf(old)] = o; else objects.push(o);
+    if (old) objects[objects.indexOf(old)] = o; else { objects.push(o); born.set(o.id, now() + i * 70); }
     taken.add(o.name);
     ids.push(o.id);
   });
@@ -702,16 +707,29 @@ function draw(): void {
     .filter((i): i is { o: GeoObject; s: Shape; ghost: boolean } => !!i.s && (!i.o.hidden || tool === 'hide'))
     .sort((a, b) => LAYER[a.s.kind] - LAYER[b.s.kind]);
 
-  const byId = new Map(objects.map(o => [o.id, o]));
+  const byId = new Map(objects.map(o => [o.id, o])), t = now();
+  let growing = false;
   for (const { o, s, ghost: isGhost } of items) {
+    // how far its birth has come: 1 for everything made before
+    const since = isGhost ? undefined : born.get(o.id);
+    let grow = since === undefined ? 1 : progress(since, BIRTH, t);
+    if (grow >= 1) born.delete(o.id); else growing = true;
+    if (grow <= 0) continue;
+    const drawn = easeInOutCubic(grow);
     const st = (o.def === 'edge' ? byId.get(o.of[2])?.style : o.style) ?? {};
     const auto = o.def === 'edge' || s.kind === 'polygon' || s.kind === 'sector' ? poly : s.kind === 'angle' ? arc : s.kind === 'point' ? (o.def === 'free' || o.def === 'on' ? free : bound) : ink;
     const color = st.color === 'ink' ? ink : st.color ?? auto;
     const hot = marked.has(o.id), text = isGhost ? '' : caption(o, s, st.label, id => names.get(id) ?? '?'), font = text === o.name ? SERIF : LABEL;
-    ctx.globalAlpha = isGhost ? 0.55 : o.hidden ? 0.3 : 1;
+    ctx.globalAlpha = (isGhost ? 0.55 : o.hidden ? 0.3 : 1) * (s.kind === 'point' ? 1 : Math.min(1, easeOutCubic(grow) * 1.6));
     ctx.setLineDash([]);
     if (s.kind === 'point') {
-      const X = v.px(s.x), Y = v.py(s.y), r = st.size ?? defaultSize(o);
+      const X = v.px(s.x), Y = v.py(s.y), r = (st.size ?? defaultSize(o)) * (grow < 1 ? Math.max(0, easeOutBack(grow, 2.4)) : 1);
+      // a new point lands: a ring spreads from it as it pops
+      if (grow < 1) {
+        ctx.save(); ctx.globalAlpha = 0.45 * (1 - grow); ctx.lineWidth = 1.5; ctx.strokeStyle = color;
+        ctx.beginPath(); ctx.arc(X, Y, (st.size ?? defaultSize(o)) + 18 * easeOutCubic(grow), 0, 2 * Math.PI); ctx.stroke();
+        ctx.restore();
+      }
       ctx.beginPath();
       if (st.shape === 'cross') {
         const k = r * 0.85;
@@ -735,10 +753,13 @@ function draw(): void {
     const dash = () => ctx.setLineDash(st.dash === 'dashed' ? [w * 3, w * 3] : st.dash === 'dotted' ? [0.01, w * 3] : []); // dash and gap scale with the stroke
     ctx.beginPath();
     if (s.kind === 'polygon') s.pts.forEach((p, i) => i ? ctx.lineTo(v.px(p.x), v.py(p.y)) : ctx.moveTo(v.px(p.x), v.py(p.y)));
-    else if (s.kind === 'circle') ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, 0, 2 * Math.PI);
-    else if (s.kind === 'arc' || s.kind === 'sector') {
+    else if (s.kind === 'circle') {
+      // drawn round like a compass from the top; whole once made
+      if (drawn < 1) ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * drawn);
+      else ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, 0, 2 * Math.PI);
+    } else if (s.kind === 'arc' || s.kind === 'sector') {
       if (s.kind === 'sector') ctx.moveTo(v.px(s.cx), v.py(s.cy));
-      ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, -s.from, -(s.from + s.sweep), true);
+      ctx.arc(v.px(s.cx), v.py(s.cy), s.r * v.scale, -s.from, -(s.from + s.sweep * drawn), true);
     } else if (s.kind === 'angle') {
       const X = v.px(s.x), Y = v.py(s.y);
       if (Math.abs(s.sweep - Math.PI / 2) < 1e-9) {
@@ -750,7 +771,7 @@ function draw(): void {
       ctx.closePath();
       const mid = -(s.from + s.sweep / 2);
       if (text) label(text, X + (ARC + 30) * Math.cos(mid), Y + (ARC + 30) * Math.sin(mid), color, theme.bg, font, 'center');
-    } else lineThrough(v, s as Line);
+    } else lineThrough(v, s as Line, drawn);
     if (s.kind === 'polygon' || s.kind === 'sector' || s.kind === 'angle') {
       ctx.closePath();
       paint('fill', color, (st.fill ?? 0.16) + (hot ? 0.14 : 0));
@@ -760,12 +781,13 @@ function draw(): void {
       if (hot) { ctx.lineWidth = w + 6; paint('stroke', color, 0.18); }
       dash(); ctx.lineWidth = w; ctx.strokeStyle = color;
       ctx.stroke();
-      if (s.kind === 'vector') arrowhead(v.px(s.x1), v.py(s.y1), v.px(s.x2), v.py(s.y2), color, w);
+      if (s.kind === 'vector') arrowhead(v.px(s.x1), v.py(s.y1), v.px(s.x1 + (s.x2 - s.x1) * drawn), v.py(s.y1 + (s.y2 - s.y1) * drawn), color, w);
     }
     if (text && s.kind !== 'angle') { const [X, Y] = anchor(v, s); label(text, X + 6, Y - 10, color, theme.bg, font); }
   }
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
+  if (growing) request();
   // Where a click would put the point: a ring, filled when it lands on something (grid, line, intersection).
   const at = hover?.snap;
   if (at && at.id === undefined) {
@@ -777,10 +799,11 @@ function draw(): void {
 }
 
 /** A line-like clipped to the canvas (a long enough stretch past both edges). */
-function lineThrough(v: Viewport, s: Line): void {
+function lineThrough(v: Viewport, s: Line, drawn = 1): void {
   const X1 = v.px(s.x1), Y1 = v.py(s.y1), X2 = v.px(s.x2), Y2 = v.py(s.y2), len = Math.hypot(X2 - X1, Y2 - Y1);
   const far = (Math.hypot(width, height) + Math.hypot(X1 - width / 2, Y1 - height / 2)) / len;
-  const t0 = s.kind === 'line' ? -far : 0, t1 = s.kind === 'line' || s.kind === 'ray' ? far : 1;
+  // being drawn: a segment grows from its first point, a line out of its first point both ways
+  const t0 = s.kind === 'line' ? -far * drawn : 0, t1 = (s.kind === 'line' || s.kind === 'ray' ? far : 1) * drawn;
   ctx.moveTo(X1 + t0 * (X2 - X1), Y1 + t0 * (Y2 - Y1));
   ctx.lineTo(X1 + t1 * (X2 - X1), Y1 + t1 * (Y2 - Y1));
 }

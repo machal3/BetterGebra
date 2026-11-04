@@ -25,7 +25,7 @@ import { DIGITS, abort, clearHistory, clearVars, compute, removeVar, setDigits, 
 import { BOX, EXAMPLES, PALETTE } from './content';
 import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, prettyText, withSlots, type Replacement } from './composer-text';
 import { Backdrop } from '../Backdrop';
-import { cascade } from '../motion';
+import { cascade, shake, write } from '../motion';
 import './calculator.css';
 
 
@@ -124,7 +124,13 @@ function FactsCard({ pods }: { pods: Pod[] }) {
 function Results({ result, query, busy, run }: { result: Result; query: string; busy: boolean; run: (q: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   // each answer arrives card by card
-  useLayoutEffect(() => cascade(ref.current), [result]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    cascade(el);
+    // the answer is written out as the card lands (the values themselves are never animated); a "no" shakes
+    el?.querySelectorAll('.b-pod.is-primary .b-pod-row').forEach((row, i) => write(row, 220 + i * 120));
+    shake(el?.querySelector('.b-pod.is-error') ?? null);
+  }, [result]);
   return (
     <div ref={ref} className="b-calc-results" aria-live="polite" aria-busy={busy}>
       {result.input && (
@@ -273,7 +279,14 @@ function Composer({ value, setValue, run, input, answered }: { value: string; se
     at.current = -1;
     undo.current = null;
     const k = value.indexOf(SLOT), el = input.current;
-    if (k >= 0 && el) { el.focus(); el.setSelectionRange(k, k + 1); setMissing(true); return; }
+    const form = el?.closest('.b-composer') ?? null;
+    if (k >= 0 && el) { el.focus(); el.setSelectionRange(k, k + 1); setMissing(true); shake(form); return; }
+    // empty: a "no"; sent: the arrow flies off to the right and comes back in from the left
+    if (!value.trim()) shake(form);
+    else form?.querySelector('.b-composer-go svg')?.animate?.(
+      [{ transform: 'none', opacity: 1 }, { transform: 'translateX(14px)', opacity: 0, offset: 0.4 }, { transform: 'translateX(-14px)', opacity: 0, offset: 0.41 }, { transform: 'none', opacity: 1 }],
+      { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    );
     run(oneLine(value));
   };
 

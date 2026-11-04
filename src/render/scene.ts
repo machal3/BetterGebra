@@ -8,10 +8,27 @@ import { exactPoint, exactValue, roots } from '../math';
 import type { Dot, RealFunction } from '../math';
 import { compiled, type Compiled } from '../model';
 import { activeFn, state, type AxisUnit, type FnState } from '../state';
+import { easeInOutCubic, easeOutBack, easeOutCubic, now, progress, reducedMotion } from './anim';
 import { paintDomain } from './domain';
 import { STROKE, dashPattern, dot, drawAxes, drawGrid, ink, readTheme, traceCurve, type Theme } from './plot2d';
 import { drawParametric, paintCondition, type SetFound } from './sets';
 import { NO_INSET, Viewport, axisSteps, minorOf, type Inset } from './viewport';
+
+/** How long a graph takes to draw itself in, to morph into its edited form, and its points to pop. */
+const REVEAL = 900, MORPH = 420, POP = 560, PULSE = 520;
+/** An edit within this long of the last frame the row was drawn in morphs the graph; later, it draws in anew. */
+const MORPH_WITHIN = 1500;
+
+/** What the scene remembers of a row to animate it: what was drawn last, and what is moving. */
+interface RowMotion {
+  key: string;
+  /** The function as drawn in the last frame (mid-morph: the blend), the one an edit morphs from. */
+  shown: RealFunction | null;
+  seen: number;
+  drawn: boolean;
+  reveal?: number;
+  morph?: { from: RealFunction; t0: number };
+}
 
 export class Scene {
   width = 0;
@@ -43,6 +60,14 @@ export class Scene {
   private frame = 0;
   private plotDirty = false;
   private ends: (Dot & { color: string; fn: RealFunction; expr: string })[] = [];
+  private motion = new Map<number, RowMotion>();
+  private firstDraw = true;
+  /** The active row as its points last popped, and when. */
+  private marksKey = '';
+  private marksT0 = 0;
+  /** The point the cursor last snapped to, and when: a ring spreads from it. */
+  private pulseKey = '';
+  private pulseT0 = 0;
 
   constructor(private plot: HTMLCanvasElement, private hover: HTMLCanvasElement, private tip: HTMLElement) {
     this.ctx = plot.getContext('2d')!;
@@ -61,6 +86,12 @@ export class Scene {
       cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     this.draw();
+  }
+
+  /** The graphs are drawn in again (the panel was opened anew). */
+  replay(): void {
+    for (const m of this.motion.values()) m.drawn = false;
+    this.request();
   }
 
   refreshTheme(): void { this.theme = readTheme(); this.request(); }
@@ -97,6 +128,8 @@ export class Scene {
     drawAxes(ctx, vp, theme, axes);
 
     ctx.lineJoin = ctx.lineCap = 'round';
+    const t = now(), pens: { x: number; fn: RealFunction; color: string; width: number }[] = [];
+    let animating = false;
     const ends: (Dot & { color: string; fn: RealFunction; expr: string })[] = [];
     this.found.clear();
     if (!complex) {
@@ -105,9 +138,16 @@ export class Scene {
         if (c.set?.kind === 'condition') this.found.set(f.id, paintCondition(ctx, vp, theme, f, c.set, this.modeAnalysis?.setPoints[f.id], this.moving || this.dragging));
         else if (c.set) drawParametric(ctx, vp, theme, f, c.set);
       }
-      for (const { f, c } of graphs) {
+      graphs.forEach(({ f, c }, i) => {
+        const { fn, edge } = this.animate(f, c.fn!, i, t);
+        if (edge !== null) {
+          // drawing itself in: only what the pen has passed
+          ctx.save();
+          ctx.beginPath(); ctx.rect(0, 0, edge, this.height); ctx.clip();
+          pens.push({ x: edge, fn, color: ink(f.color), width: f.width });
+        }
         ctx.beginPath();
-        for (const e of traceCurve(ctx, vp, c.fn!)) ends.push({ ...e, color: f.color, fn: c.fn!, expr: f.expression });
+        for (const e of traceCurve(ctx, vp, fn)) if (edge === null || vp.px(e.x) <= edge) ends.push({ ...e, color: f.color, fn: c.fn!, expr: f.expression });
         const color = ink(f.color);
         // The active graph among several: a soft halo of its colour under the line (the line keeps its width).
         if (f === active && graphs.length > 1) {
@@ -121,15 +161,88 @@ export class Scene {
         ctx.setLineDash(dashPattern(f.dash, f.width));
         ctx.stroke();
         ctx.setLineDash([]);
-      }
+        if (edge !== null) ctx.restore();
+      });
     }
+    for (const [id, m] of this.motion) {
+      if (!graphs.some(r => r.f.id === id)) m.drawn = false;
+      if (!state.functions.some(f => f.id === id)) this.motion.delete(id);
+    }
+    this.firstDraw = false;
     this.ends = ends;
     // Roots and intersections: small neutral dots, so they don't read as hollow endpoints (a set draws its own points).
-    if (!activeRow?.c.set) for (const m of this.activeAnalysis?.marks ?? []) dot(ctx, vp, m.x, m.y, STROKE.end, theme.label, theme.bg);
+    // They pop in when the active row is new or edited — not on a pan or a slider — each as the pen passes it.
+    if (!activeRow?.c.set) {
+      const marks = this.activeAnalysis?.marks ?? [], key = active ? `${mode}|${active.id}|${active.expression}` : '';
+      if (marks.length && key !== this.marksKey) { this.marksKey = key; this.marksT0 = t; }
+      const pen = active && this.motion.get(active.id);
+      const order = marks.map(m => vp.px(m.x)).sort((a, b) => a - b);
+      for (const m of marks) {
+        const X = vp.px(m.x), rank = order.indexOf(X);
+        let start = this.marksT0 + Math.min(rank, 10) * 45;
+        if (pen?.reveal !== undefined) start = Math.max(start, passes(pen.reveal, X, this.inset.left, this.width));
+        const p = progress(start, POP, t);
+        if (p < 1) animating = true;
+        if (p <= 0) continue;
+        if (p < 1) ring(ctx, X, vp.py(m.y), STROKE.end + 12 * easeOutCubic(p), theme.label, 0.45 * (1 - p));
+        dot(ctx, vp, m.x, m.y, STROKE.end * easeOutBack(p), theme.label, theme.bg);
+      }
+    }
     // Where a piece ends: filled = the point belongs to the graph, hollow = only approached.
     for (const e of ends) { const c = ink(e.color); dot(ctx, vp, e.x, e.y, STROKE.end, e.closed ? c : theme.bg, c); }
+    // the pens drawing graphs in: a dot in the graph's colour with a soft halo, fading as it reaches the edge
+    for (const p of pens) {
+      const y = p.fn(vp.fromX(p.x)), Y = vp.py(y), fade = Math.min(1, (this.width - p.x) / 60);
+      if (!Number.isFinite(Y) || Y < -20 || Y > this.height + 20 || fade <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.18 * fade; ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, Y, p.width + 7, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = fade; ctx.beginPath(); ctx.arc(p.x, Y, p.width + 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = theme.bg; ctx.stroke();
+      ctx.restore();
+    }
     this.drawHover();
     this.onDrawn();
+    if (animating || pens.length || [...this.motion.values()].some(m => m.morph)) this.request();
+  }
+
+  /**
+   * How row `f` moves in this frame: a new or shown-again graph draws itself in from the left (`edge`, the pen's x;
+   * null once drawn), an edited one morphs from the graph on screen into the new one. A slider changes neither
+   * (the expression stays), so the graphs follow it directly.
+   */
+  private animate(f: FnState, fn: RealFunction, index: number, t: number): { fn: RealFunction; edge: number | null } {
+    const key = `${state.mode}|${f.expression}`;
+    let m = this.motion.get(f.id);
+    if (!m) {
+      // the first frame of the page: the graphs are drawn in one after another
+      m = { key, shown: null, seen: t, drawn: false, reveal: t + (this.firstDraw ? 150 + index * 110 : 0) };
+      this.motion.set(f.id, m);
+    } else if (m.key !== key) {
+      if (m.shown && t - m.seen < MORPH_WITHIN) { m.morph = { from: m.shown, t0: t }; m.reveal = undefined; }
+      else { m.reveal = t; m.morph = undefined; }
+      m.key = key;
+    } else if (!m.drawn) {
+      m.reveal = t; m.morph = undefined;
+    }
+    if (reducedMotion()) { m.reveal = undefined; m.morph = undefined; }
+    m.drawn = true; m.seen = t;
+    let shown = fn, edge: number | null = null;
+    if (m.morph) {
+      const p = progress(m.morph.t0, MORPH, t);
+      if (p >= 1) m.morph = undefined;
+      else {
+        const from = m.morph.from, e = easeOutCubic(p);
+        shown = x => { const a = from(x), b = fn(x); return Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * e : b; };
+      }
+    }
+    if (m.reveal !== undefined) {
+      const p = progress(m.reveal, REVEAL, t);
+      if (p >= 1) m.reveal = undefined;
+      else edge = this.inset.left + (this.width - this.inset.left) * easeInOutCubic(p) - (p <= 0 ? 1 : 0);
+    }
+    m.shown = shown;
+    return { fn: shown, edge };
   }
 
   // --- Hover ---
@@ -142,6 +255,16 @@ export class Scene {
     const hit = state.mode === 'graph' ? this.realHit() ?? this.planeHit() : this.planeHit();
     if (!hit) { tip.hidden = true; return; }
     const vp = this.vp, hx = vp.px(hit.x), hy = vp.py(hit.y);
+    // snapped to a notable point: a ring spreads from it once
+    const key = hit.snap ? `${hit.x}|${hit.y}` : '';
+    if (key !== this.pulseKey) { this.pulseKey = key; this.pulseT0 = now(); }
+    if (key) {
+      const p = progress(this.pulseT0, PULSE);
+      if (p < 1) {
+        ring(h, hx, hy, STROKE.hover + 3 + 13 * easeOutCubic(p), ink(hit.color === 'currentColor' ? this.theme.label : hit.color), 0.5 * (1 - p));
+        this.request(false);
+      }
+    }
     if (hit.dot) {
       h.beginPath(); h.arc(hx, hy, STROKE.hover, 0, Math.PI * 2);
       h.fillStyle = ink(hit.color); h.fill();
@@ -225,7 +348,7 @@ export class Scene {
         }),
       ];
       const m = this.nearestMark(marks, 8);
-      if (m) return { x: m.x, y: m.y, color: m.color ?? 'currentColor', html: stacked(m.text), dot: true };
+      if (m) return { x: m.x, y: m.y, color: m.color ?? 'currentColor', html: stacked(m.text), dot: true, snap: true };
     }
     // Otherwise follow the graph nearest the cursor (in px, so steep parts follow up-and-down moves too)…
     let best: { d: number; x: number; y: number; f: FnState; fn: RealFunction } | null = null;
@@ -273,7 +396,7 @@ export class Scene {
     // on Wykresy only a set reads points of the plane; a graph is read along its curve
     if (!c.ok || (state.mode === 'graph' && !c.set)) return null;
     const m = state.snap ? this.nearestMark(this.activeAnalysis?.marks ?? [], 8) : undefined;
-    if (m) return { x: m.x, y: m.y, color: f.color, html: stacked(m.text), dot: true };
+    if (m) return { x: m.x, y: m.y, color: f.color, html: stacked(m.text), dot: true, snap: true };
     if (c.xy) return { x: vp.fromX(p.x), y: vp.fromY(p.y), color: f.color, html: `x ${format(vp.fromX(p.x))}   y ${format(vp.fromY(p.y))}`, dot: false };
     const z: [number, number] = [vp.fromX(p.x), vp.fromY(p.y)], short = (v: number) => format(v);
     const zText = `z = ${complexText(z, short)}`;
@@ -287,7 +410,26 @@ export class Scene {
   }
 }
 
-interface Hit { x: number; y: number; color: string; html: string; dot: boolean }
+interface Hit { x: number; y: number; color: string; html: string; dot: boolean; snap?: boolean }
+
+/** A thin ring, fading: what spreads from a point that pops or is snapped to. */
+function ring(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, alpha: number): void {
+  if (alpha <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.globalAlpha = alpha; ctx.lineWidth = 1.5; ctx.strokeStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+/** When a pen that started at t0 passes screen x (the inverse of its easing, by bisection). */
+function passes(t0: number, x: number, left: number, width: number): number {
+  const target = (x - left) / Math.max(1, width - left);
+  if (target <= 0) return t0;
+  if (target >= 1) return t0 + REVEAL;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; if (easeInOutCubic(mid) < target) lo = mid; else hi = mid; }
+  return t0 + hi * REVEAL;
+}
 
 /**
  * Grid lines nearest v, roundest first: the major line, then minor lines that are multiples of 1, 0,5, 0,2…

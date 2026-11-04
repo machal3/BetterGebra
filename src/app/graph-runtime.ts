@@ -8,7 +8,7 @@ import type { AnalysisResult } from '../analysis/compute';
 import { Scene } from '../render/scene';
 import { fits, type Inset } from '../render/viewport';
 import { state } from '../state';
-import { setView } from '../ui/canvas-input';
+import { glideTo, setView, stopMotion } from '../ui/canvas-input';
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -64,6 +64,7 @@ export function setInset(next: Inset, keep: boolean): void {
   const was = scene.inset;
   if (was.left === next.left && was.bottom === next.bottom) return;
   if (keep && scene.width) {
+    stopMotion();
     const vp = scene.vp;
     scene.inset = next;
     setView({ ...state.view, min: state.view.min + (next.left - was.left) / vp.scale, cy: state.view.cy + (next.bottom - was.bottom) / 2 / vp.yscale });
@@ -81,7 +82,7 @@ export function applyRange(x0: number, x1: number, y0: number, y1: number): stri
     // float64 must still tell the grid lines apart that far from 0
     && x1 - x0 >= 1e-10 * Math.max(Math.abs(x0), Math.abs(x1)) && y1 - y0 >= 1e-10 * Math.max(Math.abs(y0), Math.abs(y1));
   if (!ok) return 'Podaj rosnące zakresy: x o szerokości od 0,0001 do 10 000 000 (w granicach ±10⁹), y o wysokości od 0,0001 do 10¹² (w granicach ±10¹⁵), nie węższe niż 10⁻¹⁰ swoich wartości.';
-  setView({ min: x0, max: x1, cy: (y0 + y1) / 2, ratio });
+  glideTo({ min: x0, max: x1, cy: (y0 + y1) / 2, ratio });
   return '';
 }
 
