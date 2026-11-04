@@ -33,7 +33,7 @@
 @font-face {
   font-family: "Bettergebra Math";
   font-display: swap;
-  src: local("STIX Two Math"), local("STIXTwoMath-Regular"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
+  src: local("STIX Two Math"), local("STIXTwoMath-Regular"), local("Cambria Math"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
 }
 /*
  * Typed formulas (the calculator's field) are Inter with the mathematical symbols drawn by the math font: Inter's
@@ -42,7 +42,7 @@
 @font-face {
   font-family: "Bettergebra Symbols";
   font-display: swap;
-  src: local("STIX Two Math"), local("STIXTwoMath-Regular"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
+  src: local("STIX Two Math"), local("STIXTwoMath-Regular"), local("Cambria Math"), url("../../node_modules/@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2") format("woff2");
   unicode-range: U+2190-21FF, U+2200-22FF, U+2300-23FF, U+25A0-25FF;
 }
 
@@ -99,6 +99,8 @@
   --b-shadow-field-hover: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   --b-shadow-thumb: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.2);
   --b-backdrop: rgba(0, 0, 0, 0.32);
+  /* a sheet over the bottom of a phone's screen: its shadow falls upwards */
+  --b-shadow-sheet: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 -10px 32px -12px rgba(0, 0, 0, 0.18);
 
   /* Radii */
   --b-r-xs: 5px;
@@ -143,6 +145,11 @@
   --b-enter: 560ms;
   --b-leave: 140ms;
   --b-stagger: 45ms;
+  /* phone sheets: they rise on a long, soft glide and drop away quicker on a gentle accelerate */
+  --b-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --b-ease-away: cubic-bezier(0.4, 0, 1, 1);
+  --b-sheet-in: 460ms;
+  --b-sheet-out: 240ms;
   --b-rise: 8px;
   --b-blur: 4px;
 
@@ -200,6 +207,7 @@
   --b-shadow-field-hover: 0 0 0 1px var(--b-faint), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --b-shadow-thumb: 0 0 0 0.5px rgba(0, 0, 0, 0.3), 0 1px 3px 0 rgba(0, 0, 0, 0.5);
   --b-backdrop: rgba(0, 0, 0, 0.55);
+  --b-shadow-sheet: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 -10px 32px -12px rgba(0, 0, 0, 0.6);
 
   --plot-bg: #161618;
   --grid-minor: #1d1d20;

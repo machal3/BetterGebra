@@ -65,7 +65,7 @@
 
 /* ---------- Phone: title in the top bar, mode switch at the bottom ---------- */
 @media (max-width: 767px) {
-  :root { --b-topbar-h: 48px; --b-bottombar-h: calc(64px + env(safe-area-inset-bottom)); }
+  :root { --b-topbar-h: 48px; --b-bottombar-h: calc(60px + env(safe-area-inset-bottom)); }
   .b-topbar {
     position: sticky;
     top: 0;
@@ -86,15 +86,30 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   background: var(--b-panel);
-  box-shadow: inset 0 1px 0 var(--b-line);
+  box-shadow: inset 0 0.5px 0 var(--b-line-hover);
   animation: b-enter-up var(--b-enter) var(--b-ease) backwards;
 }
-/* Icon above a short label, so four sections fit a 360px screen with 52px targets */
+/* A tab bar: icon above a short label, so four sections fit a 360px screen with 52px targets. No tray: the picked
+   section is the neutral fill gliding under it, its icon and label in the strong ink */
 /* (the component sets its sizes on .ui-segc[data-size], also for a coarse pointer, so these need more classes) */
-.b-bottombar .ui-segc.b-modes--bottom[data-size] { --ui-segc-h: 56px; --ui-segc-px: 2px; --ui-segc-fs: var(--b-fs-xs); --ui-segc-lh: 16px; --ui-segc-icon: 20px; }
-.b-modes--bottom .ui-segc__content { flex-direction: column; gap: 2px; }
+.b-bottombar .ui-segc.b-modes--bottom[data-size] {
+  --ui-segc-h: 54px; --ui-segc-px: 2px; --ui-segc-pad: 2px; --ui-segc-fs: var(--b-fs-xs); --ui-segc-lh: 16px; --ui-segc-icon: 22px;
+  --ui-segc-track: transparent; --ui-segc-card: var(--b-fill); --ui-segc-card-shadow: none;
+  border-radius: 0;
+}
+.b-bottombar .b-modes--bottom .ui-segc__scroller { -webkit-mask-image: none; mask-image: none; }
+.b-bottombar .b-modes--bottom .ui-segc__opt, .b-bottombar .b-modes--bottom .ui-segc__pill { border-radius: var(--b-r-2xl); }
+.b-bottombar .b-modes--bottom .ui-segc__opt { color: var(--b-text); }
+.b-bottombar .b-modes--bottom .ui-segc__opt[data-active] { color: var(--b-strong); }
+.b-modes--bottom .ui-segc__track { column-gap: 4px; }
+.b-modes--bottom .ui-segc__content { flex-direction: column; gap: 3px; }
+.b-modes--bottom .ui-segc__label { font-weight: 500; }
+/* the picked section's icon lifts a little as the fill arrives under it */
+.b-modes--bottom .ui-segc__icon { transition: color 90ms ease, transform var(--b-slow) var(--b-ease); }
+.b-modes--bottom .ui-segc__opt[data-active] .ui-segc__icon { transform: translateY(-1px) scale(1.08); }
+.b-modes--bottom .ui-segc__opt:active .ui-segc__icon { transform: scale(0.92); transition-duration: 90ms; }
 
 /* ---------- Start screen ---------- */
 .b-home {

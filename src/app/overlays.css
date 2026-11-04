@@ -70,7 +70,18 @@
   .b-help-head, .b-help-tabs, .b-help-body, .b-help-foot { padding-left: 16px; padding-right: 12px; }
   .b-help-foot { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .b-help-table td:first-child { white-space: normal; }
-  .b-toaster { left: 8px; right: 8px; width: auto; bottom: calc(var(--b-bottombar-h) + 8px); }
+  /* above the pane bar, which is above the tab bar */
+  .b-toaster { left: 8px; right: 8px; width: auto; bottom: calc(var(--b-bottombar-h) + 72px); }
+  /* Pomoc is a sheet: it rises from the edge and drops back */
+  .b-help {
+    opacity: 1; transform: translateY(100%); box-shadow: var(--b-shadow-sheet);
+    transition: transform var(--b-sheet-out) var(--b-ease-away), overlay var(--b-sheet-out) allow-discrete, display var(--b-sheet-out) allow-discrete;
+  }
+  .b-help[open] {
+    transform: none; filter: none;
+    transition: transform var(--b-sheet-in) var(--b-ease-sheet), overlay var(--b-sheet-in) allow-discrete, display var(--b-sheet-in) allow-discrete;
+  }
+  @starting-style { .b-help[open] { opacity: 1; transform: translateY(100%); filter: none; } }
 }
 @media (prefers-reduced-motion: reduce) {
   .b-dialog, .b-dialog[open], .b-dialog::backdrop, .b-tooltip, .b-tooltip:popover-open { transition: none; }

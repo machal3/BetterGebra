@@ -291,7 +291,8 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
   .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
-  .b-calc-hero { padding-top: 8px; }
+  .b-calc-hero { padding-top: 4px; gap: 4px; }
+  .b-calc-hero-icon { display: none; }
   .b-calc-hero h2 { font-size: var(--b-fs-xl); line-height: 28px; }
   .b-calc-hero p { font-size: var(--b-fs-md); line-height: 20px; }
   /* the field comes sooner; the facts would wrap with a dot at the start of a line */

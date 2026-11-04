@@ -14,6 +14,8 @@
   display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--b-r-xs);
   background: var(--b-card); box-shadow: var(--b-shadow); font: 500 var(--b-fs-xs)/1 var(--b-font); color: var(--b-ink);
 }
+/* a key to press means nothing on a touch screen without a keyboard (Pomoc still lists the keys) */
+@media (hover: none) and (pointer: coarse) { .ui-buttonc .b-kbd { display: none; } }
 .b-tag {
   display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--b-r-xs);
   background: var(--b-fill); font-size: var(--b-fs-xs); font-weight: 500; line-height: 16px; color: var(--b-text);
@@ -165,12 +167,22 @@
     border-radius: var(--b-r-2xl) var(--b-r-2xl) 0 0; padding-bottom: env(safe-area-inset-bottom);
   }
   .b-popover::before {
-    content: ""; display: block; width: 36px; height: 4px; margin: 8px auto 0; border-radius: 2px; background: var(--b-line-hover);
+    content: ""; display: block; width: 36px; height: 4px; margin: 7px auto 0; border-radius: 2px; background: var(--b-faint);
   }
-  .b-popover { transform: translateY(32px); }
-  .b-popover:popover-open { transition-duration: var(--b-slow); }
-  @starting-style { .b-popover:popover-open { transform: translateY(32px); filter: none; } }
-  .b-popover::backdrop { background: transparent; transition: background-color var(--b-slow) ease, overlay var(--b-slow) allow-discrete, display var(--b-slow) allow-discrete; }
+  /* it rises from the edge like the panel's sheet, and drops back the same way */
+  .b-popover {
+    opacity: 1; transform: translateY(100%); box-shadow: var(--b-shadow-sheet);
+    transition: transform var(--b-sheet-out) var(--b-ease-away),
+      overlay var(--b-sheet-out) allow-discrete, display var(--b-sheet-out) allow-discrete;
+  }
+  .b-popover:popover-open {
+    transform: none;
+    transition: transform var(--b-sheet-in) var(--b-ease-sheet),
+      overlay var(--b-sheet-in) allow-discrete, display var(--b-sheet-in) allow-discrete;
+  }
+  @starting-style { .b-popover:popover-open { opacity: 1; transform: translateY(100%); filter: none; } }
+  .b-popover::backdrop { background: transparent; transition: background-color var(--b-sheet-out) ease, overlay var(--b-sheet-out) allow-discrete, display var(--b-sheet-out) allow-discrete; }
+  .b-popover:popover-open::backdrop { transition-duration: var(--b-slow); }
   .b-popover:popover-open::backdrop { background: var(--b-backdrop); }
   @starting-style { .b-popover:popover-open::backdrop { background: transparent; } }
   /* settings whose effect shows on the canvas: no dimming, and the upper part of the canvas stays in sight */

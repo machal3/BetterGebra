@@ -1,8 +1,8 @@
 /**
  * The side panel as a floating card over the canvas: its header (the part's name and a button that folds the card
  * up to that header, remembered; motion.ts moves it). On phones the card is away until a button of the pane bar
- * (over the bottom of the canvas) opens one part of it as a sheet — Funkcje, Obiekty, Historia… — with a grip, a
- * half or full height and a close button, so the canvas is free the rest of the time. The sheet's header has tabs
+ * (over the bottom of the canvas) opens one part of it as a sheet — Funkcje, Obiekty, Historia… — with a grip (drag
+ * it, or tap it for the half or full height) and a close button, so the canvas is free the rest of the time. The sheet's header has tabs
  * for the panel's other parts, and the sheet stays above the on-screen keyboard (--b-kb). Whatever part of the
  * canvas the card covers becomes the inset of the Wykresy and Geometria views, measured with a ResizeObserver and
  * passed on outside React, so dragging the sheet never re-renders anything.
@@ -12,12 +12,12 @@ import { createPortal, flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Count } from '@/components/controls';
-import { IconChevronDown, IconClose, IconPanel } from '@/components/icons';
+import { IconClose, IconPanel } from '@/components/icons';
 import { PHONE, useMedia } from '@/hooks/use-media';
 import { setGeometryInset } from '../geometry/controller';
 import { NO_INSET, type Inset } from '../render/viewport';
 import { setInset } from './graph-runtime';
-import { fold } from './motion';
+import { EASE, fold, reduced } from './motion';
 import { usePanel, type Panel } from './navigation';
 
 const STORE = 'bettergebra.dock';
@@ -76,9 +76,11 @@ export function PaneBar({ panel, items }: { panel: Panel; items: PaneButton[] })
   const key = JSON.stringify(items.filter(b => !b.onClick && !b.popover).map(({ label, count }) => ({ label, count })));
   useLayoutEffect(() => {
     if (!phone || !shown) return;
-    tabs = JSON.parse(key);
+    const mine = JSON.parse(key);
+    tabs = mine;
     paneListeners.forEach(f => f());
-    return () => { tabs = []; };
+    // only its own tabs: the next panel's bar may have set its tabs already (panels switch in separate renders)
+    return () => { if (tabs === mine) tabs = []; };
   }, [phone, shown, key]);
   if (!phone || !shown || !host) return null;
   return createPortal(
@@ -118,6 +120,21 @@ export function Dock({ title }: { title: string }) {
   useLayoutEffect(() => { document.body.dataset.dock = card ? 'open' : 'closed'; }, [card]);
   useLayoutEffect(() => { document.body.dataset.sheet = open ? 'open' : 'closed'; }, [open]);
   useEffect(() => () => { delete document.body.dataset.dock; delete document.body.dataset.sheet; }, []);
+  // Another tab of the open sheet: its content slides in from the side of that tab
+  const shownTab = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const was = shownTab.current;
+    shownTab.current = open;
+    if (!phone || !open || !was || was === open || reduced()) return;
+    const body = Array.from(document.querySelectorAll<HTMLElement>('.b-dock .sidebar-body')).find(b => getComputedStyle(b).display !== 'none');
+    const i = tabs.findIndex(t => t.label === open), j = tabs.findIndex(t => t.label === was);
+    const dx = i < 0 || j < 0 ? 0 : i > j ? 16 : -16;
+    body?.scrollTo({ top: 0 });
+    body?.animate(
+      [{ opacity: 0, transform: `translateX(${dx}px)` }, { opacity: 1, transform: 'none' }],
+      { duration: 300, easing: EASE },
+    );
+  }, [open, phone]);
   // another part of the app starts with the canvas free
   useEffect(() => { setPane(null); lastPane = null; }, [title]);
   const toggle = () => {
@@ -208,9 +225,9 @@ export function Dock({ title }: { title: string }) {
   // (full, half, away); a short move is a tap
   const drag = useRef<{ y: number; h: number; moved: boolean; t: number; v: number; last: number } | null>(null);
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!phone || (e.target as Element).closest('button')) return;
+    // the grip is a button too (a tap changes the height), but dragging it moves the sheet
+    if (!phone || (e.target as Element).closest('button:not(.b-dock-grip)')) return;
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!;
-    e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { y: e.clientY, h: dock.offsetHeight, moved: false, t: e.timeStamp, v: 0, last: e.clientY };
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -218,13 +235,17 @@ export function Dock({ title }: { title: string }) {
     if (!d) return;
     const dock = e.currentTarget.closest<HTMLElement>('.b-dock')!, app = dock.parentElement!;
     if (!d.moved && Math.abs(e.clientY - d.y) < 4) return;
+    if (!d.moved) e.currentTarget.setPointerCapture(e.pointerId);
     d.moved = true;
     // px per ms, downwards positive, mostly from the latest moves
     d.v = 0.6 * d.v + 0.4 * (e.clientY - d.last) / Math.max(1, e.timeStamp - d.t);
     d.last = e.clientY;
     d.t = e.timeStamp;
     dock.classList.add('is-dragging');
-    dock.style.setProperty('--b-sheet-h', `${Math.max(64, Math.min(app.clientHeight - 8, d.h + d.y - e.clientY))}px`);
+    // past the full height the sheet gives less and less, as if on a rubber band
+    const max = app.clientHeight - 8, want = d.h + d.y - e.clientY;
+    const h = want > max ? max + 24 * (1 - 1 / (1 + (want - max) / 80)) : want;
+    dock.style.setProperty('--b-sheet-h', `${Math.max(64, h)}px`);
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
@@ -245,7 +266,13 @@ export function Dock({ title }: { title: string }) {
     const full = height === 'full';
     return createPortal(
       <div className="b-dock-bar" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-        <span className="b-dock-grip" aria-hidden="true" />
+        <button
+          type="button"
+          className="b-dock-grip"
+          aria-label={full ? 'Zmniejsz panel' : 'Powiększ panel'}
+          title={full ? 'Zmniejsz panel' : 'Powiększ panel'}
+          onClick={() => setSheet(full ? 'half' : 'full')}
+        />
         <h2 className={parts.length > 1 ? 'b-visually-hidden' : 'b-dock-title'}>{open ?? lastPane ?? title}</h2>
         {parts.length > 1 && (
           // the panel's other parts, one tap away
@@ -261,13 +288,6 @@ export function Dock({ title }: { title: string }) {
             options={parts.map(p => ({ value: p.label, label: p.label, count: p.count || undefined }))}
           />
         )}
-        <Button
-          variant="ghost"
-          icon={<IconChevronDown className={full ? undefined : 'b-flip'} />}
-          aria-label={full ? 'Zmniejsz panel' : 'Powiększ panel'}
-          title={full ? 'Zmniejsz panel' : 'Powiększ panel'}
-          onClick={() => setSheet(full ? 'half' : 'full')}
-        />
         <Button variant="ghost" icon={<IconClose />} aria-label="Zamknij panel" title="Zamknij panel" onClick={() => setPane(null)} />
       </div>,
       head,

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button-clean';
 import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Disclosure, ErrorText, Field, Switch, placePopover } from '@/components/controls';
-import { IconDownload, IconFitY, IconRatio, IconReset, IconSliders, IconZoomIn, IconZoomOut } from '@/components/icons';
+import { IconDownload, IconFitY, IconList, IconRatio, IconReset, IconSliders, IconVariable, IconZoomIn, IconZoomOut } from '@/components/icons';
 import { useStore } from '@/hooks/use-store';
 import { format } from '../../format';
 import { labelDigits } from '../../render/plot2d';
@@ -44,8 +44,8 @@ function Panes({ viewOpen }: { viewOpen: boolean }) {
     <PaneBar
       panel="graphs"
       items={[
-        { label: 'Funkcje', count },
-        ...params ? [{ label: 'Parametry', count: params }] : [],
+        { label: 'Funkcje', icon: <IconList />, count },
+        ...params ? [{ label: 'Parametry', icon: <IconVariable />, count: params }] : [],
         { label: 'Badanie', icon: <IconStudy />, pressed: analysisOpen, onClick: toggleAnalysis },
         { label: 'Widok', icon: <IconSliders />, popover: 'view-panel', expanded: viewOpen },
       ]}
