@@ -106,14 +106,20 @@
   animation: b-compute 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate, b-fade 300ms ease backwards;
 }
 @keyframes b-compute { from { background-position: -50% 0; } to { background-position: 150% 0; } }
-/* the wave crossing the answer's card (reveal.ts): its crest, a faint swell inside it, the drop's mark and splash */
-.b-pod-ripple { position: absolute; inset: 0; z-index: 4; overflow: hidden; border-radius: inherit; pointer-events: none; }
-.b-pod-ripple > div { position: absolute; border-radius: 50%; will-change: transform, opacity; }
+/* the wave crossing the answer's card (reveal.ts): its surface as a growing disc behind the content, the shadow
+   rising under it, and over the content its crest, a faint swell inside it, the drop's mark and splash */
+.b-pod.is-primary { isolation: isolate; }
+.b-pod-sheet, .b-pod-shade, .b-pod-ripple { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.b-pod-sheet { z-index: -1; overflow: hidden; }
+.b-pod-shade { z-index: -2; }
+.b-pod-ripple { z-index: 4; overflow: hidden; }
+:is(.b-pod-sheet, .b-pod-ripple) > div { position: absolute; border-radius: 50%; will-change: transform, opacity; }
+.b-pod-surface { background: var(--b-card); }
 .b-pod-crest {
   box-shadow: inset 0 0 0 1px var(--b-faint);
   background: radial-gradient(circle closest-side, transparent 70%, var(--b-wash) 93%, var(--b-fill) 99%, transparent 100%);
 }
-.b-pod-drop { background: var(--b-ink); }
+.b-pod-drop { background: var(--b-ink); opacity: 0; }
 .b-pod-splash { box-shadow: inset 0 0 0 1px var(--b-faint); }
 /* the drop and its wave on the page's grid (inkwave.ts): one canvas over the drifting lines, under the cards */
 .b-inkwave { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }

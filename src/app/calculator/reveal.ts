@@ -84,35 +84,42 @@ function distance(el: Element, ripple: Ripple, nearest = false): number {
 /** 3–4. The answer's card, uncovered by the wave from where the drop lands; what is on it settles in as it passes. */
 function openAnswer(card: HTMLElement, ripple: Ripple, impact: number): void {
   const b = card.getBoundingClientRect(), lx = ripple.x - b.left, ly = ripple.y - b.top;
-  // the circle keeps to the wave's radius: sampled, so the clip and the wave on the grid never part
-  const cover = Math.hypot(Math.max(lx, b.width - lx), Math.max(ly, b.height - ly)) + 48, T = reachAt(cover, ripple.far), N = 14;
-  const frames: Keyframe[] = Array.from({ length: N + 1 }, (_, i) => {
-    const r = radiusAt((T * i) / N, ripple.far);
-    return { clipPath: `circle(${i ? r.toFixed(1) : 0}px at ${lx}px ${ly}px)`, transform: `scale(${0.985 + 0.015 * (i / N)})`, offset: i / N };
-  });
-  play(card, frames, { duration: T, delay: impact, easing: 'linear' });
-
-  // On the card, over its content: the crest and a faint swell just inside it, keeping to the same radius, and the
-  // splash where the drop landed — elements moved by transform and opacity only, so none of it repaints the card.
-  const surface = document.createElement('div');
-  surface.className = 'b-pod-ripple';
-  const piece = (cls: string, size: number) => {
+  // The card's surface grows as a circle keeping to the wave's radius (sampled, so it and the wave on the grid never
+  // part). It is drawn by an element of its own behind the content — a disc scaled by transform inside the card's
+  // still rounded outline — while the card itself is see-through: nothing is clipped or repainted per frame, the
+  // compositor does it all. The card's shadow comes up as the disc fills it.
+  const cover = Math.hypot(Math.max(lx, b.width - lx), Math.max(ly, b.height - ly)) + 2, T = reachAt(cover, ripple.far), N = 16;
+  const scales = Array.from({ length: N + 1 }, (_, i) => ({ scale: radiusAt((T * i) / N, ripple.far) / cover, offset: i / N }));
+  const holder = (cls: string) => { const el = document.createElement('div'); el.className = cls; card.append(el); leftovers.push(el); return el; };
+  const disc = (parent: HTMLElement, cls: string, size: number) => {
     const el = document.createElement('div');
     el.className = cls;
     Object.assign(el.style, { left: `${lx - size}px`, top: `${ly - size}px`, width: `${2 * size}px`, height: `${2 * size}px` });
-    surface.append(el);
+    parent.append(el);
     return el;
   };
-  const crest = piece('b-pod-crest', cover);
-  card.append(surface);
-  leftovers.push(surface);
-  play(crest, frames.map((f, i) => ({ transform: `scale(${(radiusAt((T * i) / N, ripple.far) / cover).toFixed(4)})`, opacity: i === N ? 0 : 1, offset: f.offset })),
-    { duration: T, delay: impact, easing: 'linear', fill: 'both' });
-  play(piece('b-pod-drop', 4), [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(0.2)', opacity: 0 }], { duration: 160, delay: impact, easing: 'ease-out', fill: 'both' });
-  [26, 46].forEach((size, i) => play(piece('b-pod-splash', size), [{ transform: 'scale(0)', opacity: 0.9 - i * 0.3 }, { transform: 'scale(1)', opacity: 0 }],
-    { duration: 600, delay: impact + i * 90, easing: OUT, fill: 'both' }));
-  setTimeout(() => surface.remove(), 2000 + impact);
+  const shadow = getComputedStyle(card).boxShadow, whole = impact + T;
+  play(card, [{ backgroundColor: 'transparent', boxShadow: 'none' }, { backgroundColor: 'transparent', boxShadow: 'none' }], { duration: whole + 40, easing: 'linear' });
+  const under = holder('b-pod-sheet');
+  play(disc(under, 'b-pod-surface', cover), scales.map(k => ({ transform: `scale(${k.scale.toFixed(4)})`, offset: k.offset })), { duration: T, delay: impact, easing: 'linear', fill: 'both' });
+  const shade = holder('b-pod-shade');
+  shade.style.boxShadow = shadow;
+  play(shade, [{ opacity: 0 }, { opacity: 1 }], { duration: T * 0.5 + 40, delay: impact + T * 0.5, easing: 'ease-out', fill: 'both' });
 
+  // Over the content: the crest and a faint swell just inside it, at the same radius, and the drop's splash.
+  const surface = holder('b-pod-ripple');
+  play(disc(surface, 'b-pod-crest', cover), scales.map((k, i) => ({ transform: `scale(${k.scale.toFixed(4)})`, opacity: i === N ? 0 : 1, offset: k.offset })),
+    { duration: T, delay: impact, easing: 'linear', fill: 'both' });
+  // (hidden until the drop lands: only then does its mark show, and fade)
+  play(disc(surface, 'b-pod-drop', 4), [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(0.2)', opacity: 0 }], { duration: 160, delay: impact, easing: 'ease-out', fill: 'forwards' });
+  [26, 46].forEach((size, i) => play(disc(surface, 'b-pod-splash', size), [{ transform: 'scale(0)', opacity: 0.9 - i * 0.3 }, { transform: 'scale(1)', opacity: 0 }],
+    { duration: 600, delay: impact + i * 90, easing: OUT, fill: 'both' }));
+  setTimeout(() => { under.remove(); shade.remove(); surface.remove(); }, whole + 1400);
+
+  // nothing of the card shows before the wave reaches it: a row's hairline, a footer's tint
+  for (const row of card.querySelectorAll(':scope > .b-pod-row')) {
+    play(row, [{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: impact + reachAt(distance(row, ripple, true), ripple.far), easing: 'linear' });
+  }
   const when = (el: Element) => impact + reachAt(distance(el, ripple), ripple.far);
   // the head: the badge stamped and a gleam across it, the title and the copy button out of a soft blur
   const badge = card.querySelector('.b-pod-badge');

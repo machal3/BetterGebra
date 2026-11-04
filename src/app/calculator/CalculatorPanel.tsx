@@ -27,6 +27,7 @@ import { SLOT, SLOT_NAME, fillTemplate, nextSlot, oneLine, prettify, prettyText,
 import { Backdrop } from '../Backdrop';
 import { cascade, shake } from '../motion';
 import { glideField, revealAnswer } from './reveal';
+import { warmInkWave } from './inkwave';
 import './calculator.css';
 
 
@@ -637,6 +638,8 @@ export function CalculatorPanel() {
   const idle = current.status === 'idle', busy = current.status === 'busy';
   // leaving the empty page, the field glides from its middle to the top instead of jumping
   const fieldTop = useRef<number | null>(null);
+  // the wave's painter starts on its own thread before the first answer is asked for
+  useEffect(() => { if (panel === 'calculator') warmInkWave(); }, [panel]);
   useLayoutEffect(() => { glideField(main?.querySelector('.b-composer') ?? null, fieldTop.current); }, [idle, main]);
   useLayoutEffect(() => { fieldTop.current = main?.querySelector('.b-composer')?.getBoundingClientRect().top ?? null; });
   return (
