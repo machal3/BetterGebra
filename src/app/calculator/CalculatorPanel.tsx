@@ -12,7 +12,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control-clean';
 import { Skeleton } from '@/components/ui/shimmer-loader';
 import { ThinkingLoader } from '@/components/ui/thinking-loader-clean';
 import { Count, Disclosure, Section, cx } from '@/components/controls';
-import { IconArrowRight, IconBook, IconCalculator, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconStop, IconTrash, IconVariable } from '@/components/icons';
+import { IconArrowRight, IconBook, IconChevronDown, IconClose, IconHistory, IconList, IconPlus, IconSearch, IconStop, IconTrash, IconVariable } from '@/components/icons';
 import { DATA_POPOVER, DataImport } from './DataImport';
 import type { Pod, Result, Row, Step } from '../../cas/engine';
 import { nodeML, spelling } from '../../cas/nodeformat';
@@ -131,10 +131,16 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
         // the question as understood: a heading over the results, not a card of its own
         <header className="b-calc-query" data-ui-message>
           <div className="b-calc-query-main">
-            <span className="b-calc-query-label">Wejście</span>
-            <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
-            {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: <span className="b-formula-text">{prettyText(result.interpreted)}</span></p>}
-            {result.used && <p className="b-calc-query-note">Ze zmiennych: {result.used}</p>}
+            <div className="b-calc-query-line">
+              <span className="b-calc-query-label">Wyniki dla</span>
+              <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
+            </div>
+            {(result.interpreted || result.used) && (
+              <p className="b-calc-query-note">
+                {result.interpreted && <span>Rozumiem jako: <span className="b-formula-text">{prettyText(result.interpreted)}</span></span>}
+                {result.used && <span>Ze zmiennych: {result.used}</span>}
+              </p>
+            )}
           </div>
           <MessageActions actions={['regenerate']} text={query} regenerating={busy} onRegenerate={() => run(query)} label="Działania na pytaniu" />
         </header>
@@ -201,7 +207,7 @@ const Placeholder = () => (
 );
 
 const PALETTE_KEY = 'bettergebra.calc.palette';
-const readOpen = () => { try { return localStorage.getItem(PALETTE_KEY) !== '0'; } catch { return true; } };
+const readOpen = () => { try { return localStorage.getItem(PALETTE_KEY) === '1'; } catch { return false; } };
 
 /** A template (or plain text) at the field's caret, the selection in its first □; the next □ is selected, to be typed over. */
 function place(el: HTMLTextAreaElement, template: string, setValue: (v: string) => void) {
@@ -228,7 +234,8 @@ const Hint = () => (
   </p>
 );
 
-function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLTextAreaElement | null> }) {
+/** `answered`: the question whose results are on the page; while the field holds it, its formula is shown there, not under the field. */
+function Composer({ value, setValue, run, input, answered }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLTextAreaElement | null>; answered: string | null }) {
   const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
@@ -311,6 +318,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
   return (
     <form className="b-composer" role="search" aria-label="Obliczenie" onSubmit={e => { e.preventDefault(); submit(); }}>
       <div className="b-composer-field">
+        <span className="b-composer-icon" aria-hidden="true"><IconSearch size={18} /></span>
         <textarea
           ref={input}
           id="calc-input"
@@ -329,7 +337,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
         <Button type="submit" className="b-composer-go" icon={<IconArrowRight />} aria-label="Oblicz" title="Oblicz  Enter" />
       </div>
       <div id="calc-preview" className={cx('b-composer-preview', !!shown.error && 'is-invalid')} aria-live="off">
-        {shown.ml ? <span dangerouslySetInnerHTML={{ __html: shown.ml }} /> : shown.error}
+        {oneLine(value) === answered ? null : shown.ml ? <span dangerouslySetInnerHTML={{ __html: shown.ml }} /> : shown.error}
       </div>
       {missing && <p className="b-composer-missing" role="alert">Uzupełnij puste pola <span className="b-slot-chip" role="img" aria-label="□" /> — <kbd>Tab</kbd> przechodzi do następnego.</p>}
       <div className="b-composer-bar">
@@ -346,7 +354,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
               options={PALETTE.map(p => ({ value: p.id, label: p.name, controls: 'calc-palette' }))}
             />
           )
-          : <Hint />}
+          : null}
         <div className="b-composer-tools">
           <div className="b-digits">
             <span id="calc-digits-label">Cyfry</span>
@@ -414,14 +422,10 @@ function Suggestions({ run }: { run: (q: string) => void }) {
   // another topic: its tiles arrive one by one
   useLayoutEffect(() => cascade(grid.current), [topic]);
   return (
-    <section className="b-calc-suggest" aria-labelledby="calc-suggest-title">
-      <header className="b-calc-suggest-head">
-        <h2 id="calc-suggest-title">Przykłady</h2>
-        <span className="b-calc-suggest-hint">Kliknij, aby obliczyć</span>
-      </header>
+    <section className="b-calc-suggest" aria-label="Przykłady">
       {/* all the topics in view, wrapped: sixteen tabs in one row would run off the card */}
       <div className="b-calc-topics" role="tablist" aria-label="Rodzaj przykładów">
-        {EXAMPLES.map(([t, items]) => (
+        {EXAMPLES.map(([t]) => (
           <button key={t} type="button" role="tab" className="b-chip b-calc-topic" data-topic={t} aria-selected={t === topic} aria-controls="calc-examples"
             tabIndex={t === topic ? 0 : -1} onClick={() => setTopic(t)} onKeyDown={e => {
               // ← → walk the topics, as tabs do
@@ -432,15 +436,16 @@ function Suggestions({ run }: { run: (q: string) => void }) {
               setTopic(next);
               (e.currentTarget.parentElement?.querySelector(`[data-topic="${next}"]`) as HTMLElement | null)?.focus();
             }}>
-            {t}<span className="b-calc-topic-count">{items.length}</span>
+            {t}
           </button>
         ))}
       </div>
       <div ref={grid} id="calc-examples" className="b-calc-tiles" role="tabpanel" aria-label={topic}>
         {items.map(([q, label]) => (
           <button key={q} type="button" className="b-row b-calc-tile" onClick={() => run(q)}>
-            <span className="b-calc-tile-label">{label}</span>
+            <span className="b-calc-tile-icon" aria-hidden="true"><IconSearch size={14} /></span>
             <span className="b-calc-tile-query">{q}</span>
+            <span className="b-calc-tile-label">{label}</span>
             <span className="b-calc-tile-go" aria-hidden="true"><IconArrowRight size={14} /></span>
           </button>
         ))}
@@ -611,20 +616,8 @@ export function CalculatorPanel() {
       {main && createPortal(
         <>
         <Backdrop className="b-calc-backdrop" speed={7} />
-        <div className="b-calc">
-          {idle && (
-            <div className="b-calc-hero">
-              <span className="b-calc-hero-icon" aria-hidden="true"><IconCalculator size={22} /></span>
-              <h2>Kalkulator symboliczny</h2>
-              <p>Wpisz wyrażenie, równanie albo polecenie — po polsku lub angielsku.</p>
-              <ul className="b-calc-hero-facts" aria-label="Co daje kalkulator">
-                <li>wyniki dokładne: ułamki, pierwiastki, π</li>
-                <li>tylko pewne cyfry dziesiętne</li>
-                <li>sprawdzone numerycznie</li>
-              </ul>
-            </div>
-          )}
-          <Composer value={value} setValue={setValue} run={run} input={input} />
+        <div className={idle ? 'b-calc is-idle' : 'b-calc'}>
+          <Composer value={value} setValue={setValue} run={run} input={input} answered={current.result ? current.query : null} />
           {busy && <Status />}
           {idle && <Suggestions run={run} />}
           {current.result ? <Results result={current.result} query={current.query} busy={busy} run={run} /> : busy && <Placeholder />}

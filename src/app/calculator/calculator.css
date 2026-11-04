@@ -13,40 +13,30 @@
 .b-calc > :nth-child(3) { animation-delay: calc(var(--b-stagger) * 3); }
 .b-calc > :nth-child(n + 4) { animation-delay: calc(var(--b-stagger) * 4.5); }
 
-/* ---------- Empty state: a quiet heading over the field ---------- */
-.b-calc-hero { display: grid; justify-items: center; gap: 6px; padding: 32px 0 8px; text-align: center; }
-.b-calc-hero-icon {
-  display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 6px; border-radius: var(--b-r-xl);
-  background: var(--b-card); color: var(--b-strong); box-shadow: var(--b-shadow-hover);
-}
-.b-calc-hero h2 { margin: 0; font-size: var(--b-fs-2xl); line-height: 36px; font-weight: 500; color: var(--b-strong); }
-.b-calc-hero p { max-width: 520px; margin: 0; font-size: var(--b-fs-title); line-height: 24px; color: var(--b-text); }
-/* three facts, a dot between them */
-.b-calc-hero-facts {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 0; margin: 6px 0 0; padding: 0; list-style: none;
-  font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-muted);
-}
-.b-calc-hero-facts li + li::before { content: "·"; margin: 0 8px; color: var(--b-faint); }
+/* ---------- Empty state: a search page, the field a third of the way down, narrower, the examples under it ---------- */
+.b-calc.is-idle { width: min(100%, 720px); padding-top: clamp(48px, 24vh, 240px); }
 
 /* ---------- Composer: the centre of the page ---------- */
 .b-composer {
-  overflow: hidden; border-radius: var(--b-r-xl); background: var(--b-card); box-shadow: var(--b-shadow-pop);
+  overflow: hidden; border-radius: calc(var(--b-r-xl) * 2); background: var(--b-card); box-shadow: var(--b-shadow-pop);
   outline: 2px solid transparent; outline-offset: 6px;
   transition: outline-color var(--b-normal) ease, outline-offset var(--b-slow) var(--b-ease), box-shadow var(--b-slow) ease;
 }
 /* the ring closes in on the field */
 .b-composer:focus-within { outline-color: var(--b-focus); outline-offset: 1px; }
-.b-composer-field { display: flex; align-items: flex-end; gap: var(--b-s2); padding: 10px 10px 2px 20px; }
+.b-composer-field { display: flex; align-items: flex-start; gap: var(--b-s3); padding: 8px 8px 0 20px; }
+/* the magnifier and the button at the first line, however many lines the field has */
+.b-composer-icon { display: grid; flex: none; height: 48px; place-items: center; color: var(--b-icon); }
 /* the field grows with its lines (Shift+Enter): a system, the rows of a matrix */
 .b-composer-field textarea {
   flex: 1; min-width: 0; min-height: 48px; max-height: 240px; margin: 0; padding: 12px 0; border: 0; outline: none; background: transparent;
   resize: none; overflow-y: auto; font: 400 var(--b-fs-math)/24px var(--b-formula); color: var(--b-strong);
 }
 .b-composer-field textarea::placeholder { font-family: var(--b-font); color: var(--b-faint); opacity: 1; }
-.ui-buttonc.b-composer-go { --h: 36px; --radius: var(--b-r-md); flex: none; margin-bottom: 6px; }
+.ui-buttonc.b-composer-go { --h: 40px; --radius: var(--b-r-full); flex: none; width: 40px; margin-top: 4px; }
 /* what was typed, as it will be read: the formula under the line, or why it can't be read */
 .b-composer-preview {
-  min-height: 0; padding: 2px 20px 14px; overflow-x: auto; overflow-y: hidden; font-size: var(--b-fs-math-lg); color: var(--b-ink);
+  min-height: 0; padding: 2px 20px 14px 50px; overflow-x: auto; overflow-y: hidden; font-size: var(--b-fs-math-lg); color: var(--b-ink);
 }
 .b-composer-preview:empty { padding-bottom: 6px; }
 .b-composer-preview math { font-family: var(--b-math); }
@@ -55,7 +45,7 @@
 /* an empty place of a template: a soft block, no hairline (a 1px line goes blurry at 125 % and 150 % scaling) */
 .b-slot { margin: 0 0.5px; border-radius: 2px; background: var(--b-line-hover); }
 .b-slot-chip { display: inline-block; width: 0.62em; height: 0.74em; margin: 0 1px; border-radius: 2px; vertical-align: -0.05em; background: var(--b-line-hover); }
-.b-composer-missing { margin: -6px 20px 12px; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-warn); }
+.b-composer-missing { margin: -6px 20px 12px 50px; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-warn); }
 
 kbd {
   display: inline-block; min-width: 18px; padding: 0 4px; border-radius: var(--b-r-xs); background: var(--b-card); box-shadow: inset 0 0 0 1px var(--b-line-hover);
@@ -65,7 +55,7 @@ kbd {
 /* the tray under the field: the palette's tabs (or the keys' hint) on the left, digits and the palette switch on the right */
 .b-composer-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-s2) var(--b-s3);
-  padding: 6px 10px 6px 12px; background: var(--b-wash); box-shadow: inset 0 1px 0 var(--b-line);
+  padding: 6px 12px 6px 20px; box-shadow: inset 0 1px 0 var(--b-line);
 }
 .b-palette-tabs { flex: 1 1 300px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .b-palette-tabs::-webkit-scrollbar { display: none; }
@@ -75,7 +65,6 @@ kbd {
 .b-composer-hint {
   display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: var(--b-fs-xs); line-height: 18px; color: var(--b-muted);
 }
-.b-composer-bar > .b-composer-hint { flex: 1 1 300px; min-width: 0; }
 @media (hover: none) { .b-composer-hint { display: none; } }
 
 /* the palette: templates as they will look, each empty place a box */
@@ -103,49 +92,45 @@ kbd {
 /* ---------- Working ---------- */
 .b-calc-status { display: flex; align-items: center; justify-content: center; gap: var(--b-s3); }
 
-/* ---------- Examples in the empty state: a card of tiles ---------- */
-.b-calc-suggest {
-  display: grid; gap: var(--b-s3); margin-top: var(--b-s4); padding: 14px 16px 16px;
-  border-radius: var(--b-r-xl); background: var(--b-card); box-shadow: var(--b-shadow);
-}
-.b-calc-suggest-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-s3); padding: 0 2px; }
-.b-calc-suggest-head h2 { margin: 0; font-size: var(--b-fs-md); font-weight: 500; line-height: 20px; color: var(--b-strong); }
-.b-calc-suggest-hint { font-size: var(--b-fs-sm); color: var(--b-muted); }
-/* the topics: chips that wrap; the picked one is the solid chip */
-.b-calc-topics { display: flex; flex-wrap: wrap; gap: 6px; }
-.b-chip.b-calc-topic { min-height: 28px; padding: 0 10px; gap: 6px; font-size: var(--b-fs-md); }
-.b-calc-topic-count { font-size: var(--b-fs-xs); color: var(--b-muted); }
-.b-chip.b-calc-topic[aria-selected="true"] { background: var(--b-solid); box-shadow: none; color: var(--b-on-solid); }
-.b-chip.b-calc-topic[aria-selected="true"] .b-calc-topic-count { color: inherit; opacity: 0.7; }
-.b-calc-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-/* a tile: what it shows over what is typed; the whole tile runs it */
+/* ---------- Examples in the empty state: topics as quiet tabs, queries as a list of suggestions ---------- */
+.b-calc-suggest { display: grid; gap: var(--b-s3); margin-top: var(--b-s2); }
+.b-calc-topics { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.b-chip.b-calc-topic { min-height: 28px; padding: 0 10px; font-size: var(--b-fs-sm); background: transparent; box-shadow: none; color: var(--b-text); }
+@media (hover: hover) { .b-chip.b-calc-topic:hover { background: var(--b-fill); color: var(--b-strong); } }
+.b-chip.b-calc-topic[aria-selected="true"] { background: var(--b-solid); color: var(--b-on-solid); }
+.b-calc-tiles { display: grid; padding: 6px; border-radius: calc(var(--b-r-xl) * 1.5); background: var(--b-card); box-shadow: var(--b-shadow); }
+/* a suggestion: the magnifier, what is typed, what it shows; the whole row runs it */
 .b-row.b-calc-tile {
-  position: relative; display: grid; align-content: start; gap: 4px; min-height: 64px; padding: 10px 32px 10px 12px;
-  border-radius: var(--b-r-md); background: var(--b-wash); box-shadow: inset 0 0 0 0.5px var(--b-line);
-  transition: background-color var(--b-fast) ease, box-shadow var(--b-fast) ease, transform var(--b-press) var(--b-ease);
+  position: relative; display: flex; align-items: center; gap: var(--b-s3); min-height: 40px; padding: 8px 36px 8px 14px;
+  border-radius: var(--b-r-lg); background: transparent; text-align: start;
+  transition: background-color var(--b-fast) ease, transform var(--b-press) var(--b-ease);
 }
-@media (hover: hover) { .b-row.b-calc-tile:hover { background: var(--b-card); box-shadow: var(--b-shadow-hover); } }
-.b-row.b-calc-tile:active { transform: scale(0.985); }
-.b-calc-tile-label { font-size: var(--b-fs-sm); line-height: 16px; color: var(--b-text); }
-.b-calc-tile-query { font: var(--b-fs-sm)/18px var(--b-mono); color: var(--b-strong); overflow-wrap: anywhere; }
+@media (hover: hover) { .b-row.b-calc-tile:hover { background: var(--b-fill); } }
+.b-row.b-calc-tile:active { transform: scale(0.99); }
+.b-calc-tile-icon { display: grid; flex: none; color: var(--b-faint); }
+.b-calc-tile-query { flex: 1; min-width: 0; font: var(--b-fs-md)/20px var(--b-mono); color: var(--b-strong); overflow-wrap: anywhere; }
+.b-calc-tile-label { flex: none; max-width: 45%; font-size: var(--b-fs-sm); line-height: 16px; text-align: end; color: var(--b-muted); }
 .b-calc-tile-go {
-  position: absolute; top: 10px; right: 10px; display: grid; color: var(--b-icon);
-  opacity: 0; translate: -4px 0; transition: opacity var(--b-fast) ease, translate var(--b-normal) var(--b-ease);
+  position: absolute; top: 50%; right: 12px; display: grid; color: var(--b-icon);
+  opacity: 0; translate: -4px -50%; transition: opacity var(--b-fast) ease, translate var(--b-normal) var(--b-ease);
 }
-.b-calc-tile:is(:hover, :focus-visible) .b-calc-tile-go { opacity: 1; translate: 0 0; }
-@media (hover: none) { .b-calc-tile-go { opacity: 1; translate: 0 0; } }
+.b-calc-tile:is(:hover, :focus-visible) .b-calc-tile-go { opacity: 1; translate: 0 -50%; }
+@media (hover: none) { .b-calc-tile-go { display: none; } .b-row.b-calc-tile { padding-right: 14px; } }
 
 /* ---------- Results ---------- */
 .b-calc-results { display: grid; gap: var(--b-s2); container-type: inline-size; transition: opacity var(--b-normal) ease; }
 .b-calc-results[aria-busy="true"] { opacity: 0.5; }
 /* "Co dalej z wynikiem": the whole width under the cards */
 .ui-src.b-calc-next { grid-column: 1 / -1; max-width: none; margin-top: var(--b-s2); }
-/* the question as understood: on the page, between a hairline and the cards */
-.b-calc-query { display: flex; align-items: flex-start; gap: var(--b-s3); margin-top: var(--b-s2); padding: 14px 4px 8px; box-shadow: inset 0 1px 0 var(--b-line); }
+/* the question as understood: one quiet line over the cards, as a search page names what it found */
+.b-calc-query { display: flex; align-items: center; gap: var(--b-s3); margin-top: var(--b-s2); padding: 0 8px 0 16px; }
 .b-calc-query-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.b-calc-query-label { font-size: var(--b-fs-xs); font-weight: 500; line-height: 16px; color: var(--b-muted); }
-.b-calc-query .b-pod-math { font-size: var(--b-fs-math-lg); }
-.b-calc-query-note { margin: 0; font-size: var(--b-fs-sm); color: var(--b-text); }
+.b-calc-query-line { display: flex; align-items: baseline; gap: var(--b-s2); min-width: 0; }
+.b-calc-query-label { flex: none; font-size: var(--b-fs-sm); line-height: 20px; color: var(--b-muted); }
+.b-calc-query .b-pod-math { font-size: var(--b-fs-math); }
+/* how it was read and what came from the variables: a dot between them */
+.b-calc-query-note { display: flex; flex-wrap: wrap; gap: 0 var(--b-s2); margin: 0; font-size: var(--b-fs-sm); line-height: 18px; color: var(--b-muted); }
+.b-calc-query-note > span + span::before { content: "·"; margin-right: var(--b-s2); color: var(--b-faint); }
 
 .b-pod {
   position: relative; display: grid; gap: 2px; min-width: 0; padding: 12px 16px 14px;
@@ -291,12 +276,6 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
 /* ---------- Phones ---------- */
 @media (max-width: 767px) {
   .b-calc { padding: 16px 12px 24px; gap: var(--b-s3); }
-  .b-calc-hero { padding-top: 4px; gap: 4px; }
-  .b-calc-hero-icon { display: none; }
-  .b-calc-hero h2 { font-size: var(--b-fs-xl); line-height: 28px; }
-  .b-calc-hero p { font-size: var(--b-fs-md); line-height: 20px; }
-  /* the field comes sooner; the facts would wrap with a dot at the start of a line */
-  .b-calc-hero-facts { display: none; }
   .b-composer-field { padding-left: 14px; }
   /* 16px: a phone doesn't zoom into the field */
   .b-composer-field textarea { font-size: 16px; }
@@ -306,10 +285,12 @@ span.b-cplot-key { display: inline-flex; align-items: center; gap: 6px; min-heig
   .b-palette { padding-inline: 8px; }
   .b-palette-keys { grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); }
   .b-palette-keys { grid-auto-rows: 48px; }
-  .b-calc-suggest { padding: 12px 10px 12px; }
-  .b-calc-suggest-hint { display: none; }
-  .b-calc-tiles { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .b-row.b-calc-tile { min-height: 0; }
+  .b-calc.is-idle { padding-top: 24px; }
+  .b-composer-icon { display: none; }
+  .b-calc-topics { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding-inline: 12px; }
+  .b-chip.b-calc-topic { flex: none; }
+  .b-row.b-calc-tile { flex-wrap: wrap; gap: 2px var(--b-s3); }
+  .b-calc-tile-label { max-width: none; text-align: start; }
   .b-pod { padding: 10px 12px 12px; }
   .b-pod.is-primary { padding: 12px 14px 0; }
   .b-pod.is-primary > .b-pod-note:last-child { margin-inline: -14px; padding-inline: 14px; }
