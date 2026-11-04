@@ -70,7 +70,7 @@ function RowView({ row }: { row: Row }) {
 function PodCard({ pod, primary, run }: { pod: Pod; primary: boolean; run: (q: string) => void }) {
   const text = pod.rows.map(r => r.text).join('\n');
   return (
-    <section className={cx('b-pod', primary && 'is-primary', (!!pod.plot || !pod.rows.length) && 'is-wide')} data-ui-message aria-label={pod.title}>
+    <section className={cx('b-pod', primary && 'is-primary', primary && !pod.plot && 'is-solid', (!!pod.plot || !pod.rows.length) && 'is-wide')} data-ui-message aria-label={pod.title}>
       <header className="b-pod-head">
         <h3>{pod.title}</h3>
         {pod.rows.length > 0 && <MessageActions actions={['copy']} text={text} label={`Działania: ${pod.title}`} />}

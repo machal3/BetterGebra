@@ -1,7 +1,7 @@
 /**
  * The calculator's plots, drawn by the same code as Wykresy and Geometria: viewport, grid, axes and exact curve
  * tracing. Curves the graph panel can read are retraced at every zoom; the rest are drawn from the worker's samples.
- * Drag to move, Ctrl + wheel, a pinch or the buttons to zoom, hover to read values; "Otwórz w Wykresach" hands the
+ * Drag to move, the wheel, a pinch or the buttons to zoom, hover to read values; "Otwórz w Wykresach" hands the
  * curves to the full graph panel. This module draws and handles the canvas; the card around it (toolbar, legend,
  * points) is the React component CalcPlot, which drives it through the handle mountPlot returns.
  */
@@ -27,8 +27,8 @@ export function redrawCalcPlots(): void {
 export const color = (i: number) => PALETTE[((i % PALETTE.length) + PALETTE.length) % PALETTE.length];
 /** The colour as drawn on the canvas (lifted in dark mode); the legend and the tooltip lift `color` in CSS. */
 const paint = (i: number) => ink(color(i));
-// The grid of Wykresy, minor lines too: with the light grid tokens the card reads as graph paper, not grey.
-const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: true, halo: false });
+// Only the major grid lines: a card is small, and the minor ones made it heavy.
+const OPTIONS = (plane: boolean, xUnit: AxisUnit = 'num'): AxesOptions => ({ grid: true, axes: true, xUnit, yUnit: 'num', plane, minorGrid: false, halo: false });
 /** Where each mode of the graph panel lives, for the button and the toast. */
 export const PANEL: Record<PanelMode, { to: string; name: string }> = { graph: { to: 'Wykresach', name: 'Wykresy' }, complex: { to: 'Zespolonych', name: 'Zespolone' } };
 /** A function row as the graph panel keeps it, for compiling a region the way Wykresy does. */
@@ -143,7 +143,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     drawAxes(ctx, v, theme, OPTIONS(!!p.plane, xUnit));
 
     // asymptotes and reference lines
-    const line = (x0: number, y0: number, x1: number, y1: number, stroke: string, dash: number[], width = 1.25) => {
+    const line = (x0: number, y0: number, x1: number, y1: number, stroke: string, dash: number[], width = 1) => {
       ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.setLineDash(dash); ctx.lineWidth = width; ctx.strokeStyle = stroke; ctx.stroke(); ctx.setLineDash([]);
     };
     // labelled in small pills: vertical lines at the top edge (the bottom when that is taken), horizontal ones at the left
@@ -175,7 +175,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     const near = hoverMark(v), lit = near ?? focus;
     for (const m of shown) {
       const c = paint(m.color ?? 0), X = v.px(m.x), Y = v.py(m.y);
-      if (m === lit) { ctx.beginPath(); ctx.arc(X, Y, 12, 0, 2 * Math.PI); ctx.globalAlpha = 0.18; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; }
+      if (m === lit) { ctx.beginPath(); ctx.arc(X, Y, 11, 0, 2 * Math.PI); ctx.globalAlpha = 0.14; ctx.fillStyle = c; ctx.fill(); ctx.globalAlpha = 1; }
       if (m.kind === 'hole') dot(ctx, v, m.x, m.y, STROKE.point, theme.bg, c);
       else dot(ctx, v, m.x, m.y, m === lit ? STROKE.point + 1 : STROKE.point, c, theme.bg);
     }
@@ -241,7 +241,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
     for (const [clipY, clipH, c] of to === undefined ? [[0, Y0, paint(0)], [Y0, H - Y0, paint(1)]] as const : [[0, H, paint(0)]] as const) {
       ctx.save();
       ctx.beginPath(); ctx.rect(0, clipY, W, clipH); ctx.clip();
-      ctx.globalAlpha = 0.2; ctx.fillStyle = c; ctx.fill(path);
+      ctx.globalAlpha = 0.14; ctx.fillStyle = c; ctx.fill(path);
       ctx.restore();
     }
   }
@@ -277,8 +277,7 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
       if (style.pill) {
         // a tag in the Affect UI manner: a 6px card with a hairline and a soft lift
         ctx.beginPath(); ctx.roundRect(box[0], box[1], box[2], box[3], 6);
-        ctx.save(); ctx.shadowColor = 'rgba(0, 0, 0, 0.12)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
-        ctx.fillStyle = theme.bg; ctx.fill(); ctx.restore();
+        ctx.fillStyle = theme.bg; ctx.fill();
         ctx.lineWidth = 0.5; ctx.strokeStyle = theme.gridMajor; ctx.stroke();
       }
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
@@ -444,9 +443,8 @@ export function mountPlot(p: Plot, canvas: HTMLCanvasElement, stage: HTMLElement
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('lostpointercapture', end);
   canvas.addEventListener('pointerleave', () => { pointer = null; request(); });
-  // The page scrolls with the wheel; Ctrl (or a trackpad pinch, which sets it) zooms.
+  // The wheel (and a trackpad pinch) zooms about the cursor; the page scrolls beside the plot.
   canvas.addEventListener('wheel', e => {
-    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const at = local(e);
     zoom(Math.exp(Math.max(-300, Math.min(300, e.deltaY * [1, 16, H][e.deltaMode])) * 0.004), at.x, at.y);

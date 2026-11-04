@@ -11,11 +11,11 @@ export let LABEL = '500 11px "Inter Variable", Inter, ui-sans-serif, system-ui, 
 export let SERIF = 'italic 15px "Cambria Math", "STIX Two Math", serif';
 
 /**
- * One look for every plot (Wykresy, Zespolone, the calculator's cards): curves 2.5px with round ends, helper and
- * dashed curves thinner, the ends of pieces 4px, notable points 5px, the point read under the cursor 5px with a
+ * One look for every plot (Wykresy, Zespolone, the calculator's cards), kept light: curves 2px with round ends, helper
+ * and dashed curves thinner, the ends of pieces 3.5px, notable points 4.5px, the point read under the cursor 4.5px with a
  * ring in the background colour, the active graph lifted by a soft halo of its own colour instead of a thicker line.
  */
-export const STROKE = { curve: 2.5, helper: 1.5, dashed: 2, end: 4, point: 5, hover: 5, halo: 6, haloAlpha: 0.14 } as const;
+export const STROKE = { curve: 2, helper: 1.25, dashed: 1.5, end: 3.5, point: 4.5, hover: 4.5, halo: 6, haloAlpha: 0.14 } as const;
 
 /** How far curve colours are lifted towards white (0 light, ~0.2 dark: `--curve-mix`), so they keep their contrast on a dark canvas. */
 let LIFT = 0;

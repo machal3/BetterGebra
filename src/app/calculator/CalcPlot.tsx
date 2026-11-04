@@ -67,7 +67,7 @@ function CalcPlot2D({ plot }: { plot: Plot }) {
 
   const out = handoff(plot);
   const listed = plot.marks.filter(m => Number.isFinite(m.y) && m.label).slice(0, 24);
-  const label = `Wykres: ${plot.series.map(s => s.label).join('; ') || 'dane'}. Przeciągnij, aby przesunąć; Ctrl + kółko lub plus i minus przybliżają, 0 przywraca widok.`;
+  const label = `Wykres: ${plot.series.map(s => s.label).join('; ') || 'dane'}. Przeciągnij, aby przesunąć; kółko myszy lub plus i minus przybliżają, 0 przywraca widok.`;
   const keys = [
     ...plot.series.map((s, i) => s.label && (
       <button
@@ -98,7 +98,7 @@ function CalcPlot2D({ plot }: { plot: Plot }) {
         <div className="b-cplot-legend">{keys}</div>
         <div className="b-cplot-tools" role="toolbar" aria-label="Widok wykresu">
           <Button variant="ghost" size="sm" icon={<IconZoomOut />} aria-label="Oddal" title="Oddal  −" onClick={() => handle.current?.zoom(1 / 0.7)} />
-          <Button variant="ghost" size="sm" icon={<IconZoomIn />} aria-label="Przybliż" title="Przybliż  +  (lub Ctrl + kółko)" onClick={() => handle.current?.zoom(0.7)} />
+          <Button variant="ghost" size="sm" icon={<IconZoomIn />} aria-label="Przybliż" title="Przybliż  +  (lub kółko myszy)" onClick={() => handle.current?.zoom(0.7)} />
           <Button variant="ghost" size="sm" icon={<IconReset />} aria-label="Przywróć widok" title="Przywróć widok  0" onClick={() => handle.current?.reset()} />
           <span className="b-cplot-sep" aria-hidden="true" />
           <Button
@@ -146,7 +146,7 @@ function CalcPlot2D({ plot }: { plot: Plot }) {
         </ul>
       )}
       <div className="b-cplot-foot">
-        <span className="b-cplot-hint">Przeciągnij, by przesunąć · Ctrl + kółko przybliża · dwuklik powiększa</span>
+        <span className="b-cplot-hint">Przeciągnij, by przesunąć · kółko przybliża i oddala · dwuklik powiększa</span>
         {out.rows.length > 0 && (
           <Button variant="secondary" size="sm" icon={<IconOpen />} title={`Przenieś ${WHAT[out.mode]} do panelu ${PANEL[out.mode].name}`} onClick={() => handle.current?.open()}>
             {`Otwórz w ${PANEL[out.mode].to}`}

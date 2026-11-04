@@ -158,6 +158,31 @@ kbd {
   margin: 6px -22px 0; padding: 10px 22px; background: var(--b-wash); box-shadow: inset 0 1px 0 var(--b-line);
   border-radius: 0 0 var(--b-r-xl) var(--b-r-xl);
 }
+/*
+ * The answer in reverse: the solid of the interface (a picked chip, the primary button) as its card, dark on the light
+ * page and light on the dark one, so it stands apart from the cards that explain it. Inside, the ink tokens are
+ * redefined from --b-on-solid, so everything in it (formulas, notes, matrices, the copy button) follows.
+ */
+.b-pod.is-solid {
+  background: linear-gradient(var(--b-solid), var(--b-solid)) var(--b-card);
+  box-shadow: var(--b-shadow-pop);
+  --b-strong: var(--b-on-solid);
+  --b-ink: color-mix(in srgb, var(--b-on-solid) 92%, transparent);
+  --b-text: color-mix(in srgb, var(--b-on-solid) 68%, transparent);
+  --b-muted: color-mix(in srgb, var(--b-on-solid) 52%, transparent);
+  --b-faint: color-mix(in srgb, var(--b-on-solid) 34%, transparent);
+  --b-icon: color-mix(in srgb, var(--b-on-solid) 62%, transparent);
+  --b-line: color-mix(in srgb, var(--b-on-solid) 14%, transparent);
+  --b-line-hover: color-mix(in srgb, var(--b-on-solid) 22%, transparent);
+  --b-fill: color-mix(in srgb, var(--b-on-solid) 12%, transparent);
+  --b-wash: color-mix(in srgb, var(--b-on-solid) 5%, transparent);
+}
+.b-pod.is-solid .b-pod-head h3 { color: var(--b-text); }
+.b-pod.is-solid .ui-mac {
+  --ui-mac-icon: var(--b-icon); --ui-mac-ink: var(--b-ink); --ui-mac-text: var(--b-text); --ui-mac-muted: var(--b-muted);
+  --ui-mac-fill: var(--b-fill); --ui-mac-wash: var(--b-wash); --ui-mac-line: var(--b-line);
+}
+.b-pod.is-solid ::selection { background: color-mix(in srgb, var(--b-on-solid) 28%, transparent); }
 /* Short values side by side (Rząd 2 · Wyznacznik −2 · Ślad 5): tiles under one card, one copy for all */
 .b-pod.b-facts { grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: var(--b-s2); padding: 8px 8px 8px 8px; }
 .b-pod.b-facts > .ui-mac { width: 32px; }
@@ -216,7 +241,7 @@ button.b-cplot-key:focus-visible { outline: 2px solid var(--b-focus); outline-of
   border-radius: var(--b-r-lg); background: var(--plot-bg);
 }
 /* the hairline lies over the canvas, which would cover an inset shadow of the stage */
-.b-cplot-stage::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--b-line-hover); pointer-events: none; }
+.b-cplot-stage::after { content: ""; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--b-line); pointer-events: none; }
 .b-cplot-stage--3d { aspect-ratio: 4 / 3; }
 .b-cplot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: inherit; touch-action: none; cursor: crosshair; outline: none; }
 .b-cplot-canvas.grabbing { cursor: grabbing; }
