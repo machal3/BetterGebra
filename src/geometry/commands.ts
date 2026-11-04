@@ -222,6 +222,12 @@ export function parseInput(input: string, objects: GeoObject[]): Parsed {
     name = named[1];
     text = named[3].trim();
   }
+  const fnNamed = !named && text.match(/^([^\s=:()]+)\s*\(\s*x\s*\)\s*[:=]\s*([^]+)$/i);
+  if (fnNamed && NAME.test(fnNamed[1]) && fnNamed[1] !== 'x' && fnNamed[1] !== 'y') {
+    if (BY_NAME.has(fold(fnNamed[1]))) fail(`„${fnNamed[1]}” to nazwa polecenia. Wybierz inną nazwę.`);
+    name = fnNamed[1];
+    text = `y = ${fnNamed[2].trim()}`;
+  }
   const byName = new Map(objects.map(o => [o.name, o]));
   const drafts: Draft[] = [];
   const b: Build = {

@@ -82,6 +82,7 @@ test('equations become lines and circles', () => {
   expect(line.kind).toBe('line');
   expect(2 * line.x1 - 3 * line.y1).toBeCloseTo(6, 12);
   expect(main('g: 2x - 3y = 6')).toMatchObject({ name: 'g', d: { text: '2x - 3y = 6' } });
+  expect(main('f(x) = 2x + 1')).toMatchObject({ name: 'f', d: { kind: 'line', def: 'equation', coef: [-2, 1, -1], text: 'y = 2x + 1' } });
 });
 
 test('mistakes get a readable message', () => {

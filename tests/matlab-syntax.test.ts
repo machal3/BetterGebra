@@ -125,6 +125,51 @@ test('functions: f(x) = …, @(x) …, applied to numbers and lists', () => {
   expect(ask('g(1)').error).toMatch(/2 argumenty/);
 });
 
+test('f(x), g(x), y = … across derivatives, arithmetic, equations and commands', () => {
+  const { ask } = session();
+  // defining two functions at once shows their intersection points and plot
+  const both = ask('f(x) = x^2, g(x) = 2x + 3');
+  expect(card(both, 'Zapisane zmienne')).toBe('f(x) = x^2 | g(x) = 2x + 3');
+  expect(card(both, 'Punkty wspólne')).toBe('x = −1 | x = 3');
+
+  // derivatives f', f'(x), f'(3), f''(3)
+  expect(card(ask("f'"), 'Funkcja')).toBe('(x) ↦ 2x');
+  expect(card(ask("f'(x)"), 'Wynik')).toBe('2x');
+  expect(card(ask("f'(3)"), 'Wynik')).toBe('6');
+  expect(card(ask("f''(3)"), 'Wynik')).toBe('2');
+
+  // arithmetic, composition and equations on stored functions
+  expect(card(ask('f + g'), 'Wynik')).toBe('x^2 + 2x + 3');
+  expect(card(ask('f(g(x))'), 'Wynik')).toBe('(2x + 3)^2');
+  expect(card(ask('f = g'), 'Rozwiązania')).toBe('x = −1 | x = 3');
+  expect(card(ask('f(x) = g(x)'), 'Rozwiązania')).toBe('x = −1 | x = 3');
+  expect(card(ask('g(x) = 0'), 'Rozwiązania')).toBe('x = −3/2');
+  expect(card(ask('diff(f)'), 'Pochodna')).toBe('d/dx (x^2) = 2x');
+  expect(card(ask('integrate(f, 0, 3)'), 'Całka oznaczona')).toBe('9');
+  expect(card(ask('analyze(f)'), 'Funkcja')).toBe('f(x) = x^2');
+
+  // parametric function definition f(x) = a*x + b
+  const param = ask('h(x) = a*x + b');
+  expect(first(param)).toBe('h(x) = a·x + b');
+  expect(card(param, 'Pochodna')).toBe('d/dx (a·x + b) = a');
+  expect(card(param, 'Miejsca zerowe')).toBe('x = −b/a');
+
+  // inline f(x) = …, g(x) = …, y = … inside commands and Polish queries
+  expect(card(run('diff(f(x) = x^3 - 3x)'), 'Pochodna')).toBe('d/dx (x^3 − 3x) = 3x^2 − 3');
+  expect(card(run('pochodna y = sin(x)'), 'Pochodna')).toBe('d/dx (sin(x)) = cos(x)');
+  expect(card(run('integrate(g(x) = 2x, 0, 3)'), 'Całka oznaczona')).toBe('9');
+  expect(card(run('całka funkcji f(x) = 3x^2'), 'Całka nieoznaczona')).toBe('x^3 + C');
+  expect(card(run('limit(f(x) = sin(x)/x, x->0)'), 'Granica')).toBe('1');
+  expect(card(run('domain(f(x) = 1/(x - 2))'), 'Dziedzina')).toBe('x ∈ (−∞; 2) ∪ (2; +∞)');
+  expect(card(run('dziedzina y = sqrt(x - 1)'), 'Dziedzina')).toBe('x ∈ ⟨1; +∞)');
+  expect(card(run('roots(f(x) = x^2 - 4)'), 'Rozwiązania')).toBe('x = −2 | x = 2');
+  expect(card(run('miejsca zerowe funkcji y = x^2 - 9'), 'Rozwiązania')).toBe('x = −3 | x = 3');
+  expect(card(run('badanie funkcji f(x) = x^3 - 3x'), 'Ekstrema lokalne')).toContain('maksimum lokalne: x = −1');
+  expect(card(run('ekstrema funkcji y = x^2 - 4x + 3'), 'Ekstrema lokalne')).toContain('minimum lokalne: x = 2');
+  expect(card(run('styczna do f(x) = x^2 w punkcie x = 1'), 'Styczna')).toBe('y = 2x − 1');
+  expect(run('plot(f(x) = x^2, g(x) = 2x + 1)').pods[0].plot?.series.map(s => s.label)).toEqual(['f(x) = x^2', 'g(x) = 2x + 1']);
+});
+
 test('= stays an equation when the right side has free letters', () => {
   const { ask, vars } = session();
   expect(ask('y = 2x + 1').pods[0].title).not.toBe('Zapisana zmienna');

@@ -66,8 +66,8 @@ export function nodeML(n: Node, spelled?: (n: string) => string): string {
 }
 
 function ml(n: Node): string {
-  // y(0), y′(0) in the conditions of a differential equation
-  if (odeY && n.t === 'op' && n.o === '*' && isOdeHead(n.a) && (n.b.t === 'num' || n.b.t === 'neg')) return row(ml(n.a), paren(ml(n.b)));
+  // f′(x), f′(2), and y(0), y′(0) in the conditions of a differential equation
+  if ((n.t === 'op' && n.o === '*' && n.call) || (odeY && n.t === 'op' && n.o === '*' && isOdeHead(n.a) && (n.b.t === 'num' || n.b.t === 'neg'))) return row(ml(n.a), paren(ml(n.b)));
   switch (n.t) {
     case 'num': return mn(n.v.replace('.', ','));
     case 'id': return mi(ID[n.n] ?? spell(n.n));

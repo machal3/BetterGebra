@@ -85,6 +85,12 @@ export function evaluate(n: Node, env: Env): Value {
     case 'neg': return arith('neg', evaluate(n.a, env));
     case 'op': {
       const a = evaluate(n.a, env), b = evaluate(n.b, env);
+      if (n.o === '*' && n.call) {
+        if (a.t === 'fn') return apply(a, [b]);
+        if (a.t === 'expr' && b.t === 'expr' && n.a.t === 'post' && n.a.o === "'" && variables(a.e).length === 1) {
+          return ex(subst(a.e, variables(a.e)[0], b.e));
+        }
+      }
       if (n.o === '.*' || n.o === './' || n.o === '.^') return elementwise(n.o, a, b);
       if (n.o === '\\') return leftDivide(a, b);
       return arith(n.o, a, b);
@@ -94,6 +100,10 @@ export function evaluate(n: Node, env: Env): Value {
         const v = evaluate(n.a, env);
         if (v.t === 'list' || v.t === 'matrix') return transposed(v, n.o === "'");
         if (n.o === ".'") return v;
+        if (v.t === 'fn') {
+          if (v.params.length !== 1 || v.body.t !== 'expr') return fail('Pochodną z ′ liczę dla funkcji jednej zmiennej; dla wielu użyj diff(f, x).');
+          return { t: 'fn', params: v.params, body: ex(diff(v.body.e, v.params[0])) };
+        }
       }
       const a = scalar(evaluate(n.a, env), n.o === '!' ? 'Silnia' : n.o === '°' ? 'Stopnie' : 'Pochodna');
       if (n.o === '!') return ex(fn('factorial', a));
@@ -177,6 +187,7 @@ function identifier(n: string, env: Env): Value {
 export function scalar(v: Value, what: string): Expr {
   if (v.t === 'expr') return v.e;
   if (v.t === 'matrix' && v.rows.length === 1 && v.rows[0].length === 1) return v.rows[0][0];
+  if (v.t === 'fn' && v.body.t === 'expr' && !variables(v.body.e).some(s => v.params.some(p => s.startsWith(`${p}_`)))) return v.body.e;
   const kind = { list: 'listy', matrix: 'macierzy', rel: 'równania', fn: 'funkcji', str: 'napisu' }[v.t];
   return fail(`${what}: oczekuję wyrażenia, a nie ${kind}.`);
 }
@@ -191,7 +202,10 @@ export function arith(op: Op, a: Value, b?: Value): Value {
   if (b && (a.t === 'matrix' || b.t === 'matrix')) { const r = denseOp(op, a, b); if (r) return r; }
   return approxValue(arithExact(op, exactly(a), b && exactly(b)));
 }
-function arithExact(op: Op, a: Value, b?: Value): Value {
+const unwrapFnExpr = (v: Value): Value =>
+  v.t === 'fn' && v.body.t === 'expr' && !variables(v.body.e).some(s => v.params.some(p => s.startsWith(`${p}_`))) ? v.body : v;
+function arithExact(op: Op, a0: Value, b0?: Value): Value {
+  const a = unwrapFnExpr(a0), b = b0 && unwrapFnExpr(b0);
   for (const v of b ? [a, b] : [a]) {
     if (v.t === 'fn') fail('Funkcję wywołaj z argumentem, np. f(2); działania wykonuję na jej wartościach.');
     if (v.t === 'str') fail(`Napis '${v.s}' to nazwa opcji polecenia, nie liczba.`);

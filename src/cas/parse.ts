@@ -9,7 +9,7 @@ import { fail } from './q';
 export type Node =
   | { t: 'num'; v: string }
   | { t: 'id'; n: string }
-  | { t: 'op'; o: '+' | '-' | '*' | '/' | '^' | '.*' | './' | '.^' | '\\'; a: Node; b: Node }
+  | { t: 'op'; o: '+' | '-' | '*' | '/' | '^' | '.*' | './' | '.^' | '\\'; a: Node; b: Node; call?: true }
   | { t: 'neg'; a: Node }
   /** tr: written after a matrix or a list, so ' is the transpose and not the derivative */
   | { t: 'post'; o: '!' | '°' | "'" | ".'"; a: Node; tr?: boolean }
@@ -251,6 +251,10 @@ const nameList = (s: string) => s.split(',').map(p => p.trim()).filter(p => NAME
 function definedNames(src: string): string[] {
   const out: string[] = [];
   for (const m of src.matchAll(/@\s*\(([^()]*)\)/g)) out.push(...nameList(m[1]));
+  for (const m of src.matchAll(/\b([a-z][a-z0-9_]*)\s*\(([^()]*)\)\s*:?=(?![=>])/g)) {
+    const ps = nameList(m[2]);
+    if (ps.length && !reserved(m[1])) out.push(m[1], ...ps);
+  }
   const first = src.match(HEAD);
   if ((first && !reserved(first[1])) || MULTI.test(src)) {
     for (const piece of statements(src)) {
@@ -448,15 +452,31 @@ export function parse(input: string, opts: ParseOptions = {}): Node {
     }
     if (known.has(t)) {
       // a variable: A(2, 3) of a matrix, list or function is an index; a number's n(2) stays n·2
-      if (peek() === '(' && kinds[t] !== 'scalar') return { t: 'index', n: t, args: indexArgs() };
+      if (peek() === '(' && (kinds[t] !== 'scalar' || isFnDefHead(t))) return { t: 'index', n: t, args: indexArgs() };
       return { t: 'id', n: t };
     }
     if (Object.hasOwn(CONSTANT_WORDS, t)) return { t: 'id', n: CONSTANT_WORDS[t] };
     // lu and qr are decompositions only when called: elsewhere l·u, q·r as before
     if ((t === 'lu' || t === 'qr') && peek() !== '(') return { t: 'op', o: '*', a: { t: 'id', n: t[0] }, b: { t: 'id', n: t[1] } };
     if (isAlias(t)) return call(t);
-    if (isWord(t) && t.length === 1) return { t: 'id', n: t };
+    if (isWord(t) && t.length === 1) {
+      if (isFnDefHead(t)) return { t: 'index', n: t, args: indexArgs() };
+      return { t: 'id', n: t };
+    }
     return fail(`Nie rozpoznaję „${t}”.`);
+  }
+
+  /** f(x) = … inside an argument or with assign: false: read f(x) as an index so it formats and unwraps as a function. */
+  function isFnDefHead(name: string): boolean {
+    if (peek() !== '(') return false;
+    let k = 1;
+    while (isWord(peek(k)) && !reserved(peek(k)!) && peek(k) !== name) {
+      k++;
+      if (peek(k) === ',') { k++; continue; }
+      if (peek(k) === ')' && (peek(k + 1) === '=' || peek(k + 1) === ':=')) return k > 1;
+      break;
+    }
+    return false;
   }
 
   const transposable = (n: Node): boolean => n.t === 'list' || n.t === 'range' || (n.t === 'post' && !!n.tr) || ((n.t === 'id' || n.t === 'index') && (kinds[n.n] === 'matrix' || kinds[n.n] === 'list'));
@@ -483,7 +503,7 @@ export function parse(input: string, opts: ParseOptions = {}): Node {
     for (;;) {
       const t = peek();
       if (t === '*' || t === '/' || t === '.*' || t === './' || t === '\\') { take(); left = { t: 'op', o: t, a: left, b: unary() }; }
-      else if (startsAtom(t) && !spaced()) left = { t: 'op', o: '*', a: left, b: power0() };
+      else if (startsAtom(t) && !spaced()) left = { t: 'op', o: '*', a: left, b: power0(), ...(t === '(' && left.t === 'post' && left.o === "'" && !left.tr ? { call: true } : {}) };
       else return left;
     }
   }

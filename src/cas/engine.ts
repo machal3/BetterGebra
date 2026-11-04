@@ -281,8 +281,13 @@ function assignedValue(n: Extract<Node, { t: 'assign' }>, env: Env): Value | nul
   if (v.t === 'rel' || v.t === 'str') return null;
   if (n.params && v.t === 'fn') fail(`Zapisz funkcję jako ${n.name}(${params.join(', ')}) = wyrażenie albo ${n.name} = @(${params.join(', ')}) wyrażenie.`);
   const value: Value = n.params ? { t: 'fn', params, body: v } : v;
-  // = with letters left free is an equation (y = 2x + 1); := always assigns, a matrix or @(x) … always is an assignment
-  if (n.op === '=' && (value.t === 'expr' || n.params) && freeSymbols(value).length) return null;
+  // = with letters left free is an equation (y = 2x + 1); := always assigns, a matrix, f(x) = … or @(x) … is an assignment
+  if (n.op === '=' && value.t === 'expr' && freeSymbols(value).length) return null;
+  if (n.op === '=' && v.t === 'fn' && !n.params && n.value.t === 'id') return null;
+  // f(x) = 0 or f(x) = g(x) when f is already a stored function is an equation to solve, not a redefinition
+  if (n.op === '=' && n.params && !ws.local.has(n.name) && ws.saved[n.name]?.kind === 'fn') {
+    if ((v.t === 'expr' && isConstant(v.e)) || (n.value.t === 'index' && ws.saved[n.value.n]?.kind === 'fn')) return null;
+  }
   return value;
 }
 
@@ -301,6 +306,10 @@ function statements(items: Node[], env: Env): Out {
     if (item.t !== 'assign') {
       if (k !== items.length - 1) throw new NotAssignment();
       last = top(item, env);
+      return;
+    }
+    if (k === items.length - 1 && items.length > 1 && item.op === '=' && item.params && ws.local.has(item.name)) {
+      last = top({ t: 'rel', ops: ['='], parts: [{ t: 'index', n: item.name, args: item.params.map(p => ({ t: 'id', n: p })) }, item.value] }, env);
       return;
     }
     const v = assignedValue(item, env);
@@ -324,6 +333,22 @@ function statements(items: Node[], env: Env): Out {
     }
   }
   else if (done.length === 1) pods.push(...(safe(() => valuePods(done[0][1]).pods.slice(1)) ?? []));
+  else if (done.length >= 2 && done.every(([, v]) => v.t === 'fn' && v.params.length === 1 && v.body.t === 'expr' && !freeSymbols(v).length)) {
+    const fns = done.map(([n, v]) => {
+      const fn = v as FnValue;
+      const e = subst((fn.body as { e: Expr }).e, fn.params[0], sym('x'));
+      return { name: spelled(n), e, label: `${spelled(n)}(x) = ${toText(e)}` };
+    });
+    if (fns.length === 2) {
+      const z = safe(() => zerosOf(sub(fns[0].e, fns[1].e), 'x'));
+      if (z && z.kind === 'list') {
+        const real = z.sols.filter(isRealSol);
+        if (real.length) pods.push({ title: 'Punkty wspólne', rows: solutionRows(real.slice(0, 16), 'x'), note: `Rozwiązania równania ${fns[0].name}(x) = ${fns[1].name}(x).` });
+      }
+    }
+    const plot = safe(() => plotOf(fns.map(f => f.e), 'x', { labels: fns.map(f => f.label), crossings: fns.length === 2 }));
+    if (plot) pods.push({ title: 'Wykres', rows: [], plot, note: fns.length === 2 ? 'Zaznaczone są też punkty wspólne obu funkcji.' : undefined });
+  }
   return { pods, value: end?.value ?? done[done.length - 1][1] };
 }
 /** [a, b] = f(…): the outputs of a command that gives several. */
@@ -373,6 +398,15 @@ function fnPods(f: FnValue): Pod[] {
   const pods: Pod[] = [{ title: 'Funkcja', rows: [{ ml: M(valueML(f)), text: `(${f.params.join(', ')}) ↦ ${valueText(f.body)}` }] }];
   const body = f.body;
   if (f.params.length === 1 && body.t === 'expr' && !freeSymbols(f).length) pods.push(...(safe(() => expressionPods(subst(body.e, f.params[0], sym('x'))).slice(1)) ?? []));
+  else if (f.params.length === 1 && body.t === 'expr') {
+    const x = f.params[0], e = body.e;
+    const d = safe(() => simplify(diff(e, x)));
+    if (d) pods.push({ title: 'Pochodna', rows: [eqRow(derivML(x, `<mrow>${mo('(')}${toML(e)}${mo(')')}</mrow>`), `d/d${x} (${toText(e)})`, polyForm(d, x))] });
+    const F = size(e) < 200 ? safe(() => integrate(e, x)) : null;
+    if (F) { const G = antiderivativeForm(simplify(F), x); pods.push({ title: 'Całka nieoznaczona', rows: [{ ml: M(`${mo('∫')}${toML(e)}<mspace width="0.17em"/><mi mathvariant="normal">d</mi>${mi(x)}${mo('=')}${toML(G)}${mo('+')}<mi>C</mi>`), text: `${toText(G)} + C` }] }); }
+    const z = safe(() => zerosOf(e, x));
+    if (z && z.kind === 'list' && z.sols.length) pods.push({ title: 'Miejsca zerowe', rows: solutionRows(z.sols.slice(0, 16), x), note: z.note });
+  }
   // g(x, y): the surface and the level lines, as surf(g) and contour(g)
   if (f.params.length === 2 && body.t === 'expr' && !freeSymbols(f).length) pods.push(...(safe(() => fieldPods(body.e)) ?? []));
   return pods;
@@ -1306,7 +1340,38 @@ function interestingPoints(e: Expr, x: string): number[] {
 
 /** An argument naming a variable (x), or null. */
 const varArg = (n: Node | undefined): string | null => n?.t === 'id' && n.n.length === 1 ? n.n : null;
-const exprArg = (n: Node, env: Env, what = 'Argument') => scalar(evaluate(n, env), what);
+/** Unwraps an inline function notation y = … or f(x) = … inside a command argument. */
+function unwrapFnNode(n: Node, env: Env): { name?: string; rawName?: string; params?: string[]; rhs: Node; env: Env } | null {
+  if (n.t === 'assign') {
+    const params = n.params ?? [];
+    return { name: spelled(n.name), rawName: n.name, params: n.params ?? undefined, rhs: n.value, env: withParams(env, params) };
+  }
+  if (n.t === 'rel' && n.ops.length === 1 && n.ops[0] === '=') {
+    const [l, r] = n.parts;
+    if (l.t === 'index' && l.args.length >= 1 && l.args.every(a => a.t === 'id') && !letters(r).includes(l.n)) {
+      const params = l.args.map(a => (a as { t: 'id'; n: string }).n);
+      return { name: spelled(l.n), rawName: l.n, params, rhs: r, env: withParams(env, params) };
+    }
+    if (l.t === 'id' && l.n !== 'x' && !letters(r).includes(l.n)) {
+      return { name: spelled(l.n), rawName: l.n, rhs: r, env };
+    }
+  }
+  return null;
+}
+function fnVar(n: Node | undefined, env: Env): string | null {
+  if (!n) return null;
+  const u = unwrapFnNode(n, env);
+  if (u?.params?.length === 1) return u.params[0];
+  if (n.t === 'id') {
+    const v = safe(() => evaluate(n, env));
+    if (v?.t === 'fn' && v.params.length === 1) return v.params[0];
+  }
+  return null;
+}
+const exprArg = (n: Node, env: Env, what = 'Argument'): Expr => {
+  const u = unwrapFnNode(n, env);
+  return u ? scalar(evaluate(u.rhs, u.env), what) : scalar(evaluate(n, env), what);
+};
 const intArg = (n: Node | undefined, env: Env, what: string, fallback?: number): number => {
   if (!n) { if (fallback === undefined) fail(`${what}: brak argumentu.`); return fallback!; }
   const e = exprArg(n, env, what);
@@ -1422,7 +1487,7 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
     case 'expandlog': return one('Rozwinięte logarytmy', expandLog(exprArg(args[0], env)), 'Dla dodatnich argumentów logarytmów.');
     case 'factor': return factorCommand(args, env);
     case 'apart': return apartCommand(args, env);
-    case 'solve': case 'roots': return solveCommand(args, env);
+    case 'solve': case 'roots': return solveCommand(args, env, name);
     case 'diff': return diffCommand(args, env);
     case 'integrate': return integrateCommand(args, env);
     case 'limit': return limitCommand(args, env);
@@ -1448,7 +1513,7 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
       return one('Po podstawieniu', s);
     }
     case 'domain': {
-      const e = exprArg(args[0], env), x = varArg(args[1]) ?? mainVar(e);
+      const e = exprArg(args[0], env), x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
       const d = domain(e, x);
       return { pods: [{ title: 'Dziedzina', rows: [intervalRow(d.parts, x)], note: d.note }] };
     }
@@ -1457,7 +1522,7 @@ function command(name: string, args: Node[], env0: Env, nout = 1): Out {
     case 'extrema': return analyzeCommand(args, env, true);
     case 'tangent': {
       const e = exprArg(args[0], env);
-      const x = args.length === 3 ? varArg(args[1]) ?? 'x' : mainVar(e);
+      const x = args.length === 3 ? varArg(args[1]) ?? 'x' : fnVar(args[0], env) ?? mainVar(e);
       const at = exprArg(args[args.length - 1], env, 'Punkt');
       const y0 = simplify(subst(e, x, at)), k = simplify(subst(diff(e, x), x, at));
       const line = simplify(add(mul(k, sub(sym(x), at)), y0));
@@ -1706,7 +1771,7 @@ function lcmPoly(a: P, b: P): P {
 }
 const mulP = (a: P, b: P): P => { const out: Q[] = Array(a.length + b.length - 1).fill(q(0)); a.forEach((x, i) => b.forEach((y, j) => { out[i + j] = q(out[i + j].n * x.d * y.d + x.n * y.n * out[i + j].d, out[i + j].d * x.d * y.d); })); return out; };
 
-function solveCommand(args: Node[], env: Env): Out {
+function solveCommand(args: Node[], env: Env, name = 'solve'): Out {
   let vars: string[] | null = null;
   if (args[1]) {
     const v = args[1];
@@ -1720,16 +1785,24 @@ function solveCommand(args: Node[], env: Env): Out {
     const es = a.items.map(i => exprArg(i, env));
     return systemFromExprs(es, vars);
   }
-  if (a.t === 'rel') return relation(a, env, vars);
+  if (a.t === 'rel') {
+    const u = unwrapFnNode(a, env);
+    if (u && (name === 'roots' || (u.params && !ws.local.has(u.rawName!) && !Object.hasOwn(ws.saved, u.rawName!)))) {
+      const e = scalar(evaluate(u.rhs, u.env), 'Równanie');
+      const x = vars?.[0] ?? u.params?.[0] ?? mainVar(e);
+      return equationPods(e, ZERO, x);
+    }
+    return relation(a, env, vars);
+  }
   // an expression: = 0
   const e = exprArg(a, env);
-  const x = vars?.[0] ?? mainVar(e);
+  const x = vars?.[0] ?? fnVar(a, env) ?? mainVar(e);
   return equationPods(e, ZERO, x);
 }
 
 function diffCommand(args: Node[], env: Env): Out {
   const e = exprArg(args[0], env);
-  let x = varArg(args[1]) ?? mainVar(e);
+  let x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
   let k = 1;
   const pods: Pod[] = [];
   // diff(f, x, n) or diff(f, x, y) (mixed partial)
@@ -1745,7 +1818,7 @@ function diffCommand(args: Node[], env: Env): Out {
   if (args[1] && !varArg(args[1])) {
     // diff(f, 3): order without a variable
     k = intArg(args[1], env, 'Rząd pochodnej');
-    x = mainVar(e);
+    x = fnVar(args[0], env) ?? mainVar(e);
   }
   const d = diffN(e, x, k);
   const s = simplify(d);
@@ -1770,11 +1843,11 @@ function integrateCommand(args: Node[], env: Env): Out {
     return definitePods(fe, fx, exprArg(args[1], env, 'Granica'), exprArg(args[2], env, 'Granica'));
   }
   const e = exprArg(args[0], env);
-  let x = varArg(args[1]) ?? mainVar(e);
+  let x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
   let a: Expr | null = null, b: Expr | null = null;
   if (args.length === 3 && args[1].t === 'rel') fail('Granice zapisz jako integrate(f; x; a; b).');
   if (args.length >= 3) {
-    if (args.length === 3) { x = mainVar(e); a = exprArg(args[1], env, 'Granica'); b = exprArg(args[2], env, 'Granica'); }
+    if (args.length === 3) { x = fnVar(args[0], env) ?? mainVar(e); a = exprArg(args[1], env, 'Granica'); b = exprArg(args[2], env, 'Granica'); }
     else { a = exprArg(args[2], env, 'Granica'); b = exprArg(args[3], env, 'Granica'); }
   }
   const body = `${toML(e)}<mspace width="0.17em"/><mi mathvariant="normal">d</mi>${mi(x)}`;
@@ -1853,7 +1926,7 @@ function limitArgs(args: Node[], env: Env): { e: Expr; x: string; at: Expr; dir:
     at = exprArg(args[1].parts[1], env, 'Punkt');
     dirNode = args[2];
   } else {
-    x = varArg(args[1]) ?? mainVar(e);
+    x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
     at = args[2] ? exprArg(args[2], env, 'Punkt') : ZERO;
     dirNode = args[3];
   }
@@ -1913,7 +1986,7 @@ function limitPlot(e: Expr, x: string, at: Expr, sides: [number, Lim | null][]):
 
 function taylorCommand(args: Node[], env: Env): Out {
   const e = exprArg(args[0], env);
-  const x = varArg(args[1]) ?? mainVar(e);
+  const x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
   const at = args[2] ? exprArg(args[2], env, 'Punkt') : ZERO;
   const n = args[3] ? intArg(args[3], env, 'Rząd') : 6;
   if (n < 0 || n > 40) fail('Rząd szeregu od 0 do 40.');
@@ -2017,6 +2090,16 @@ function plotCommand(args: Node[], env: Env): Out {
   const fns: Expr[] = [], parts: Plot[] = [], labels: string[] = [], curves: { f: Expr; vx: string; vy: string }[] = [];
   const partRows: (HandoffRow[] | undefined)[] = [];
   for (const a of args) {
+    const u = unwrapFnNode(a, env);
+    if (u && (u.params || u.name === 'y')) {
+      const r = scalar(evaluate(u.rhs, u.env), 'Wykres');
+      const v0 = u.params?.[0] ?? 'x';
+      if ((!u.params || u.params.length === 1) && variables(r).every(v => v === v0 || v === 'x')) {
+        fns.push(r);
+        labels.push(u.params ? `${u.name}(${u.params.join(', ')}) = ${toText(r)}` : `y = ${toText(r)}`);
+        continue;
+      }
+    }
     if (a.t === 'rel') {
       if (a.ops.length !== 1 || a.ops[0] !== '=') fail('Rysuję równania (ze znakiem =), np. x^2 + y^2 = 25.');
       const [l, r] = a.parts.map(p => scalar(evaluate(p, env), 'Równanie'));
@@ -2047,7 +2130,7 @@ function plotCommand(args: Node[], env: Env): Out {
     const e = scalar(v, 'Wykres');
     if (variables(e).length > 1) fail(`${toText(e)} ma kilka zmiennych. Narysuję funkcję jednej zmiennej albo krzywą z równania, np. x^2 + y^2 = 25.`);
     fns.push(e);
-    labels.push(`y = ${toText(e)}`);
+    labels.push(a.t === 'id' && v.t === 'fn' && v.params.length === 1 ? `${spelled(a.n)}(${v.params[0]}) = ${toText(e)}` : `y = ${toText(e)}`);
   }
   const x = fns.length ? mainVar(add(...fns.map(f => mul(f, f)))) : 'x';
   if (fns.some(f => variables(f).some(v => v !== x))) fail('Wszystkie funkcje na jednym wykresie muszą mieć tę samą zmienną.');
@@ -2086,7 +2169,7 @@ function plotCommand(args: Node[], env: Env): Out {
 
 function analyzeCommand(args: Node[], env: Env, onlyExtrema = false): Out {
   const e = exprArg(args[0], env, 'Funkcja');
-  const x = varArg(args[1]) ?? mainVar(e);
+  const x = varArg(args[1]) ?? fnVar(args[0], env) ?? mainVar(e);
   if (variables(e).length > 1) fail('Badam funkcje jednej zmiennej (bez parametrów).');
   const X = sym(x);
   const pods: Pod[] = [];
