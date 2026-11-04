@@ -24,8 +24,8 @@
 }
 /* the ring closes in on the field */
 .b-composer:focus-within { outline-color: var(--b-focus); outline-offset: 1px; }
-.b-composer-field { display: flex; align-items: flex-end; gap: var(--b-s3); padding: 8px 8px 0 20px; }
-/* the magnifier at the first line */
+.b-composer-field { display: flex; align-items: flex-start; gap: var(--b-s3); padding: 8px 8px 0 20px; }
+/* the magnifier and the button at the first line, however many lines the field has */
 .b-composer-icon { display: grid; flex: none; height: 48px; place-items: center; color: var(--b-icon); }
 /* the field grows with its lines (Shift+Enter): a system, the rows of a matrix */
 .b-composer-field textarea {
@@ -33,7 +33,7 @@
   resize: none; overflow-y: auto; font: 400 var(--b-fs-math)/24px var(--b-formula); color: var(--b-strong);
 }
 .b-composer-field textarea::placeholder { font-family: var(--b-font); color: var(--b-faint); opacity: 1; }
-.ui-buttonc.b-composer-go { --h: 40px; --radius: var(--b-r-full); flex: none; width: 40px; margin-bottom: 4px; }
+.ui-buttonc.b-composer-go { --h: 40px; --radius: var(--b-r-full); flex: none; width: 40px; margin-top: 4px; }
 /* what was typed, as it will be read: the formula under the line, or why it can't be read */
 .b-composer-preview {
   min-height: 0; padding: 2px 20px 14px 50px; overflow-x: auto; overflow-y: hidden; font-size: var(--b-fs-math-lg); color: var(--b-ink);
