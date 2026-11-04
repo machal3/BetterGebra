@@ -131,10 +131,16 @@ function Results({ result, query, busy, run }: { result: Result; query: string; 
         // the question as understood: a heading over the results, not a card of its own
         <header className="b-calc-query" data-ui-message>
           <div className="b-calc-query-main">
-            <span className="b-calc-query-label">Wejście</span>
-            <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
-            {result.interpreted && <p className="b-calc-query-note">Rozumiem jako: <span className="b-formula-text">{prettyText(result.interpreted)}</span></p>}
-            {result.used && <p className="b-calc-query-note">Ze zmiennych: {result.used}</p>}
+            <div className="b-calc-query-line">
+              <span className="b-calc-query-label">Wyniki dla</span>
+              <div className="b-pod-math" dangerouslySetInnerHTML={{ __html: result.input.ml }} />
+            </div>
+            {(result.interpreted || result.used) && (
+              <p className="b-calc-query-note">
+                {result.interpreted && <span>Rozumiem jako: <span className="b-formula-text">{prettyText(result.interpreted)}</span></span>}
+                {result.used && <span>Ze zmiennych: {result.used}</span>}
+              </p>
+            )}
           </div>
           <MessageActions actions={['regenerate']} text={query} regenerating={busy} onRegenerate={() => run(query)} label="Działania na pytaniu" />
         </header>
@@ -228,7 +234,8 @@ const Hint = () => (
   </p>
 );
 
-function Composer({ value, setValue, run, input }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLTextAreaElement | null> }) {
+/** `answered`: the question whose results are on the page; while the field holds it, its formula is shown there, not under the field. */
+function Composer({ value, setValue, run, input, answered }: { value: string; setValue: (v: string) => void; run: (q: string) => void; input: React.RefObject<HTMLTextAreaElement | null>; answered: string | null }) {
   const { history, digits, vars } = useCalc();
   // ↑ ↓ walk through earlier questions; the line being typed comes back at the end
   const at = useRef(-1), draft = useRef('');
@@ -330,7 +337,7 @@ function Composer({ value, setValue, run, input }: { value: string; setValue: (v
         <Button type="submit" className="b-composer-go" icon={<IconArrowRight />} aria-label="Oblicz" title="Oblicz  Enter" />
       </div>
       <div id="calc-preview" className={cx('b-composer-preview', !!shown.error && 'is-invalid')} aria-live="off">
-        {shown.ml ? <span dangerouslySetInnerHTML={{ __html: shown.ml }} /> : shown.error}
+        {oneLine(value) === answered ? null : shown.ml ? <span dangerouslySetInnerHTML={{ __html: shown.ml }} /> : shown.error}
       </div>
       {missing && <p className="b-composer-missing" role="alert">Uzupełnij puste pola <span className="b-slot-chip" role="img" aria-label="□" /> — <kbd>Tab</kbd> przechodzi do następnego.</p>}
       <div className="b-composer-bar">
@@ -610,7 +617,7 @@ export function CalculatorPanel() {
         <>
         <Backdrop className="b-calc-backdrop" speed={7} />
         <div className={idle ? 'b-calc is-idle' : 'b-calc'}>
-          <Composer value={value} setValue={setValue} run={run} input={input} />
+          <Composer value={value} setValue={setValue} run={run} input={input} answered={current.result ? current.query : null} />
           {busy && <Status />}
           {idle && <Suggestions run={run} />}
           {current.result ? <Results result={current.result} query={current.query} busy={busy} run={run} /> : busy && <Placeholder />}
